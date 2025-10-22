@@ -76,14 +76,23 @@ function LiveChat() {
         if (!isInitialized) return;
 
         const unsubscribeMessage = socketManager.onMessage(async (messageData) => {
+            console.log('🔄 New message received via socket:', messageData);
 
             // Check if this is a message status update
             if (messageData.changes && ['sent', 'delivered', 'read', 'failed'].includes(messageData.changes)) {
+                console.log('📊 Message status update received:', messageData);
                 
                 // Refresh messages for active chat if it's affected
                 if (activeChat?.number && dbAvailable) {
                     const updatedMessage = await dbHelper.getMessages(activeChat.number);
-                    setMessages(updatedMessage);
+                    setMessages([...updatedMessage]);
+                }
+
+                // Refresh chat list to show updated status
+                if (dbAvailable) {
+                    const updatedChats = await dbHelper.getChats();
+                    console.log('✅ Refreshing chat list after status update:', updatedChats.length);
+                    setChats([...updatedChats]);
                 }
                 return;
             }
@@ -92,11 +101,11 @@ function LiveChat() {
             // Refresh chats to show updated data
             if (dbAvailable) {
                 const updatedChats = await dbHelper.getChats();
-                setChats(updatedChats);
+                setChats([...updatedChats]);
 
                 if (activeChat?.number) {
                     const updatedMessage = await dbHelper.getMessages(activeChat.number);
-                    setMessages(updatedMessage);
+                    setMessages([...updatedMessage]);
                 }
             }
 
@@ -130,6 +139,21 @@ function LiveChat() {
 
     const handleBackToChatList = () => {
         setActiveChat(null);
+    };
+
+    const handleMessageStatusUpdate = async (chatNumber, messageId, status) => {
+        try {
+            console.log('🔄 handleMessageStatusUpdate called:', { chatNumber, messageId, status });
+            // Refresh the chat list to show updated status
+            if (dbAvailable) {
+                const updatedChats = await dbHelper.getChats();
+                console.log('✅ Updated chats fetched from DB:', updatedChats.length);
+                // Create a new array reference to trigger React re-render
+                setChats([...updatedChats]);
+            }
+        } catch (error) {
+            console.error('Error updating chat list after status change:', error);
+        }
     };
 
     if (!isInitialized) {
@@ -227,6 +251,7 @@ function LiveChat() {
                                 dbAvailable={dbAvailable}
                                 refresh={activeChat.refresh}
                                 socketMessage={messages}
+                                onMessageStatusUpdate={handleMessageStatusUpdate}
                             />
                         </motion.div>
                     ) : (

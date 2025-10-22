@@ -7,7 +7,7 @@ class ChatDatabase extends Dexie {
     constructor(dbName) {
         super(dbName || 'ChatDatabase');
         this.version(2).stores({
-            chats: '++id, number, name, is_favorite, wamid, create_date, type, message_type, message, status, unique_id, last_id, lastUpdated',
+            chats: '++id, number, name, is_favorite, wamid, create_date, type, message_type, message, status, unique_id, last_id, lastUpdated, send_by_username, send_by_mobile',
             messages: `
                 ++id,
                 message_id,
@@ -167,6 +167,8 @@ export const dbHelper = {
                         status: chat.status,
                         unique_id: chat.unique_id,
                         last_id: chat.last_id,
+                        send_by_username: chat.send_by_username || '',
+                        send_by_mobile: chat.send_by_mobile || '',
                         lastUpdated: Date.now()
                     };
 
@@ -320,11 +322,58 @@ export const dbHelper = {
                 
                 await db.messages.where('message_id').equals(messageId).modify(updateData);
                 console.log(`✅ Message ${messageId} status updated from ${message.status} to ${status}`);
+
+                // Update the chat's last message status if this is the latest message
+                await this.updateChatLastMessageStatus(message.chat_number, messageId, status);
             } else {
                 console.log(`⚠️ Message ${messageId} status not updated: ${message.status} → ${status} (downgrade not allowed)`);
             }
         } catch (error) {
             console.error("❌ Error updating message status:", error);
+        }
+    },
+
+    async updateChatLastMessageStatus(chatNumber, messageId, status) {
+        try {
+            const db = this.db;
+            
+            // Try to update by matching the chat's last message identifiers first
+            const chatRow = await db.chats.where('number').equals(chatNumber).first();
+
+            let shouldUpdate = false;
+            if (chatRow) {
+                const msgIdStr = String(messageId);
+                const byWamid = chatRow.wamid && String(chatRow.wamid) === msgIdStr;
+                const byUniqueId = chatRow.unique_id && String(chatRow.unique_id) === msgIdStr;
+                const byLastId = typeof chatRow.last_id !== 'undefined' && String(chatRow.last_id) === msgIdStr;
+
+                if (byWamid || byUniqueId || byLastId) {
+                    shouldUpdate = true;
+                }
+            }
+
+            // Fallback: compare against the latest message stored for this chat
+            if (!shouldUpdate) {
+                const latestMessage = await db.messages
+                    .where('chat_number')
+                    .equals(chatNumber)
+                    .orderBy('timestamp')
+                    .reverse()
+                    .first();
+
+                if (latestMessage && latestMessage.message_id === messageId) {
+                    shouldUpdate = true;
+                }
+            }
+
+            if (shouldUpdate) {
+                await db.chats.where('number').equals(chatNumber).modify({ status, lastUpdated: Date.now() });
+                console.log(`✅ Chat ${chatNumber} last message status updated to: ${status}`);
+            } else {
+                console.log(`ℹ️ Skipped updating chat ${chatNumber} status; message ${messageId} is not the last chat message.`);
+            }
+        } catch (error) {
+            console.error("❌ Error updating chat last message status:", error);
         }
     },
 
@@ -339,6 +388,25 @@ export const dbHelper = {
             }
         } catch (error) {
             console.error("❌ Error incrementing retry count:", error);
+        }
+    },
+
+    async updateChat(chatNumber, updates) {
+        try {
+            const db = this.db;
+            await db.chats.where('number').equals(chatNumber).modify(updates);
+        } catch (error) {
+            console.error("❌ Error updating chat:", error);
+        }
+    },
+
+    async getMessageByMessageId(messageId) {
+        try {
+            const db = this.db;
+            return await db.messages.where('message_id').equals(messageId).first();
+        } catch (error) {
+            console.error("❌ Error getting message by message_id:", error);
+            return null;
         }
     }
 };

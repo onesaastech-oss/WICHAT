@@ -726,7 +726,7 @@ const ContactPreview = ({ contactInfo, isOwnMessage }) => {
 };
 
 // Main Conversation Component
-function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socketMessage = null }) {
+function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socketMessage = null, onMessageStatusUpdate }) {
     const [messageInput, setMessageInput] = useState('');
     const [showMediaModal, setShowMediaModal] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
@@ -1022,6 +1022,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 if (dbAvailable) {
                     await dbHelper.updateMessageStatus(tempMessageId, 'sent');
                 }
+
+                // Notify parent component about status update
+                if (onMessageStatusUpdate) {
+                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'sent');
+                }
             } else {
                 // Update message status to failed
                 setMessages(prev =>
@@ -1034,6 +1039,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 
                 if (dbAvailable) {
                     await dbHelper.updateMessageStatus(tempMessageId, 'failed');
+                }
+
+                // Notify parent component about status update
+                if (onMessageStatusUpdate) {
+                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
                 }
             }
         } catch (error) {
@@ -1049,6 +1059,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             
             if (dbAvailable) {
                 await dbHelper.updateMessageStatus(tempMessageId, 'failed');
+            }
+
+            // Notify parent component about status update
+            if (onMessageStatusUpdate) {
+                onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
             }
         }
     };
@@ -1115,6 +1130,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
         setIsUploading(true);
         setUploadProgress(0);
+        const tempMessageId = `temp_${Date.now()}`;
 
         try {
             const formData = new FormData();
@@ -1142,29 +1158,20 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 const fileUrl = uploadResponse.data.link;
                 const fileType = selectedFile.type;
                 const fileName = selectedFile.file.name;
-                const tempMessageId = `temp_${Date.now()}`;
 
                 const tempMessage = {
                     id: Date.now().toString(),
-                    messageId: tempMessageId,
-                    sender: 'You',
-                    text: messageInput || `Sent a ${getFileTypeLabel(fileType).toLowerCase()}`,
-                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    type: fileType,
-                    fileInfo: {
-                        name: fileName,
-                        type: fileType,
-                        size: selectedFile.file.size,
-                        url: URL.createObjectURL(selectedFile.file),
-                        serverUrl: fileUrl,
-                        loading: false
-                    },
+                    message_id: tempMessageId,
+                    type: 'out',
+                    message_type: fileType,
+                    message: messageInput || `Sent a ${getFileTypeLabel(fileType).toLowerCase()}`,
+                    media_url: fileUrl,
+                    media_name: fileName,
                     status: 'pending',
-                    originalStatus: 'pending',
-                    messageType: 'out',
-                    isRead: true,
+                    timestamp: Date.now(),
                     send_by: 'You',
-                    message_type: fileType
+                    chat_number: activeChat.number,
+                    create_date: new Date().toISOString()
                 };
 
                 if (dbAvailable) {
@@ -1212,46 +1219,55 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     }
                     setMessages(prev =>
                         prev.map(msg =>
-                            msg.messageId === tempMessageId
+                            msg.message_id === tempMessageId
                                 ? {
                                     ...msg,
-                                    status: 'sent',
-                                    originalStatus: 'sent',
-                                    fileInfo: { ...msg.fileInfo, loading: false }
+                                    status: 'sent'
                                 }
                                 : msg
                         )
                     );
+
+                    // Notify parent component about status update
+                    if (onMessageStatusUpdate) {
+                        onMessageStatusUpdate(activeChat.number, tempMessageId, 'sent');
+                    }
                 } else {
                     if (dbAvailable) {
                         await dbHelper.updateMessageStatus(tempMessageId, 'failed');
                     }
                     setMessages(prev =>
                         prev.map(msg =>
-                            msg.messageId === tempMessageId
+                            msg.message_id === tempMessageId
                                 ? {
                                     ...msg,
-                                    status: 'failed',
-                                    originalStatus: 'failed',
-                                    fileInfo: { ...msg.fileInfo, loading: false }
+                                    status: 'failed'
                                 } : msg
                         )
                     );
+
+                    // Notify parent component about status update
+                    if (onMessageStatusUpdate) {
+                        onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
+                    }
                 }
             }
         } catch (error) {
             console.error('Upload failed:', error);
             setMessages(prev =>
                 prev.map(msg =>
-                    msg.status === 'pending'
+                    msg.message_id === tempMessageId
                         ? {
                             ...msg,
-                            status: 'failed',
-                            originalStatus: 'failed',
-                            fileInfo: msg.fileInfo ? { ...msg.fileInfo, loading: false } : null
+                            status: 'failed'
                         } : msg
                 )
             );
+
+            // Notify parent component about status update
+            if (onMessageStatusUpdate) {
+                onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
+            }
         } finally {
             setIsUploading(false);
             setUploadProgress(0);

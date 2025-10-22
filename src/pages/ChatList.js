@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiSearch, FiStar } from 'react-icons/fi';
+import { FiSearch, FiStar, FiImage, FiVideo, FiFile, FiMusic, FiMapPin, FiUser, FiCheck, FiClock, FiAlertCircle } from 'react-icons/fi';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import { dbHelper } from './db';
@@ -37,13 +37,12 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         })();
     }, [tokens]);
 
-    // 🔹 When a new socket message arrives
+    // 🔹 When socket_chats prop changes (including status updates)
     useEffect(() => {
-        if (socket_chats.length > 0) {
+        if (socket_chats && socket_chats.length > 0) {
+            console.log('📊 ChatList: Updating chats from socket_chats prop', socket_chats.length);
             setChats(socket_chats);
         }
-
-
     }, [socket_chats]);
 
 
@@ -95,7 +94,9 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                 message: apiChat.last_message.message,
                 status: apiChat.last_message.status,
                 unique_id: apiChat.last_message.unique_id,
-                last_id: apiChat.last_message.id
+                last_id: apiChat.last_message.id,
+                send_by_username: apiChat.last_message.send_by?.username || '',
+                send_by_mobile: apiChat.last_message.send_by?.mobile || ''
             }));
 
             // Save to IndexedDB if available
@@ -117,22 +118,129 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         return date.toLocaleDateString('en-GB');
     };
 
+    // Format last message based on message type
+    const formatLastMessage = (chat) => {
+        if (!chat.message && !chat.message_type) {
+            return 'No messages yet';
+        }
+
+        const messageType = chat.message_type || 'text';
+        const message = chat.message || '';
+
+        switch (messageType) {
+            case 'text':
+                return message || 'Message';
+            case 'image':
+                return '📷 Photo';
+            case 'video':
+                return '🎥 Video';
+            case 'audio':
+                return '🎵 Audio';
+            case 'document':
+                return '📄 Document';
+            case 'location':
+                return '📍 Location';
+            case 'contact':
+                return '👤 Contact';
+            case 'sticker':
+                return '😀 Sticker';
+            case 'voice':
+                return '🎤 Voice message';
+            default:
+                return message || 'Message';
+        }
+    };
+
+    // Get message status icon for sent messages
+    const getMessageStatusIcon = (status, isOwnMessage) => {
+        if (!isOwnMessage) return null;
+
+        switch (status) {
+            case 'pending':
+                return <FiClock className="w-3 h-3 text-gray-400" />;
+            case 'sent':
+                return <FiCheck className="w-3 h-3 text-gray-400" />;
+            case 'delivered':
+                return (
+                    <div className="flex">
+                        <FiCheck className="w-3 h-3 text-gray-400" />
+                        <FiCheck className="w-3 h-3 -ml-1 text-gray-400" />
+                    </div>
+                );
+            case 'read':
+                return (
+                    <div className="flex">
+                        <FiCheck className="w-3 h-3 text-green-500" />
+                        <FiCheck className="w-3 h-3 -ml-1 text-green-500" />
+                    </div>
+                );
+            case 'failed':
+                return <FiAlertCircle className="w-3 h-3 text-red-500" />;
+            default:
+                return <FiClock className="w-3 h-3 text-gray-400" />;
+        }
+    };
+
+    // Check if the last message was sent by the current user
+    const isLastMessageFromUser = (chat) => {
+        // Check if the message type is 'out' or if it's a sent message
+        return chat.type === 'out' || chat.send_by_username || chat.send_by_mobile;
+    };
+
+    // Get message type icon
+    const getMessageTypeIcon = (messageType) => {
+        switch (messageType) {
+            case 'image':
+                return <FiImage className="w-3 h-3" />;
+            case 'video':
+                return <FiVideo className="w-3 h-3" />;
+            case 'audio':
+            case 'voice':
+                return <FiMusic className="w-3 h-3" />;
+            case 'document':
+                return <FiFile className="w-3 h-3" />;
+            case 'location':
+                return <FiMapPin className="w-3 h-3" />;
+            case 'contact':
+                return <FiUser className="w-3 h-3" />;
+            default:
+                return null;
+        }
+    };
+
+    // Format time for display
+    const formatTime = (dateString) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffInHours = (now - date) / (1000 * 60 * 60);
+        
+        if (diffInHours < 24) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } else if (diffInHours < 168) { // Less than a week
+            return date.toLocaleDateString([], { weekday: 'short' });
+        } else {
+            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        }
+    };
+
     // Group chats by favorite status
     const groupedChats = () => {
         const filtered = chats.filter((chat) => {
+            const lastMessageText = formatLastMessage(chat);
             const matchesSearch =
                 chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                chat.lastMessage.toLowerCase().includes(searchQuery.toLowerCase());
+                lastMessageText.toLowerCase().includes(searchQuery.toLowerCase());
             let matchesTab = true;
             if (activeTab === 'Unread') matchesTab = chat.unread;
-            if (activeTab === 'Favourites') matchesTab = chat.isFavorite;
+            if (activeTab === 'Favourites') matchesTab = chat.is_favorite;
             if (activeTab === 'Groups') matchesTab = chat.isGroup;
             return matchesSearch && matchesTab;
         });
 
         if (activeTab === 'All') {
-            const favorites = filtered.filter(chat => chat.isFavorite);
-            const others = filtered.filter(chat => !chat.isFavorite);
+            const favorites = filtered.filter(chat => chat.is_favorite);
+            const others = filtered.filter(chat => !chat.is_favorite);
 
             return [
                 ...(favorites.length > 0 ? [{ isGroup: true, groupName: 'Favorites', chats: favorites }] : []),
@@ -256,17 +364,23 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                                                                 <span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400"></span>
                                                             )}
                                                             <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                                {chat.time}
+                                                                {formatTime(chat.create_date)}
                                                             </div>
                                                         </div>
                                                     </div>
                                                     <div className="flex justify-between items-center">
-                                                        <p className="text-sm truncate text-gray-500 dark:text-gray-400">
-                                                            {chat.lastMessage}
-                                                        </p>
-                                                        {chat.unread && (
-                                                            <span className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400 ml-2"></span>
-                                                        )}
+                                                        <div className="flex items-center space-x-1 min-w-0 flex-1">
+                                                            {getMessageTypeIcon(chat.message_type)}
+                                                            <p className="text-sm truncate text-gray-500 dark:text-gray-400">
+                                                                {formatLastMessage(chat)}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center space-x-1 flex-shrink-0">
+                                                            {getMessageStatusIcon(chat.status, isLastMessageFromUser(chat))}
+                                                            {chat.unread && (
+                                                                <span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400 ml-1"></span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>

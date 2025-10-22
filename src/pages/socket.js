@@ -70,6 +70,21 @@ class SocketManager {
                 return;
             }
 
+            // Check if this is a message sent by the current user (outgoing message)
+            const isOutgoingMessage = messageData.message.type === 'out' || 
+                                    messageData.message.send_by?.username || 
+                                    messageData.message.send_by?.mobile;
+
+            // For outgoing messages, check if we already have this message to avoid duplicates
+            if (isOutgoingMessage) {
+                const existingMessage = await dbHelper.getMessageByMessageId(messageData.message.message_id);
+                if (existingMessage) {
+                    console.log('Outgoing message already exists, updating status only');
+                    await dbHelper.updateMessageStatus(messageData.message.message_id, messageData.message.status);
+                    return;
+                }
+            }
+
             // New Message
             const messageList = [{
                 message_id: messageData.message.message_id || '',
@@ -128,6 +143,8 @@ class SocketManager {
                 status: messageData.message.status || '',
                 unique_id: messageData.message.message_id || '',
                 last_id: messageData.message.id || '',
+                send_by_username: messageData.message.send_by?.username || '',
+                send_by_mobile: messageData.message.send_by?.mobile || '',
             }]
 
             // Save to IndexedDB if available
@@ -142,6 +159,7 @@ class SocketManager {
 
     async handleMessageStatusUpdate(statusData) {
         try {
+            console.log('📊 Message status update received:', statusData);
             
             const { message_id, changes, failed_reason } = statusData;
             
@@ -165,6 +183,7 @@ class SocketManager {
             // Update message status in database
             await dbHelper.updateMessageStatus(message_id, newStatus, failed_reason);
             
+            console.log(`✅ Message ${message_id} status updated to: ${newStatus}`);
             
         } catch (error) {
             console.error('Error handling message status update:', error);
