@@ -38,6 +38,14 @@ class SocketManager {
                 this.messageCallbacks.forEach(callback => callback(data));
             });
 
+            // Handle message status updates
+            this.socket.on("message_status", async (data) => {
+                await this.handleMessageStatusUpdate(data);
+
+                // Notify all registered callbacks
+                this.messageCallbacks.forEach(callback => callback(data));
+            });
+
             this.socket.on("connect_error", (error) => {
                 console.log("❌ Socket Connection error:", error.message);
                 this.isConnected = false;
@@ -129,6 +137,37 @@ class SocketManager {
 
         } catch (error) {
             console.error('Error handling incoming message:', error);
+        }
+    }
+
+    async handleMessageStatusUpdate(statusData) {
+        try {
+            
+            const { message_id, changes, failed_reason } = statusData;
+            
+            if (!message_id) {
+                console.warn('No message_id in status update:', statusData);
+                return;
+            }
+
+            // Map status changes to our internal status
+            let newStatus = changes;
+            if (changes === 'failed') {
+                newStatus = 'failed';
+            } else if (changes === 'sent') {
+                newStatus = 'sent';
+            } else if (changes === 'delivered') {
+                newStatus = 'delivered';
+            } else if (changes === 'read') {
+                newStatus = 'read';
+            }
+
+            // Update message status in database
+            await dbHelper.updateMessageStatus(message_id, newStatus, failed_reason);
+            
+            
+        } catch (error) {
+            console.error('Error handling message status update:', error);
         }
     }
 

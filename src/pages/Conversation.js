@@ -16,7 +16,10 @@ import {
     FiX,
     FiZoomIn,
     FiPlay,
-    FiExternalLink
+    FiExternalLink,
+    FiCheck,
+    FiClock,
+    FiAlertCircle
 } from 'react-icons/fi';
 import { FaRegEye } from "react-icons/fa6";
 import { MdOutlineCancel } from "react-icons/md";
@@ -27,6 +30,61 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Encrypt } from './encryption/payload-encryption';
 import { dbHelper } from './db';
 import ReactPlayer from 'react-player';
+
+// Message Status Indicator Component
+const MessageStatusIndicator = ({ status, isOwnMessage, darkMode }) => {
+    if (!isOwnMessage) return null;
+
+    const getStatusIcon = (status) => {
+        switch (status) {
+            case 'pending':
+                return <FiClock className="w-3 h-3" />;
+            case 'sent':
+                return <FiCheck className="w-3 h-3" />;
+            case 'delivered':
+                return (
+                    <div className="flex">
+                        <FiCheck className="w-3 h-3" />
+                        <FiCheck className="w-3 h-3 -ml-1" />
+                    </div>
+                );
+            case 'read':
+                return (
+                    <div className="flex">
+                        <FiCheck className="w-3 h-3 text-green-500" />
+                        <FiCheck className="w-3 h-3 -ml-1 text-green-500" />
+                    </div>
+                );
+            case 'failed':
+                return <FiAlertCircle className="w-3 h-3 text-red-500" />;
+            default:
+                return <FiClock className="w-3 h-3" />;
+        }
+    };
+
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'pending':
+                return 'text-gray-400 dark:text-gray-500';
+            case 'sent':
+                return 'text-gray-400 dark:text-gray-500';
+            case 'delivered':
+                return 'text-gray-400 dark:text-gray-500';
+            case 'read':
+                return 'text-blue-500 dark:text-blue-400';
+            case 'failed':
+                return 'text-red-500 dark:text-red-400';
+            default:
+                return 'text-gray-400 dark:text-gray-500';
+        }
+    };
+
+    return (
+        <div className={`flex items-center space-x-1 ${getStatusColor(status)}`}>
+            {getStatusIcon(status)}
+        </div>
+    );
+};
 
 // Professional Media Modal Component
 const MediaModal = ({ isOpen, onClose, mediaItem, type }) => {
@@ -913,10 +971,17 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     };
 
     const sendTextMessage = async (text) => {
+        const tempMessageId = `temp_${Date.now()}`;
         const newMessage = {
+            id: Date.now().toString(),
+            message_id: tempMessageId,
             type: 'out',
             message_type: 'text',
             message: text,
+            status: 'pending',
+            timestamp: Date.now(),
+            send_by: 'You',
+            chat_number: activeChat.number
         };
 
         setMessages(prev => [...prev, newMessage]);
@@ -945,12 +1010,46 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             );
 
             if (!response.data.error) {
+                // Update message status to sent
+                setMessages(prev =>
+                    prev.map(msg =>
+                        msg.message_id === tempMessageId
+                            ? { ...msg, status: 'sent' }
+                            : msg
+                    )
+                );
+                
                 if (dbAvailable) {
-                    await processApiResponse(response.data);
+                    await dbHelper.updateMessageStatus(tempMessageId, 'sent');
+                }
+            } else {
+                // Update message status to failed
+                setMessages(prev =>
+                    prev.map(msg =>
+                        msg.message_id === tempMessageId
+                            ? { ...msg, status: 'failed' }
+                            : msg
+                    )
+                );
+                
+                if (dbAvailable) {
+                    await dbHelper.updateMessageStatus(tempMessageId, 'failed');
                 }
             }
         } catch (error) {
             console.error('Failed to send message:', error);
+            // Update message status to failed
+            setMessages(prev =>
+                prev.map(msg =>
+                    msg.message_id === tempMessageId
+                        ? { ...msg, status: 'failed' }
+                        : msg
+                )
+            );
+            
+            if (dbAvailable) {
+                await dbHelper.updateMessageStatus(tempMessageId, 'failed');
+            }
         }
     };
 
@@ -1287,6 +1386,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                                 <span className="text-xs opacity-75">
                                                     {formatTime(msg.timestamp)}
                                                 </span>
+                                                <MessageStatusIndicator 
+                                                    status={msg.status || 'pending'} 
+                                                    isOwnMessage={msg.type === 'out'} 
+                                                    darkMode={darkMode}
+                                                />
                                             </div>
                                         </div>
                                     </div>

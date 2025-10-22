@@ -76,8 +76,19 @@ function LiveChat() {
         if (!isInitialized) return;
 
         const unsubscribeMessage = socketManager.onMessage(async (messageData) => {
-            console.log('🔄 New message received via socket:', messageData);
 
+            // Check if this is a message status update
+            if (messageData.changes && ['sent', 'delivered', 'read', 'failed'].includes(messageData.changes)) {
+                
+                // Refresh messages for active chat if it's affected
+                if (activeChat?.number && dbAvailable) {
+                    const updatedMessage = await dbHelper.getMessages(activeChat.number);
+                    setMessages(updatedMessage);
+                }
+                return;
+            }
+
+            // Handle regular message updates
             // Refresh chats to show updated data
             if (dbAvailable) {
                 const updatedChats = await dbHelper.getChats();

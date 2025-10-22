@@ -287,10 +287,42 @@ export const dbHelper = {
         }
     },
 
-    async updateMessageStatus(messageId, status) {
+    async updateMessageStatus(messageId, status, failedReason = '') {
         try {
             const db = this.db;
-            await db.messages.where('message_id').equals(messageId).modify({ status });
+            
+            // Get current message to check existing status
+            const message = await db.messages.where('message_id').equals(messageId).first();
+            
+            if (!message) {
+                console.warn(`Message with ID ${messageId} not found`);
+                return;
+            }
+
+            // Define status hierarchy (higher number = higher status)
+            const statusHierarchy = {
+                'pending': 1,
+                'sent': 2,
+                'delivered': 3,
+                'read': 4,
+                'failed': 0 // Failed can override any status
+            };
+
+            const currentStatusLevel = statusHierarchy[message.status] || 0;
+            const newStatusLevel = statusHierarchy[status] || 0;
+
+            // Only update if new status is higher or if it's a failure
+            if (newStatusLevel > currentStatusLevel || status === 'failed') {
+                const updateData = { status };
+                if (failedReason && status === 'failed') {
+                    updateData.failed_reason = failedReason;
+                }
+                
+                await db.messages.where('message_id').equals(messageId).modify(updateData);
+                console.log(`✅ Message ${messageId} status updated from ${message.status} to ${status}`);
+            } else {
+                console.log(`⚠️ Message ${messageId} status not updated: ${message.status} → ${status} (downgrade not allowed)`);
+            }
         } catch (error) {
             console.error("❌ Error updating message status:", error);
         }
