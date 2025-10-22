@@ -75,7 +75,7 @@ class SocketManager {
                                     messageData.message.send_by?.username || 
                                     messageData.message.send_by?.mobile;
 
-            // For outgoing messages, check if we already have this message to avoid duplicates
+            // For outgoing messages, try to merge with existing temp message to avoid duplicates
             if (isOutgoingMessage) {
                 const existingMessage = await dbHelper.getMessageByMessageId(messageData.message.message_id);
                 if (existingMessage) {
@@ -83,6 +83,44 @@ class SocketManager {
                     await dbHelper.updateMessageStatus(messageData.message.message_id, messageData.message.status);
                     return;
                 }
+
+                // Merge echoed server message into temp outgoing if same media
+                await dbHelper.mergeServerOutgoingMessage(chatNumber, {
+                    message_id: messageData.message.message_id || '',
+                    wamid: messageData.message.wamid || '',
+                    create_date: messageData.message.create_date || '',
+                    type: messageData.message.type || '',
+                    message_type: messageData.message.message_type || '',
+                    message: messageData.message.message || '',
+                    is_template: messageData.message.is_template || false,
+                    is_forwarded: messageData.message.is_forwarded || false,
+                    is_reply: messageData.message.is_reply || false,
+                    status: messageData.message.status || '',
+                    id: messageData.message.id || '',
+                    send_by_username: messageData.message.send_by?.username || '',
+                    send_by_name: messageData.message.send_by?.name || '',
+                    send_by_mobile: messageData.message.send_by?.mobile || '',
+                    send_by_email: messageData.message.send_by?.email || '',
+                    send_by_status: messageData.message.send_by?.status || false,
+                    is_read: messageData.message.is_read || false,
+                    read_by_username: messageData.message.read_by?.username || '',
+                    read_by_name: messageData.message.read_by?.name || '',
+                    read_by_mobile: messageData.message.read_by?.mobile || '',
+                    read_by_email: messageData.message.read_by?.email || '',
+                    read_by_status: messageData.message.read_by?.status || false,
+                    failed_reason: messageData.message.failed_reason || '',
+                    media_url: messageData.message.media_url || '',
+                    media_name: messageData.message.media_name || '',
+                    is_voice: messageData.message.is_voice || false,
+                    address: messageData.message.address || '',
+                    latitude: messageData.message.latitude || '',
+                    longitude: messageData.message.longitude || '',
+                    name: messageData.message.name || '',
+                    reply_wamid: messageData.message.reply_wamid || '',
+                    timestamp: messageData.message.timestamp || '',
+                    retryCount: messageData.message.retryCount || ''
+                });
+                return;
             }
 
             // New Message

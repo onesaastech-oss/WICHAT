@@ -391,6 +391,76 @@ export const dbHelper = {
         }
     },
 
+    // Merge server-echoed outgoing media message into existing temp message
+    async mergeServerOutgoingMessage(chatNumber, serverMessage) {
+        try {
+            const db = this.db;
+
+            const mediaUrl = serverMessage.media_url || '';
+            if (!mediaUrl) {
+                // No media URL, fallback to saving server message as-is
+                await this.saveMessage([{
+                    ...serverMessage,
+                    chat_number: chatNumber,
+                    timestamp: Date.now()
+                }]);
+                return;
+            }
+
+            // Find a recent outgoing temp message in the same chat with same media URL
+            const recentMessages = await db.messages
+                .where('chat_number')
+                .equals(chatNumber)
+                .reverse()
+                .sortBy('id');
+
+            const candidate = recentMessages.find(m =>
+                m && m.type === 'out' &&
+                m.media_url === mediaUrl &&
+                (m.status === 'pending' || m.status === 'sent' || !m.status)
+            );
+
+            if (candidate) {
+                // Update the temp message with server identifiers and status
+                await db.messages.update(candidate.id, {
+                    message_id: serverMessage.message_id || candidate.message_id,
+                    wamid: serverMessage.wamid || candidate.wamid,
+                    id: serverMessage.id || candidate.id,
+                    create_date: serverMessage.create_date || candidate.create_date,
+                    status: serverMessage.status || candidate.status,
+                    message_type: serverMessage.message_type || candidate.message_type,
+                    message: serverMessage.message || candidate.message,
+                    timestamp: Date.now()
+                });
+                // Also ensure chat row reflects latest identifiers
+                await this.saveChats([{
+                    number: chatNumber,
+                    name: '',
+                    wamid: serverMessage.wamid || '',
+                    create_date: serverMessage.create_date || '',
+                    type: serverMessage.type || 'out',
+                    message_type: serverMessage.message_type || candidate.message_type,
+                    message: serverMessage.message || candidate.message,
+                    status: serverMessage.status || candidate.status,
+                    unique_id: serverMessage.message_id || candidate.message_id,
+                    last_id: serverMessage.id || candidate.id,
+                    send_by_username: serverMessage.send_by_username || '',
+                    send_by_mobile: serverMessage.send_by_mobile || ''
+                }]);
+                return;
+            }
+
+            // Fallback: no candidate found, save as new message
+            await this.saveMessage([{
+                ...serverMessage,
+                chat_number: chatNumber,
+                timestamp: Date.now()
+            }]);
+        } catch (error) {
+            console.error('❌ Error merging outgoing message:', error);
+        }
+    },
+
     async updateChat(chatNumber, updates) {
         try {
             const db = this.db;

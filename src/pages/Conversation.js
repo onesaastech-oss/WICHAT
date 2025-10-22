@@ -261,7 +261,6 @@ const MediaModal = ({ isOpen, onClose, mediaItem, type }) => {
 
 // Professional Document Preview Component
 const DocumentPreview = ({ fileInfo, isOwnMessage }) => {
-    const [showModal, setShowModal] = useState(false);
 
     const getFileIcon = (fileName) => {
         const extension = fileName?.split('.').pop()?.toLowerCase();
@@ -295,6 +294,29 @@ const DocumentPreview = ({ fileInfo, isOwnMessage }) => {
         return extension.toUpperCase() + ' File';
     };
 
+    const downloadFile = async (url, filename = 'file') => {
+        try {
+            const res = await fetch(url, { credentials: 'omit' });
+            const blob = await res.blob();
+            const objectUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = objectUrl;
+            a.download = filename || 'file';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(objectUrl);
+        } catch (err) {
+            console.error('Download failed, falling back to open:', err);
+            window.open(url, '_blank', 'noopener,noreferrer');
+        }
+    };
+
+    const handleDownload = (e) => {
+        e.stopPropagation();
+        downloadFile(fileInfo.serverUrl, fileInfo.name);
+    };
+
     if (!fileInfo?.serverUrl) {
         return (
             <div className="flex flex-col items-center justify-center p-4 sm:p-6 bg-gray-50 dark:bg-gray-700 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 w-full max-w-xs sm:max-w-sm">
@@ -312,8 +334,7 @@ const DocumentPreview = ({ fileInfo, isOwnMessage }) => {
     return (
         <>
             <div 
-                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 w-full max-w-xs sm:max-w-sm overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer"
-                onClick={() => setShowModal(true)}
+                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 w-full max-w-xs sm:max-w-sm overflow-hidden shadow-sm hover:shadow-md transition-all duration-200"
             >
                 {/* Header */}
                 <div className="flex items-center space-x-2 sm:space-x-3 p-3 sm:p-4 border-b border-gray-100 dark:border-gray-700">
@@ -333,29 +354,26 @@ const DocumentPreview = ({ fileInfo, isOwnMessage }) => {
                 {/* Actions */}
                 <div className="p-2 sm:p-3 bg-gray-50 dark:bg-gray-750">
                     <div className="flex items-center justify-between">
-                        <button className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-1 sm:py-2 text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
-                            <FaRegEye className="w-3 h-3 sm:w-4 sm:h-4" />
-                            <span>Preview</span>
-                        </button>
                         <a
                             href={fileInfo.serverUrl}
-                            download={fileInfo.name}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
+                            className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-1 sm:py-2 text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                        >
+                            <FaRegEye className="w-3 h-3 sm:w-4 sm:h-4" />
+                            <span>Preview</span>
+                        </a>
+                        <button
+                            onClick={handleDownload}
                             className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-1 sm:py-2 text-xs sm:text-sm font-medium text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors"
                         >
                             <FiDownload className="w-3 h-3 sm:w-4 sm:h-4" />
                             <span>Download</span>
-                        </a>
+                        </button>
                     </div>
                 </div>
             </div>
-
-            <MediaModal
-                isOpen={showModal}
-                onClose={() => setShowModal(false)}
-                mediaItem={fileInfo}
-                type="document"
-            />
         </>
     );
 };
@@ -903,6 +921,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
         switch (message.message_type) {
             case 'image':
+            case 'photo':
                 return (
                     <ImagePreview
                         fileInfo={fileInfo}
