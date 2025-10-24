@@ -19,7 +19,8 @@ import {
     FiExternalLink,
     FiCheck,
     FiClock,
-    FiAlertCircle
+    FiAlertCircle,
+    FiInfo
 } from 'react-icons/fi';
 import { FaRegEye } from "react-icons/fa6";
 import { MdOutlineCancel } from "react-icons/md";
@@ -31,8 +32,198 @@ import { Encrypt } from './encryption/payload-encryption';
 import { dbHelper } from './db';
 import ReactPlayer from 'react-player';
 
+// Error Modal Component
+const ErrorModal = ({ isOpen, onClose, errorMessage }) => {
+    if (!isOpen) return null;
+
+    return (
+        <AnimatePresence>
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+                onClick={onClose}
+            >
+                <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.9, opacity: 0 }}
+                    transition={{ type: "spring", duration: 0.3 }}
+                    className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex items-center space-x-3 mb-4">
+                        <div className="flex-shrink-0">
+                            <FiAlertCircle className="w-6 h-6 text-red-500" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            Message Failed
+                        </h3>
+                    </div>
+                    <p className="text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
+                        {errorMessage}
+                    </p>
+                    <div className="flex justify-end">
+                        <button
+                            onClick={onClose}
+                            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </motion.div>
+            </motion.div>
+        </AnimatePresence>
+    );
+};
+
+// Message Info Modal Component
+const MessageInfoModal = ({ isOpen, onClose, message, activeChat }) => {
+    if (!isOpen || !message) return null;
+
+    const formatDateTime = (timestamp) => {
+        if (!timestamp) return 'Unknown';
+        const date = new Date(timestamp);
+        return date.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        });
+    };
+
+    const getMessageTypeDisplay = (messageType) => {
+        switch (messageType) {
+            case 'text': return 'Text Message';
+            case 'image': return 'Image';
+            case 'video': return 'Video';
+            case 'audio': return 'Audio';
+            case 'document': return 'Document';
+            case 'location': return 'Location';
+            case 'contact': return 'Contact';
+            default: return 'Unknown';
+        }
+    };
+
+    const getStatusDisplay = (status) => {
+        switch (status) {
+            case 'pending': return 'Pending';
+            case 'sent': return 'Sent';
+            case 'delivered': return 'Delivered';
+            case 'read': return 'Read';
+            case 'failed': return 'Failed';
+            default: return 'Unknown';
+        }
+    };
+
+    return (
+        <AnimatePresence>
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+                onClick={onClose}
+            >
+                <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.9, opacity: 0 }}
+                    transition={{ type: "spring", duration: 0.3 }}
+                    className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full mx-4 p-6"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex items-center space-x-3 mb-6">
+                        <div className="flex-shrink-0">
+                            <FiUser className="w-6 h-6 text-blue-500" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            Message Details
+                        </h3>
+                    </div>
+
+                    <div className="space-y-4">
+                        {/* Message Content Preview */}
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message Content</h4>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 max-h-32 overflow-y-auto">
+                                {message.message_type === 'text' ? (
+                                    <p className="whitespace-pre-wrap">{message.message}</p>
+                                ) : (
+                                    <p className="italic">{getMessageTypeDisplay(message.message_type)} - {message.message}</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Message Details */}
+                        <div className="grid grid-cols-1 gap-4">
+                            <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-600">
+                                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Type</span>
+                                <span className="text-sm text-gray-900 dark:text-white">{getMessageTypeDisplay(message.message_type)}</span>
+                            </div>
+
+                            <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-600">
+                                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Direction</span>
+                                <span className="text-sm text-gray-900 dark:text-white">
+                                    {message.type === 'out' ? 'Outgoing' : 'Incoming'}
+                                </span>
+                            </div>
+
+                            <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-600">
+                                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Status</span>
+                                <span className={`text-sm font-medium ${message.status === 'failed' ? 'text-red-500' :
+                                        message.status === 'read' ? 'text-green-500' :
+                                            message.status === 'delivered' ? 'text-blue-500' :
+                                                'text-gray-500'
+                                    }`}>
+                                    {getStatusDisplay(message.status)}
+                                </span>
+                            </div>
+
+                            <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-600">
+                                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Timestamp</span>
+                                <span className="text-sm text-gray-900 dark:text-white">
+                                    {formatDateTime(message.timestamp || message.create_date)}
+                                </span>
+                            </div>
+
+                            <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-600">
+                                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Chat</span>
+                                <span className="text-sm text-gray-900 dark:text-white">{activeChat?.name || 'Unknown'}</span>
+                            </div>
+
+                            {message.failed_reason && (
+                                <div className="flex justify-between items-start py-2 border-b border-gray-200 dark:border-gray-600">
+                                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Error</span>
+                                    <span className="text-sm text-red-500 max-w-xs text-right">{message.failed_reason}</span>
+                                </div>
+                            )}
+
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end mt-6">
+                        <button
+                            onClick={onClose}
+                            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </motion.div>
+            </motion.div>
+        </AnimatePresence>
+    );
+};
+
 // Message Status Indicator Component
 const MessageStatusIndicator = ({ status, isOwnMessage, darkMode, failedReason }) => {
+    const [showErrorModal, setShowErrorModal] = useState(false);
+
     if (!isOwnMessage) return null;
 
     const getStatusIcon = (status) => {
@@ -84,21 +275,25 @@ const MessageStatusIndicator = ({ status, isOwnMessage, darkMode, failedReason }
     const handleClick = (e) => {
         if (isFailed) {
             e.stopPropagation();
-            try {
-                // Simple fallback UI to show reason on click (esp. for mobile)
-                alert(failedReason);
-            } catch {}
+            setShowErrorModal(true);
         }
     };
 
     return (
-        <div
-            className={`flex items-center space-x-1 ${getStatusColor(status)} ${isFailed ? 'cursor-help' : ''}`}
-            title={isFailed ? failedReason : undefined}
-            onClick={handleClick}
-        >
-            {getStatusIcon(status)}
-        </div>
+        <>
+            <div
+                className={`flex items-center space-x-1 ${getStatusColor(status)} ${isFailed ? 'cursor-help' : ''}`}
+                title={isFailed ? 'Click to view error details' : undefined}
+                onClick={handleClick}
+            >
+                {getStatusIcon(status)}
+            </div>
+            <ErrorModal
+                isOpen={showErrorModal}
+                onClose={() => setShowErrorModal(false)}
+                errorMessage={failedReason}
+            />
+        </>
     );
 };
 
@@ -349,7 +544,7 @@ const DocumentPreview = ({ fileInfo, isOwnMessage }) => {
 
     return (
         <>
-            <div 
+            <div
                 className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 w-full max-w-xs sm:max-w-sm overflow-hidden shadow-sm hover:shadow-md transition-all duration-200"
             >
                 {/* Header */}
@@ -428,8 +623,8 @@ const ImagePreview = ({ fileInfo, isOwnMessage }) => {
                         <div className="w-6 h-6 sm:w-8 sm:h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                     </div>
                 )}
-                
-                <div 
+
+                <div
                     className="relative overflow-hidden rounded-xl cursor-pointer transform transition-transform duration-200 group-hover:scale-[1.02]"
                     onClick={() => setShowModal(true)}
                 >
@@ -504,7 +699,7 @@ const VideoPreview = ({ fileInfo, isOwnMessage }) => {
                     </div>
                 )}
 
-                <div 
+                <div
                     className="relative overflow-hidden rounded-xl bg-black cursor-pointer"
                     onClick={() => setShowModal(true)}
                 >
@@ -584,7 +779,7 @@ const AudioPreview = ({ fileInfo, isOwnMessage }) => {
 
     return (
         <>
-            <div 
+            <div
                 className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 w-full max-w-xs sm:max-w-sm overflow-hidden shadow-sm cursor-pointer"
                 onClick={() => setShowModal(true)}
             >
@@ -756,6 +951,72 @@ const ContactPreview = ({ contactInfo, isOwnMessage }) => {
                 </button>
             </div>
         </div>
+    );
+};
+
+// Message Item Component with Info Button
+const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime }) => {
+    const [showInfoModal, setShowInfoModal] = useState(false);
+
+    return (
+        <>
+            <div className={`flex ${msg.type === 'out' ? 'justify-end' : 'justify-start'} w-full group`}>
+                <div className={`max-w-[80%] ${msg.type === 'out' ? 'order-2' : 'order-1'}`}>
+                    <div className={`flex items-end space-x-1 sm:space-x-2 ${msg.type === 'out' ? 'flex-row-reverse space-x-reverse' : ''}`}>
+                        {msg.type !== 'out' && (
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold text-xs sm:text-sm flex-shrink-0">
+                                {activeChat.name.charAt(0).toUpperCase()}
+                            </div>
+                        )}
+                        <div
+                            className={`p-3 sm:p-4 rounded-2xl ${msg.type === 'out'
+                                ? 'bg-blue-500 text-white rounded-br-md'
+                                : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-md border border-gray-200 dark:border-gray-700'
+                                } max-w-full relative`}
+                        >
+                            {msg.message_type === 'text' ? (
+                                <p className="whitespace-pre-wrap break-words text-sm sm:text-base">{msg.message}</p>
+                            ) : (
+                                renderFilePreview(msg)
+                            )}
+                            <div className={`flex items-center space-x-1 sm:space-x-2 mt-1 sm:mt-2 ${msg.type === 'out' ? 'justify-end' : 'justify-start'}`}>
+                                <span className="text-xs opacity-75">
+                                    {formatTime(msg.timestamp || msg.create_date)}
+                                </span>
+                                <MessageStatusIndicator
+                                    status={msg.status || 'pending'}
+                                    isOwnMessage={msg.type === 'out'}
+                                    darkMode={darkMode}
+                                    failedReason={msg.failed_reason}
+                                />
+                            </div>
+
+                            {/* Info Button */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowInfoModal(true);
+                                }}
+                                className={`top-2 bg-gray-200 ${msg.type === 'out' ? 'left-2' : 'right-2'} 
+                                     group-hover:opacity-100 transition-opacity duration-200
+                                    p-1 rounded-full hover:bg-black hover:bg-opacity-10 dark:hover:bg-white dark:hover:bg-opacity-10
+                                    focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1`}
+                                title="View message details"
+                            >
+                                <FiInfo className="w-2.5 h-2.5 text-gray-700 dark:text-gray-400" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <MessageInfoModal
+                isOpen={showInfoModal}
+                onClose={() => setShowInfoModal(false)}
+                message={msg}
+                activeChat={activeChat}
+            />
+        </>
     );
 };
 
@@ -1083,7 +1344,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                             : msg
                     )
                 );
-                
+
                 if (dbAvailable) {
                     await dbHelper.updateMessageStatus(tempMessageId, 'sent');
                 }
@@ -1101,7 +1362,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                             : msg
                     )
                 );
-                
+
                 if (dbAvailable) {
                     await dbHelper.updateMessageStatus(tempMessageId, 'failed');
                 }
@@ -1121,7 +1382,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         : msg
                 )
             );
-            
+
             if (dbAvailable) {
                 await dbHelper.updateMessageStatus(tempMessageId, 'failed');
             }
@@ -1466,40 +1727,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 ) : (
                     <>
                         {messages.map((msg) => (
-                            <div key={msg.id} className={`flex ${msg.type === 'out' ? 'justify-end' : 'justify-start'} w-full`}>
-                                <div className={`max-w-[80%] ${msg.type === 'out' ? 'order-2' : 'order-1'}`}>
-                                    <div className={`flex items-end space-x-1 sm:space-x-2 ${msg.type === 'out' ? 'flex-row-reverse space-x-reverse' : ''}`}>
-                                        {msg.type !== 'out' && (
-                                            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold text-xs sm:text-sm flex-shrink-0">
-                                                {activeChat.name.charAt(0).toUpperCase()}
-                                            </div>
-                                        )}
-                                        <div
-                                            className={`p-3 sm:p-4 rounded-2xl ${msg.type === 'out'
-                                                ? 'bg-blue-500 text-white rounded-br-md'
-                                                : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-md border border-gray-200 dark:border-gray-700'
-                                                } max-w-full`}
-                                        >
-                                            {msg.message_type === 'text' ? (
-                                                <p className="whitespace-pre-wrap break-words text-sm sm:text-base">{msg.message}</p>
-                                            ) : (
-                                                renderFilePreview(msg)
-                                            )}
-                                            <div className={`flex items-center space-x-1 sm:space-x-2 mt-1 sm:mt-2 ${msg.type === 'out' ? 'justify-end' : 'justify-start'}`}>
-                                                <span className="text-xs opacity-75">
-                                                    {formatTime(msg.timestamp || msg.create_date)}
-                                                </span>
-                                                <MessageStatusIndicator 
-                                                    status={msg.status || 'pending'} 
-                                                    isOwnMessage={msg.type === 'out'} 
-                                                    darkMode={darkMode}
-                                                    failedReason={msg.failed_reason}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <MessageItem
+                                key={msg.id}
+                                msg={msg}
+                                activeChat={activeChat}
+                                darkMode={darkMode}
+                                renderFilePreview={renderFilePreview}
+                                formatTime={formatTime}
+                            />
                         ))}
 
                         {isUploading && (
