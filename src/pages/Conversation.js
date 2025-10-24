@@ -1100,6 +1100,9 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 const updatedMessage = await dbHelper.getMessages(activeChat.number);
                 setMessages(updatedMessage);
             }
+            
+            // Ensure scroll to bottom after loading messages
+            setTimeout(() => scrollToBottomImmediate(), 200);
         })();
     }, [tokens, activeChat?.number]);
 
@@ -1113,6 +1116,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 console.log("💬 New socket message for active chat:", socketMessage);
                 // Append it safely without duplicating
                 setMessages(socketMessage);
+                // Scroll immediately for new socket messages
+                setTimeout(() => scrollToBottomImmediate(), 50);
             }
         }
     }, [socketMessage, activeChat]);
@@ -1123,7 +1128,27 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     }, [messages]);
 
     const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        // Use setTimeout to ensure DOM is updated
+        setTimeout(() => {
+            if (messagesEndRef.current) {
+                messagesEndRef.current.scrollIntoView({ 
+                    behavior: "smooth", 
+                    block: "end",
+                    inline: "nearest"
+                });
+            }
+        }, 100);
+    };
+
+    // Alternative scroll method for immediate scrolling
+    const scrollToBottomImmediate = () => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ 
+                behavior: "auto", 
+                block: "end",
+                inline: "nearest"
+            });
+        }
     };
 
     const syncWithAPI = async () => {
@@ -1327,8 +1352,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             chat_number: activeChat.number
         };
 
-        setMessages(prev => [...prev, newMessage]);
-        setMessageInput('');
+                setMessages(prev => [...prev, newMessage]);
+                setMessageInput('');
+                // Scroll immediately for new messages
+                setTimeout(() => scrollToBottomImmediate(), 50);
 
         // Persist temp message and update chat list immediately
         try {
@@ -1570,6 +1597,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 setMessages(prev => [...prev, tempMessage]);
                 setSelectedFile(null);
                 setMessageInput('');
+                // Scroll immediately for file uploads
+                setTimeout(() => scrollToBottomImmediate(), 50);
 
                 // Trigger parent to refresh chat list with pending state immediately
                 if (onMessageStatusUpdate) {
@@ -1766,7 +1795,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gray-50 dark:bg-gray-900 w-full">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gray-50 dark:bg-gray-900 w-full scroll-smooth">
                 {loadingHistory ? (
                     <div className="flex items-center justify-center py-6 sm:py-8">
                         <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-blue-500"></div>
