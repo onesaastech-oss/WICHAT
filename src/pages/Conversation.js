@@ -632,12 +632,18 @@ const DocumentPreview = ({ fileInfo, isOwnMessage }) => {
 };
 
 // Professional Image Preview Component
-const ImagePreview = ({ fileInfo, isOwnMessage }) => {
+const ImagePreview = ({ fileInfo, isOwnMessage, onImageLoad }) => {
     const [showModal, setShowModal] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false);
 
-    const handleImageLoad = () => setIsLoading(false);
+    const handleImageLoad = () => {
+        setIsLoading(false);
+        // Trigger scroll update when image loads
+        if (onImageLoad) {
+            setTimeout(() => onImageLoad(), 100);
+        }
+    };
     const handleImageError = () => {
         setIsLoading(false);
         setHasError(true);
@@ -706,7 +712,7 @@ const ImagePreview = ({ fileInfo, isOwnMessage }) => {
 };
 
 // Professional Video Preview Component
-const VideoPreview = ({ fileInfo, isOwnMessage }) => {
+const VideoPreview = ({ fileInfo, isOwnMessage, onVideoLoad }) => {
     const [showModal, setShowModal] = useState(false);
     const [hasError, setHasError] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -716,7 +722,13 @@ const VideoPreview = ({ fileInfo, isOwnMessage }) => {
         setIsLoading(false);
     };
 
-    const handleReady = () => setIsLoading(false);
+    const handleReady = () => {
+        setIsLoading(false);
+        // Trigger scroll update when video is ready
+        if (onVideoLoad) {
+            setTimeout(() => onVideoLoad(), 100);
+        }
+    };
 
     if (hasError || !fileInfo?.serverUrl) {
         return (
@@ -1077,6 +1089,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [messages, setMessages] = useState([]);
     const messagesEndRef = useRef(null);
+    const messagesContainerRef = useRef(null);
 
     useEffect(() => {
         markAsRead(activeChat.number);
@@ -1127,6 +1140,45 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         scrollToBottom();
     }, [messages]);
 
+    // Additional scroll update for media loading
+    useEffect(() => {
+        if (messagesContainerRef.current) {
+            // Use ResizeObserver to detect when container size changes due to image loads
+            const resizeObserver = new ResizeObserver(() => {
+                // Check if we're near the bottom, and if so, scroll to bottom
+                const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+                const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
+                
+                if (isNearBottom) {
+                    setTimeout(() => scrollToBottomImmediate(), 100);
+                }
+            });
+
+            // Also use MutationObserver for DOM changes
+            const mutationObserver = new MutationObserver(() => {
+                const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+                const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
+                
+                if (isNearBottom) {
+                    setTimeout(() => scrollToBottomImmediate(), 100);
+                }
+            });
+
+            resizeObserver.observe(messagesContainerRef.current);
+            mutationObserver.observe(messagesContainerRef.current, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['style', 'class']
+            });
+
+            return () => {
+                resizeObserver.disconnect();
+                mutationObserver.disconnect();
+            };
+        }
+    }, [messages]);
+
     const scrollToBottom = () => {
         // Use setTimeout to ensure DOM is updated
         setTimeout(() => {
@@ -1149,6 +1201,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 inline: "nearest"
             });
         }
+    };
+
+    // Handle media load scroll updates
+    const handleMediaLoad = () => {
+        // Use a small delay to ensure DOM has updated
+        setTimeout(() => {
+            scrollToBottomImmediate();
+        }, 50);
     };
 
     const syncWithAPI = async () => {
@@ -1275,6 +1335,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     <ImagePreview
                         fileInfo={fileInfo}
                         isOwnMessage={message.send_by === 'You'}
+                        onImageLoad={handleMediaLoad}
                     />
                 );
             case 'video':
@@ -1282,6 +1343,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     <VideoPreview
                         fileInfo={fileInfo}
                         isOwnMessage={message.send_by === 'You'}
+                        onVideoLoad={handleMediaLoad}
                     />
                 );
             case 'audio':
@@ -1795,7 +1857,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gray-50 dark:bg-gray-900 w-full scroll-smooth">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gray-50 dark:bg-gray-900 w-full scroll-smooth">
                 {loadingHistory ? (
                     <div className="flex items-center justify-center py-6 sm:py-8">
                         <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-blue-500"></div>
