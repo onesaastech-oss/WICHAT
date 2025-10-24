@@ -89,6 +89,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                 is_favorite: apiChat.contact.is_favorite || false,
                 wamid: apiChat.last_message.wamid,
                 create_date: apiChat.last_message.create_date,
+                timestamp: apiChat.last_message.create_date ? new Date(apiChat.last_message.create_date).getTime() : Date.now(),
                 type: apiChat.last_message.type,
                 message_type: apiChat.last_message.message_type,
                 message: apiChat.last_message.message,
@@ -209,9 +210,11 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
     };
 
     // Format time for display
-    const formatTime = (dateString) => {
-        if (!dateString) return '';
-        const date = new Date(dateString);
+    const formatTime = (dateStringOrEpoch) => {
+        if (!dateStringOrEpoch) return '';
+        const date = typeof dateStringOrEpoch === 'number'
+            ? new Date(dateStringOrEpoch)
+            : new Date(dateStringOrEpoch);
         const now = new Date();
         const diffInHours = (now - date) / (1000 * 60 * 60);
         
@@ -364,7 +367,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                                                                 <span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400"></span>
                                                             )}
                                                             <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                                {formatTime(chat.create_date)}
+                                                                {formatTime(chat.timestamp || chat.create_date)}
                                                             </div>
                                                         </div>
                                                     </div>

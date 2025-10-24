@@ -245,7 +245,11 @@ export const dbHelper = {
                         longitude: message.longitude || '',
                         name: message.name || '',
                         reply_wamid: message.reply_wamid || '',
-                        timestamp: Date.now(),
+                        timestamp: (
+                            message.timestamp
+                            || (message.create_date ? new Date(message.create_date).getTime() : undefined)
+                            || Date.now()
+                        ),
                         retryCount: message.retryCount || '',
                         chat_number: message.chat_number
                     };
@@ -431,7 +435,12 @@ export const dbHelper = {
                     status: serverMessage.status || candidate.status,
                     message_type: serverMessage.message_type || candidate.message_type,
                     message: serverMessage.message || candidate.message,
-                    timestamp: Date.now()
+                    timestamp: (
+                        serverMessage.timestamp
+                        || (serverMessage.create_date ? new Date(serverMessage.create_date).getTime() : undefined)
+                        || candidate.timestamp
+                        || Date.now()
+                    )
                 });
                 // Also ensure chat row reflects latest identifiers
                 const existingChat = await db.chats.where('number').equals(chatNumber).first();
@@ -456,7 +465,11 @@ export const dbHelper = {
             await this.saveMessage([{
                 ...serverMessage,
                 chat_number: chatNumber,
-                timestamp: Date.now()
+                timestamp: (
+                    serverMessage.timestamp
+                    || (serverMessage.create_date ? new Date(serverMessage.create_date).getTime() : undefined)
+                    || Date.now()
+                )
             }]);
         } catch (error) {
             console.error('❌ Error merging outgoing message:', error);

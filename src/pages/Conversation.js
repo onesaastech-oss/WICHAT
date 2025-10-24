@@ -887,7 +887,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 longitude: apiMessage.longitude || '',
                 name: apiMessage.name || '',
                 reply_wamid: apiMessage.reply_wamid || '',
-                timestamp: apiMessage.timestamp || '',
+                timestamp: apiMessage.timestamp || (apiMessage.create_date ? new Date(apiMessage.create_date).getTime() : ''),
                 retryCount: apiMessage.retryCount || '',
                 chat_number: activeChat.number
             }));
@@ -1487,7 +1487,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                             )}
                                             <div className={`flex items-center space-x-1 sm:space-x-2 mt-1 sm:mt-2 ${msg.type === 'out' ? 'justify-end' : 'justify-start'}`}>
                                                 <span className="text-xs opacity-75">
-                                                    {formatTime(msg.timestamp)}
+                                                    {formatTime(msg.timestamp || msg.create_date)}
                                                 </span>
                                                 <MessageStatusIndicator 
                                                     status={msg.status || 'pending'} 
@@ -1605,10 +1605,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 }
 
 // Helper function to format time
-const formatTime = (timestamp) => {
-    if (!timestamp) return '';
+const formatTime = (value) => {
+    if (!value) return '';
     try {
-        const date = new Date(timestamp);
+        const date = typeof value === 'number' ? new Date(value) : new Date(value);
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch {
         return '';
