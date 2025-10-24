@@ -148,7 +148,7 @@ const MessageInfoModal = ({ isOpen, onClose, message, activeChat }) => {
 
                     <div className="space-y-4">
                         {/* Message Content Preview */}
-                        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                        {/* <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message Content</h4>
                             <div className="text-sm text-gray-600 dark:text-gray-400 max-h-32 overflow-y-auto">
                                 {message.message_type === 'text' ? (
@@ -157,14 +157,51 @@ const MessageInfoModal = ({ isOpen, onClose, message, activeChat }) => {
                                     <p className="italic">{getMessageTypeDisplay(message.message_type)} - {message.message}</p>
                                 )}
                             </div>
-                        </div>
+                        </div> */}
 
                         {/* Message Details */}
                         <div className="grid grid-cols-1 gap-4">
-                            <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-600">
+                            {/* <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-600">
                                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Type</span>
                                 <span className="text-sm text-gray-900 dark:text-white">{getMessageTypeDisplay(message.message_type)}</span>
-                            </div>
+                            </div> */}
+
+                            {/* Sender/Receiver Information - Read from local DB flattened fields */}
+                            {message.type === 'out' && (message.send_by_name || message.send_by_mobile) && (
+                                <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-600">
+                                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Sent by</span>
+                                    <div className="text-right">
+                                        {message.send_by_name && (
+                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                                {message.send_by_name}
+                                            </div>
+                                        )}
+                                        {message.send_by_mobile && (
+                                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                {message.send_by_mobile}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {message.type === 'in' && (message.read_by_name || message.read_by_mobile) && (
+                                <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-600">
+                                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Read by</span>
+                                    <div className="text-right">
+                                        {message.read_by_name && (
+                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                                {message.read_by_name}
+                                            </div>
+                                        )}
+                                        {message.read_by_mobile && (
+                                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                {message.read_by_mobile}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-600">
                                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Direction</span>
@@ -173,16 +210,21 @@ const MessageInfoModal = ({ isOpen, onClose, message, activeChat }) => {
                                 </span>
                             </div>
 
-                            <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-600">
-                                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Status</span>
-                                <span className={`text-sm font-medium ${message.status === 'failed' ? 'text-red-500' :
-                                        message.status === 'read' ? 'text-green-500' :
-                                            message.status === 'delivered' ? 'text-blue-500' :
-                                                'text-gray-500'
-                                    }`}>
-                                    {getStatusDisplay(message.status)}
-                                </span>
-                            </div>
+                            {
+                                message.status && message.type === 'out' ?
+                                    <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-600">
+                                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Status</span>
+                                        <span className={`text-sm font-medium ${message.status === 'failed' ? 'text-red-500' :
+                                            message.status === 'read' ? 'text-green-500' :
+                                                message.status === 'delivered' ? 'text-blue-500' :
+                                                    'text-gray-500'
+                                            }`}>
+                                            {getStatusDisplay(message.status)}
+                                        </span>
+
+                                    </div>
+                                    : ''
+                            }
 
                             <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-600">
                                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Timestamp</span>
