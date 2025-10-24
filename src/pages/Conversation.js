@@ -32,7 +32,7 @@ import { dbHelper } from './db';
 import ReactPlayer from 'react-player';
 
 // Message Status Indicator Component
-const MessageStatusIndicator = ({ status, isOwnMessage, darkMode }) => {
+const MessageStatusIndicator = ({ status, isOwnMessage, darkMode, failedReason }) => {
     if (!isOwnMessage) return null;
 
     const getStatusIcon = (status) => {
@@ -79,8 +79,24 @@ const MessageStatusIndicator = ({ status, isOwnMessage, darkMode }) => {
         }
     };
 
+    const isFailed = status === 'failed' && failedReason;
+
+    const handleClick = (e) => {
+        if (isFailed) {
+            e.stopPropagation();
+            try {
+                // Simple fallback UI to show reason on click (esp. for mobile)
+                alert(failedReason);
+            } catch {}
+        }
+    };
+
     return (
-        <div className={`flex items-center space-x-1 ${getStatusColor(status)}`}>
+        <div
+            className={`flex items-center space-x-1 ${getStatusColor(status)} ${isFailed ? 'cursor-help' : ''}`}
+            title={isFailed ? failedReason : undefined}
+            onClick={handleClick}
+        >
             {getStatusIcon(status)}
         </div>
     );
@@ -1006,6 +1022,36 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         setMessages(prev => [...prev, newMessage]);
         setMessageInput('');
 
+        // Persist temp message and update chat list immediately
+        try {
+            if (dbAvailable) {
+                await dbHelper.addMessage(activeChat.number, newMessage);
+                await dbHelper.saveChats([
+                    {
+                        number: activeChat.number,
+                        name: activeChat.name,
+                        is_favorite: activeChat.is_favorite || false,
+                        wamid: '',
+                        create_date: new Date().toISOString(),
+                        type: 'out',
+                        message_type: 'text',
+                        message: text,
+                        status: 'pending',
+                        unique_id: tempMessageId,
+                        last_id: Date.now(),
+                        send_by_username: tokens?.username || '',
+                        send_by_mobile: ''
+                    }
+                ]);
+            }
+            // Trigger parent to refresh chat list with pending state
+            if (onMessageStatusUpdate) {
+                onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
+            }
+        } catch (e) {
+            console.error('Failed to persist temp message/chat row:', e);
+        }
+
         try {
             const messagePayload = {
                 project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
@@ -1195,10 +1241,32 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
                 if (dbAvailable) {
                     await dbHelper.addMessage(activeChat.number, tempMessage);
+                    await dbHelper.saveChats([
+                        {
+                            number: activeChat.number,
+                            name: activeChat.name,
+                            is_favorite: activeChat.is_favorite || false,
+                            wamid: '',
+                            create_date: tempMessage.create_date,
+                            type: 'out',
+                            message_type: fileType,
+                            message: tempMessage.message,
+                            status: 'pending',
+                            unique_id: tempMessageId,
+                            last_id: Date.now(),
+                            send_by_username: tokens?.username || '',
+                            send_by_mobile: ''
+                        }
+                    ]);
                 }
                 setMessages(prev => [...prev, tempMessage]);
                 setSelectedFile(null);
                 setMessageInput('');
+
+                // Trigger parent to refresh chat list with pending state immediately
+                if (onMessageStatusUpdate) {
+                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
+                }
 
                 const messagePayload = {
                     project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
@@ -1425,6 +1493,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                                     status={msg.status || 'pending'} 
                                                     isOwnMessage={msg.type === 'out'} 
                                                     darkMode={darkMode}
+                                                    failedReason={msg.failed_reason}
                                                 />
                                             </div>
                                         </div>

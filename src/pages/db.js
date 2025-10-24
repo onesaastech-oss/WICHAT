@@ -155,10 +155,16 @@ export const dbHelper = {
 
             await db.transaction('rw', db.chats, async () => {
                 for (const chat of chatList) {
+                    const existing = await db.chats.where('number').equals(chat.number).first();
+
+                    const safeName = (chat.name && String(chat.name).trim() !== '')
+                        ? chat.name
+                        : (existing?.name || chat.number);
+
                     const data = {
                         number: chat.number,
-                        name: chat.name,
-                        is_favorite: chat.is_favorite || false,
+                        name: safeName,
+                        is_favorite: typeof chat.is_favorite === 'boolean' ? chat.is_favorite : (existing?.is_favorite || false),
                         wamid: chat.wamid,
                         create_date: chat.create_date,
                         type: chat.type,
@@ -171,8 +177,6 @@ export const dbHelper = {
                         send_by_mobile: chat.send_by_mobile || '',
                         lastUpdated: Date.now()
                     };
-
-                    const existing = await db.chats.where('number').equals(chat.number).first();
 
                     if (existing) {
                         await db.chats.update(existing.id, data);
@@ -391,34 +395,31 @@ export const dbHelper = {
         }
     },
 
-    // Merge server-echoed outgoing media message into existing temp message
+    // Merge server-echoed outgoing message into existing temp message (handles media and text)
     async mergeServerOutgoingMessage(chatNumber, serverMessage) {
         try {
             const db = this.db;
 
             const mediaUrl = serverMessage.media_url || '';
-            if (!mediaUrl) {
-                // No media URL, fallback to saving server message as-is
-                await this.saveMessage([{
-                    ...serverMessage,
-                    chat_number: chatNumber,
-                    timestamp: Date.now()
-                }]);
-                return;
-            }
+            const isText = !mediaUrl && (serverMessage.message_type === 'text' || !serverMessage.message_type);
 
-            // Find a recent outgoing temp message in the same chat with same media URL
+            // Find a recent outgoing temp message in the same chat matching media or text
             const recentMessages = await db.messages
                 .where('chat_number')
                 .equals(chatNumber)
-                .reverse()
                 .sortBy('id');
 
-            const candidate = recentMessages.find(m =>
-                m && m.type === 'out' &&
-                m.media_url === mediaUrl &&
-                (m.status === 'pending' || m.status === 'sent' || !m.status)
-            );
+            const candidate = [...recentMessages].reverse().find(m => {
+                if (!m || m.type !== 'out') return false;
+                const isPendingish = (m.status === 'pending' || m.status === 'sent' || !m.status);
+                if (!isPendingish) return false;
+                // Prefer temp ids for safer merge
+                const isTempId = typeof m.message_id === 'string' && m.message_id.startsWith('temp_');
+                if (isText) {
+                    return (m.message_type === 'text') && (m.message === serverMessage.message) && isTempId;
+                }
+                return m.media_url === mediaUrl;
+            });
 
             if (candidate) {
                 // Update the temp message with server identifiers and status
@@ -433,9 +434,10 @@ export const dbHelper = {
                     timestamp: Date.now()
                 });
                 // Also ensure chat row reflects latest identifiers
+                const existingChat = await db.chats.where('number').equals(chatNumber).first();
                 await this.saveChats([{
                     number: chatNumber,
-                    name: '',
+                    name: existingChat?.name || chatNumber,
                     wamid: serverMessage.wamid || '',
                     create_date: serverMessage.create_date || '',
                     type: serverMessage.type || 'out',
