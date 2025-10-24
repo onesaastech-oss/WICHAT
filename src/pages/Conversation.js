@@ -1022,19 +1022,20 @@ const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime 
                                 renderFilePreview(msg)
                             )}
                             <div className={`flex items-center space-x-1 sm:space-x-2 mt-1 sm:mt-2 ${msg.type === 'out' ? 'justify-end' : 'justify-start'}`}>
+                               
+                             
                                 <span className="text-xs opacity-75">
                                     {formatTime(msg.timestamp || msg.create_date)}
                                 </span>
+                                
                                 <MessageStatusIndicator
                                     status={msg.status || 'pending'}
                                     isOwnMessage={msg.type === 'out'}
                                     darkMode={darkMode}
                                     failedReason={msg.failed_reason}
                                 />
-                            </div>
 
-                            {/* Info Button */}
-                            <button
+<button
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     setShowInfoModal(true);
@@ -1047,6 +1048,10 @@ const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime 
                             >
                                 <FiInfo className="w-2.5 h-2.5 text-gray-700 dark:text-gray-400" />
                             </button>
+                            </div>
+
+                            {/* Info Button */}
+
                         </div>
                     </div>
                 </div>
