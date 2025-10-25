@@ -2,6 +2,8 @@ import Dexie from 'dexie';
 
 let dbInstance = null;
 let changeListeners = [];
+let contactDbInstance = null;
+let contactChangeListeners = [];
 
 class ChatDatabase extends Dexie {
     constructor(dbName) {
@@ -84,6 +86,43 @@ class ChatDatabase extends Dexie {
                 listener(table, operation, data);
             } catch (error) {
                 console.error('Error in change listener:', error);
+            }
+        });
+    }
+}
+
+class ContactDatabase extends Dexie {
+    constructor(dbName) {
+        super(dbName || 'ContactDatabase');
+        this.version(1).stores({
+            contacts: '++id, contact_id, number, name, email, firm_name, website, remark, language_code, country, create_date, lastUpdated, groups, is_favorite'
+        });
+
+        // Set up database change listeners
+        this.setupChangeListeners();
+    }
+
+    setupChangeListeners() {
+        // Listen for changes on contacts table
+        this.contacts.hook('creating', (primKey, obj, transaction) => {
+            this.notifyChangeListeners('contacts', 'create', obj);
+        });
+
+        this.contacts.hook('updating', (modifications, primKey, obj, transaction) => {
+            this.notifyChangeListeners('contacts', 'update', { ...obj, ...modifications });
+        });
+
+        this.contacts.hook('deleting', (primKey, obj, transaction) => {
+            this.notifyChangeListeners('contacts', 'delete', obj);
+        });
+    }
+
+    notifyChangeListeners(table, operation, data) {
+        contactChangeListeners.forEach(listener => {
+            try {
+                listener(table, operation, data);
+            } catch (error) {
+                console.error('Error in contact change listener:', error);
             }
         });
     }
@@ -492,6 +531,223 @@ export const dbHelper = {
         } catch (error) {
             console.error("❌ Error getting message by message_id:", error);
             return null;
+        }
+    }
+};
+
+export const contactDbHelper = {
+    async init(projectId) {
+        if (!projectId) {
+            console.warn('⚠️ Missing projectId in contactDbHelper.init()');
+            projectId = 'default_project';
+        }
+
+        const dbName = `ContactDB_${projectId}`;
+
+        try {
+            if (contactDbInstance?.isOpen()) {
+                contactDbInstance.close();
+            }
+
+            contactDbInstance = new ContactDatabase(dbName);
+            await contactDbInstance.open();
+
+            console.log('✅ Contact Database opened successfully:', dbName);
+            return true;
+        } catch (error) {
+            console.error('❌ Failed to open contact database:', error);
+            try {
+                if (contactDbInstance) {
+                    contactDbInstance.close();
+                    await contactDbInstance.delete();
+                }
+                contactDbInstance = new ContactDatabase(dbName);
+                await contactDbInstance.open();
+                console.log('✅ Contact Database recreated successfully:', dbName);
+                return true;
+            } catch (recreateError) {
+                console.error('❌ Failed to recreate contact database:', recreateError);
+                return false;
+            }
+        }
+    },
+
+    get db() {
+        if (!contactDbInstance) throw new Error("Contact Database not initialized. Call contactDbHelper.init(projectId) first.");
+        return contactDbInstance;
+    },
+
+    // Add change listener
+    setOnDataChange(callback) {
+        contactChangeListeners.push(callback);
+        return () => {
+            contactChangeListeners = contactChangeListeners.filter(cb => cb !== callback);
+        };
+    },
+
+    // Remove change listener
+    removeOnDataChange(callback) {
+        contactChangeListeners = contactChangeListeners.filter(cb => cb !== callback);
+    },
+
+    async saveContacts(contactList = []) {
+        try {
+            const db = this.db;
+
+            if (!Array.isArray(contactList) || contactList.length === 0) {
+                console.warn("⚠️ No contacts to save.");
+                return;
+            }
+
+            await db.transaction('rw', db.contacts, async () => {
+                for (const contact of contactList) {
+                    const existing = await db.contacts.where('number').equals(contact.number || contact.mobile).first();
+
+                    const data = {
+                        contact_id: contact.contact_id || contact.id || contact._id,
+                        number: contact.number || contact.mobile || '',
+                        name: contact.name || contact.number || contact.mobile || 'Unknown',
+                        email: contact.email || '',
+                        firm_name: contact.firm_name || contact.company || '',
+                        website: contact.website || '',
+                        remark: contact.remark || '',
+                        language_code: contact.language_code || contact.languageCode || '',
+                        country: contact.country || '',
+                        create_date: contact.create_date || contact.createdOn || '',
+                        groups: contact.groups || [],
+                        is_favorite: contact.is_favorite || false,
+                        lastUpdated: Date.now()
+                    };
+
+                    if (existing) {
+                        await db.contacts.update(existing.id, data);
+                    } else {
+                        await db.contacts.add(data);
+                    }
+                }
+            });
+
+            console.log(`💾 Contacts saved/updated successfully (${contactList.length} items).`);
+        } catch (error) {
+            console.error("❌ Error saving contacts:", error);
+        }
+    },
+
+    async getContacts(page = 1, limit = 10) {
+        try {
+            const db = this.db;
+            const offset = (page - 1) * limit;
+            
+            const contacts = await db.contacts
+                .orderBy("lastUpdated")
+                .reverse()
+                .offset(offset)
+                .limit(limit)
+                .toArray();
+                
+            const totalCount = await db.contacts.count();
+            const totalPages = Math.ceil(totalCount / limit);
+            
+            return {
+                contacts,
+                totalCount,
+                totalPages,
+                currentPage: page
+            };
+        } catch (error) {
+            console.error("❌ Error getting contacts:", error);
+            return {
+                contacts: [],
+                totalCount: 0,
+                totalPages: 1,
+                currentPage: 1
+            };
+        }
+    },
+
+    async getAllContacts() {
+        try {
+            const db = this.db;
+            return await db.contacts.orderBy("name").toArray();
+        } catch (error) {
+            console.error("❌ Error getting all contacts:", error);
+            return [];
+        }
+    },
+
+    async getContactByNumber(number) {
+        try {
+            const db = this.db;
+            return await db.contacts.where('number').equals(number).first();
+        } catch (error) {
+            console.error("❌ Error getting contact by number:", error);
+            return null;
+        }
+    },
+
+    async addContact(contact) {
+        try {
+            const db = this.db;
+            const data = {
+                ...contact,
+                lastUpdated: Date.now()
+            };
+            await db.contacts.add(data);
+            console.log('✅ Contact added successfully');
+        } catch (error) {
+            console.error("❌ Error adding contact:", error);
+        }
+    },
+
+    async updateContact(contactId, updates) {
+        try {
+            const db = this.db;
+            await db.contacts.where('contact_id').equals(contactId).modify({
+                ...updates,
+                lastUpdated: Date.now()
+            });
+            console.log('✅ Contact updated successfully');
+        } catch (error) {
+            console.error("❌ Error updating contact:", error);
+        }
+    },
+
+    async deleteContact(contactId) {
+        try {
+            const db = this.db;
+            await db.contacts.where('contact_id').equals(contactId).delete();
+            console.log('✅ Contact deleted successfully');
+        } catch (error) {
+            console.error("❌ Error deleting contact:", error);
+        }
+    },
+
+    async searchContacts(query) {
+        try {
+            const db = this.db;
+            const searchTerm = query.toLowerCase();
+            
+            return await db.contacts
+                .filter(contact => 
+                    contact.name.toLowerCase().includes(searchTerm) ||
+                    contact.number.includes(searchTerm) ||
+                    (contact.email && contact.email.toLowerCase().includes(searchTerm)) ||
+                    (contact.firm_name && contact.firm_name.toLowerCase().includes(searchTerm))
+                )
+                .toArray();
+        } catch (error) {
+            console.error("❌ Error searching contacts:", error);
+            return [];
+        }
+    },
+
+    async clearContacts() {
+        try {
+            const db = this.db;
+            await db.contacts.clear();
+            console.log('✅ All contacts cleared');
+        } catch (error) {
+            console.error("❌ Error clearing contacts:", error);
         }
     }
 };

@@ -1,14 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
-import { Link } from 'react-router-dom';
+import axios from 'axios';
+import { Encrypt } from './encryption/payload-encryption';
+import { contactDbHelper } from './db';
 import {
-  FiMessageSquare,
-  FiMail,
-  FiSettings,
-  FiUsers,
-  FiZap,
-  FiCalendar,
-  FiActivity,
   FiPlus,
   FiDownload,
   FiUpload,
@@ -16,1015 +11,1051 @@ import {
   FiTrash2,
   FiChevronLeft,
   FiChevronRight,
-  FiUserPlus,
-  FiCheckSquare,
-  FiSquare,
-  FiChevronDown,
   FiX,
   FiUser,
-  FiFile,
-  FiSave
+  FiMail,
+  FiPhone,
+  FiGlobe,
+  FiHome,
+  FiFileText,
+  FiStar,
+  FiFilter
 } from 'react-icons/fi';
 
 function Contact() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [contacts, setContacts] = useState([]);
-  const [groups, setGroups] = useState(['Family', 'Friends', 'Work', 'Clients', 'VIP', 'Suppliers', 'Partners']);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+  const [tokens, setTokens] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [selectedContacts, setSelectedContacts] = useState([]);
   const [isAllSelected, setIsAllSelected] = useState(false);
-  
-  // Modal states
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [dbInitialized, setDbInitialized] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [showGroupModal, setShowGroupModal] = useState(false);
-  const [currentContact, setCurrentContact] = useState(null);
-  
-  // Form states
+  const [editingContact, setEditingContact] = useState(null);
+  const [favoriteContacts, setFavoriteContacts] = useState(new Set());
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+
+  // Form state for creating new contact
   const [newContact, setNewContact] = useState({
+    number: '',
     name: '',
-    mobile: '',
-    languageCode: 'en',
-    country: '',
-    groups: []
+    email: '',
+    firm_name: '',
+    website: '',
+    remark: ''
   });
-  
-  const [importFile, setImportFile] = useState(null);
-  const [selectedGroup, setSelectedGroup] = useState('');
-  const [formErrors, setFormErrors] = useState({});
-  
-  // Derived state for bulk actions
-  const showBulkActions = selectedContacts.length > 0;
-  const [showBulkDropdown, setShowBulkDropdown] = useState(false);
 
-  // Prevent background scrolling when mobile menu is open
-  useEffect(() => {
-    if (mobileMenuOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'auto';
-    }
-    return () => {
-      document.body.style.overflow = 'auto';
-    };
-  }, [mobileMenuOpen]);
+  // Form state for editing contact
+  const [editContact, setEditContact] = useState({
+    contact_id: '',
+    number: '',
+    name: '',
+    email: '',
+    firm_name: '',
+    website: '',
+    remark: ''
+  });
 
-  // Fetch contacts data (simulated)
+  // Initialize database and load auth tokens
   useEffect(() => {
-    const fetchContacts = async () => {
-      setLoading(true);
+    const initializeApp = async () => {
       try {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Mock data for contacts
-        const mockContacts = [
-          { id: 1, name: 'John Doe', mobile: '+1234567890', languageCode: 'en', country: 'United States', createdOn: '2023-06-15', groups: ['Work', 'Clients'] },
-          { id: 2, name: 'Jane Smith', mobile: '+44123456789', languageCode: 'en', country: 'United Kingdom', createdOn: '2023-06-10', groups: ['Friends'] },
-          { id: 3, name: 'Carlos Ruiz', mobile: '+34123456789', languageCode: 'es', country: 'Spain', createdOn: '2023-06-05', groups: ['Clients', 'VIP'] },
-          { id: 4, name: 'Marie Dubois', mobile: '+33123456789', languageCode: 'fr', country: 'France', createdOn: '2023-05-28', groups: ['Family'] },
-          { id: 5, name: 'Wei Zhang', mobile: '+86123456789', languageCode: 'zh', country: 'China', createdOn: '2023-05-20', groups: ['Work', 'Suppliers'] },
-          { id: 6, name: 'Hiroshi Tanaka', mobile: '+81123456789', languageCode: 'ja', country: 'Japan', createdOn: '2023-05-15', groups: ['VIP', 'Partners'] },
-          { id: 7, name: 'Anna Müller', mobile: '+49123456789', languageCode: 'de', country: 'Germany', createdOn: '2023-05-10', groups: ['Clients'] },
-          { id: 8, name: 'Marco Rossi', mobile: '+39123456789', languageCode: 'it', country: 'Italy', createdOn: '2023-05-05', groups: ['Friends', 'Partners'] },
-          { id: 9, name: 'Sofia Silva', mobile: '+55123456789', languageCode: 'pt', country: 'Brazil', createdOn: '2023-04-28', groups: ['Work'] },
-          { id: 10, name: 'Raj Patel', mobile: '+91123456789', languageCode: 'hi', country: 'India', createdOn: '2023-04-20', groups: ['VIP'] },
-          { id: 11, name: 'Elena Ivanova', mobile: '+79123456789', languageCode: 'ru', country: 'Russia', createdOn: '2023-04-15', groups: ['Family', 'Friends'] },
-          { id: 12, name: 'Mohammed Al-Fayed', mobile: '+20123456789', languageCode: 'ar', country: 'Egypt', createdOn: '2023-04-10', groups: ['Clients', 'Suppliers'] },
-        ];
-        
-        setContacts(mockContacts);
-      } catch (error) {
-        console.error('Failed to fetch contacts:', error);
-      } finally {
-        setLoading(false);
+        // Load auth tokens from session
+        const sessionData = localStorage.getItem('userData');
+        if (sessionData) {
+          const parsed = JSON.parse(sessionData);
+          if (parsed && typeof parsed === 'object') {
+            setTokens(parsed);
+
+            // Initialize contact database with project ID
+            const projectId = parsed.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c';
+            const dbInitSuccess = await contactDbHelper.init(projectId);
+            setDbInitialized(dbInitSuccess);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to initialize app:', e);
       }
     };
 
-    fetchContacts();
+    initializeApp();
   }, []);
 
-  // Get current contacts for pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentContacts = contacts.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(contacts.length / itemsPerPage);
+  // 3-Step Process: Load local DB → Sync with API → Refresh local DB
+  useEffect(() => {
+    if (!tokens?.token || !tokens?.username || !dbInitialized) return;
 
-  // Change page
-  const paginate = (pageNumber) => {
-    setCurrentPage(pageNumber);
-    setSelectedContacts([]);
-    setIsAllSelected(false);
-  };
+    const loadAndSyncContacts = async () => {
+      try {
+        // 1️⃣ Load local database immediately
+        console.log('📱 Step 1: Loading contacts from local database...');
+        setLoading(true);
 
-  // Handle individual contact selection
-  const toggleContactSelection = (contactId) => {
-    if (selectedContacts.includes(contactId)) {
-      setSelectedContacts(selectedContacts.filter(id => id !== contactId));
-      setIsAllSelected(false);
-    } else {
-      setSelectedContacts([...selectedContacts, contactId]);
+        const localResult = await contactDbHelper.getContacts(currentPage, 10);
+        if (localResult.contacts.length > 0) {
+          const mappedLocal = localResult.contacts.map(c => ({
+            id: c.contact_id, // Use contact_id as the main ID
+            name: c.name,
+            mobile: c.number,
+            email: c.email,
+            firm_name: c.firm_name,
+            website: c.website,
+            remark: c.remark,
+            languageCode: c.language_code,
+            country: c.country,
+            createdOn: c.create_date,
+            is_favorite: c.is_favorite || false
+          }));
+
+          // Load favorites from database
+          const favorites = new Set(mappedLocal.filter(c => c.is_favorite).map(c => c.id));
+          setFavoriteContacts(favorites);
+          setContacts(mappedLocal);
+          setTotalPages(localResult.totalPages);
+          setLoading(false);
+          console.log(`✅ Loaded ${mappedLocal.length} contacts from local DB`);
+        } else {
+          console.log('📭 No local contacts found, will wait for API sync');
+        }
+
+        // 2️⃣ Sync with API - make request and wait for response
+        console.log('🌐 Step 2: Syncing with API...');
+        setSyncing(true);
+
+        const payload = {
+          project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          page_no: currentPage,
+          query: ''
+        };
+
+        const { data, key } = Encrypt(payload);
+        const data_pass = JSON.stringify({ data, key });
+
+        const response = await axios.post(
+          'https://api.w1chat.com/contact/contact-list',
+          data_pass,
+          {
+            headers: {
+              'token': tokens.token,
+              'username': tokens.username,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (!response?.data?.error) {
+          const apiList = response?.data?.data || [];
+          console.log(`📥 Received ${apiList.length} contacts from API`);
+
+          // Save to local database
+          await contactDbHelper.saveContacts(apiList);
+
+          // 3️⃣ After API updates DB, re-fetch from local DB again
+          console.log('🔄 Step 3: Refreshing from updated local database...');
+          const refreshedResult = await contactDbHelper.getContacts(currentPage, 10);
+
+          const mappedRefreshed = refreshedResult.contacts.map(c => ({
+            id: c.contact_id, // Use contact_id as the main ID
+            name: c.name,
+            mobile: c.number,
+            email: c.email,
+            firm_name: c.firm_name,
+            website: c.website,
+            remark: c.remark,
+            languageCode: c.language_code,
+            country: c.country,
+            createdOn: c.create_date,
+            is_favorite: c.is_favorite || false
+          }));
+
+          // Update favorites from refreshed data
+          const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
+          setFavoriteContacts(refreshedFavorites);
+
+          setContacts(mappedRefreshed);
+          setTotalPages(refreshedResult.totalPages);
+          console.log(`✅ Final result: ${mappedRefreshed.length} contacts displayed`);
+        } else {
+          console.warn('⚠️ API returned error:', response?.data?.message);
+          // If API fails but we have local data, keep showing local data
+          if (localResult.contacts.length === 0) {
+            setContacts([]);
+            setTotalPages(1);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error in loadAndSyncContacts:', error);
+        // If everything fails, try to show local data or empty state
+        try {
+          const fallbackResult = await contactDbHelper.getContacts(currentPage, 10);
+          if (fallbackResult.contacts.length > 0) {
+            const mappedFallback = fallbackResult.contacts.map(c => ({
+              id: c.contact_id, // Use contact_id as the main ID
+              name: c.name,
+              mobile: c.number,
+              email: c.email,
+              firm_name: c.firm_name,
+              website: c.website,
+              remark: c.remark,
+              languageCode: c.language_code,
+              country: c.country,
+              createdOn: c.create_date,
+              is_favorite: c.is_favorite || false
+            }));
+
+            // Update favorites from fallback data
+            const fallbackFavorites = new Set(mappedFallback.filter(c => c.is_favorite).map(c => c.id));
+            setFavoriteContacts(fallbackFavorites);
+            setContacts(mappedFallback);
+            setTotalPages(fallbackResult.totalPages);
+          } else {
+            setContacts([]);
+            setTotalPages(1);
+          }
+        } catch (fallbackError) {
+          console.error('❌ Fallback also failed:', fallbackError);
+          setContacts([]);
+          setTotalPages(1);
+        }
+      } finally {
+        setLoading(false);
+        setSyncing(false);
+        setSelectedContacts([]);
+        setIsAllSelected(false);
+      }
+    };
+
+    loadAndSyncContacts();
+  }, [tokens?.token, tokens?.username, tokens?.projects, currentPage, dbInitialized]);
+
+  // Handle create contact
+  const handleCreateContact = async () => {
+    if (!tokens?.token || !tokens?.username) return;
+
+    try {
+      const payload = {
+        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        ...newContact
+      };
+
+      const { data, key } = Encrypt(payload);
+      const data_pass = JSON.stringify({ data, key });
+
+      const response = await axios.post(
+        'https://api.w1chat.com/contact/create-contact',
+        data_pass,
+        {
+          headers: {
+            'token': tokens.token,
+            'username': tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response?.data?.error) {
+        // Save to local database immediately
+        const newContactData = {
+          contact_id: response?.data?.data?.id || Date.now().toString(),
+          number: newContact.number,
+          name: newContact.name,
+          email: newContact.email,
+          firm_name: newContact.firm_name,
+          website: newContact.website,
+          remark: newContact.remark,
+          create_date: new Date().toISOString()
+        };
+
+        await contactDbHelper.saveContacts([newContactData]);
+
+        // Refresh contacts list
+        setCurrentPage(1);
+        setShowCreateModal(false);
+        setNewContact({
+          number: '',
+          name: '',
+          email: '',
+          firm_name: '',
+          website: '',
+          remark: ''
+        });
+
+        // Trigger refetch by updating tokens state
+        setTokens({ ...tokens });
+      } else {
+        alert('Failed to create contact: ' + (response?.data?.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Failed to create contact:', error);
+      alert('Failed to create contact. Please try again.');
     }
   };
 
-  // Handle select all on current page
-  const toggleSelectAll = () => {
+  // Handle opening edit modal
+  const handleOpenEditModal = (contact) => {
+    console.log('🔧 Opening edit modal for contact:', contact);
+    setEditingContact(contact);
+    setEditContact({
+      contact_id: contact.id, // This should be the contact_id from API
+      number: contact.mobile,
+      name: contact.name,
+      email: contact.email || '',
+      firm_name: contact.firm_name || '',
+      website: contact.website || '',
+      remark: contact.remark || ''
+    });
+    setShowEditModal(true);
+  };
+
+  // Handle update contact
+  const handleUpdateContact = async () => {
+    if (!tokens?.token || !tokens?.username || !editContact.contact_id) return;
+
+    try {
+      const payload = {
+        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        contact_id: editContact.contact_id,
+        number: editContact.number,
+        name: editContact.name,
+        email: editContact.email,
+        firm_name: editContact.firm_name,
+        website: editContact.website,
+        remark: editContact.remark
+      };
+
+      console.log('📤 Sending update payload:', payload);
+
+      const { data, key } = Encrypt(payload);
+      const data_pass = JSON.stringify({ data, key });
+
+      const response = await axios.post(
+        'https://api.w1chat.com/contact/update-contact',
+        data_pass,
+        {
+          headers: {
+            'token': tokens.token,
+            'username': tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response?.data?.error) {
+        // Update local database immediately
+        const updatedContactData = {
+          contact_id: editContact.contact_id,
+          number: editContact.number,
+          name: editContact.name,
+          email: editContact.email,
+          firm_name: editContact.firm_name,
+          website: editContact.website,
+          remark: editContact.remark,
+          create_date: editingContact.createdOn || new Date().toISOString()
+        };
+
+        await contactDbHelper.saveContacts([updatedContactData]);
+
+        // Close modal and reset form
+        setShowEditModal(false);
+        setEditingContact(null);
+        setEditContact({
+          contact_id: '',
+          number: '',
+          name: '',
+          email: '',
+          firm_name: '',
+          website: '',
+          remark: ''
+        });
+
+        // Trigger refetch by updating tokens state
+        setTokens({ ...tokens });
+      } else {
+        alert('Failed to update contact: ' + (response?.data?.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Failed to update contact:', error);
+      alert('Failed to update contact. Please try again.');
+    }
+  };
+
+  // Handle favorite contact toggle
+  const handleToggleFavorite = async (contact) => {
+    if (!tokens?.token || !tokens?.username) return;
+
+    const isFavorite = favoriteContacts.has(contact.id);
+    const action = isFavorite ? 'delete' : 'add';
+
+    try {
+      const payload = {
+        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        number: contact.mobile,
+        action: action
+      };
+
+      console.log('⭐ Toggling favorite:', { contact: contact.name, action, payload });
+
+      const { data, key } = Encrypt(payload);
+      const data_pass = JSON.stringify({ data, key });
+
+      const response = await axios.post(
+        'https://api.w1chat.com/contact/mark-as-favorite',
+        data_pass,
+        {
+          headers: {
+            'token': tokens.token,
+            'username': tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response?.data?.error) {
+        // Update local favorite state
+        const newFavorites = new Set(favoriteContacts);
+        if (action === 'add') {
+          newFavorites.add(contact.id);
+        } else {
+          newFavorites.delete(contact.id);
+        }
+        setFavoriteContacts(newFavorites);
+
+        // Update local database
+        await contactDbHelper.updateContact(contact.id, {
+          is_favorite: action === 'add'
+        });
+
+        console.log(`✅ Contact ${action === 'add' ? 'added to' : 'removed from'} favorites`);
+      } else {
+        alert('Failed to update favorite status: ' + (response?.data?.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Failed to toggle favorite:', error);
+      alert('Failed to update favorite status. Please try again.');
+    }
+  };
+
+  // Handle export to Excel
+  const handleExportToExcel = () => {
+    if (contacts.length === 0) {
+      alert('No contacts to export');
+      return;
+    }
+
+    const csvContent = [
+      ['Name', 'Mobile', 'Email', 'Company', 'Website', 'Remark',],
+      ...contacts.map(contact => [
+        contact.name,
+        contact.mobile,
+        contact.email,
+        contact.firm_name,
+        contact.website,
+        contact.remark,
+      ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'contacts.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  // Handle select all contacts
+  const handleSelectAll = () => {
     if (isAllSelected) {
       setSelectedContacts([]);
       setIsAllSelected(false);
     } else {
-      const currentPageIds = currentContacts.map(contact => contact.id);
-      setSelectedContacts(currentPageIds);
+      setSelectedContacts(contacts.map(c => c.id));
       setIsAllSelected(true);
     }
   };
 
-  // Handle bulk delete
-  const handleBulkDelete = () => {
-    setShowDeleteModal(true);
-    setShowBulkDropdown(false);
-  };
-
-  // Confirm delete
-  const confirmDelete = () => {
-    setContacts(contacts.filter(contact => !selectedContacts.includes(contact.id)));
-    setSelectedContacts([]);
-    setShowDeleteModal(false);
-    setIsAllSelected(false);
-  };
-
-  // Handle export to Excel
-  const handleExport = () => {
-    setShowExportModal(true);
-  };
-
-  // Confirm export
-  const confirmExport = () => {
-    alert(`Exporting ${selectedContacts.length > 0 ? selectedContacts.length : contacts.length} contacts to Excel`);
-    setShowExportModal(false);
-  };
-
-  // Handle import from Excel
-  const handleImport = () => {
-    setShowImportModal(true);
-  };
-
-  // Handle file upload for import
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setImportFile(file);
-    }
-  };
-
-  // Confirm import
-  const confirmImport = () => {
-    if (importFile) {
-      alert(`Importing contacts from ${importFile.name}`);
-      setShowImportModal(false);
-      setImportFile(null);
-    } else {
-      alert('Please select a file first');
-    }
-  };
-
-  // Handle add contact
-  const handleAddContact = () => {
-    setNewContact({
-      name: '',
-      mobile: '',
-      languageCode: 'en',
-      country: '',
-      groups: []
-    });
-    setFormErrors({});
-    setShowAddModal(true);
-  };
-
-  // Handle edit contact
-  const handleEditContact = (contact) => {
-    setCurrentContact(contact);
-    setNewContact({
-      name: contact.name,
-      mobile: contact.mobile,
-      languageCode: contact.languageCode,
-      country: contact.country,
-      groups: [...contact.groups] // Copy the array to avoid mutation
-    });
-    setFormErrors({});
-    setShowEditModal(true);
-  };
-
-  // Handle input change for forms
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewContact({
-      ...newContact,
-      [name]: value
-    });
-    
-    // Clear error when user starts typing
-    if (formErrors[name]) {
-      setFormErrors({
-        ...formErrors,
-        [name]: ''
-      });
-    }
-  };
-
-  // Handle group selection/deselection
-  const toggleGroupSelection = (group) => {
-    if (newContact.groups.includes(group)) {
-      // Remove group if already selected
-      setNewContact({
-        ...newContact,
-        groups: newContact.groups.filter(g => g !== group)
-      });
-    } else {
-      // Add group if not selected
-      setNewContact({
-        ...newContact,
-        groups: [...newContact.groups, group]
-      });
-    }
-  };
-
-  // Validate form
-  const validateForm = () => {
-    const errors = {};
-    
-    if (!newContact.name.trim()) {
-      errors.name = 'Name is required';
-    }
-    
-    if (!newContact.mobile.trim()) {
-      errors.mobile = 'Mobile number is required';
-    } else if (!/^\+?[0-9]{10,15}$/.test(newContact.mobile)) {
-      errors.mobile = 'Please enter a valid mobile number';
-    }
-    
-    if (!newContact.country.trim()) {
-      errors.country = 'Country is required';
-    }
-    
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  // Save new contact
-  const saveNewContact = () => {
-    if (validateForm()) {
-      const newContactObj = {
-        id: contacts.length + 1,
-        ...newContact,
-        createdOn: new Date().toISOString().split('T')[0]
-      };
-      setContacts([...contacts, newContactObj]);
-      setShowAddModal(false);
-      setNewContact({
-        name: '',
-        mobile: '',
-        languageCode: 'en',
-        country: '',
-        groups: []
-      });
-    }
-  };
-
-  // Save edited contact
-  const saveEditedContact = () => {
-    if (validateForm()) {
-      const updatedContacts = contacts.map(contact => 
-        contact.id === currentContact.id 
-          ? { ...contact, ...newContact }
-          : contact
-      );
-      setContacts(updatedContacts);
-      setShowEditModal(false);
-      setCurrentContact(null);
-      setNewContact({
-        name: '',
-        mobile: '',
-        languageCode: 'en',
-        country: '',
-        groups: []
-      });
-    }
-  };
-
-  // Handle group assignment
-  const handleGroupAssignment = () => {
-    setShowGroupModal(true);
-    setShowBulkDropdown(false);
-  };
-
-  // Confirm group assignment
-  const confirmGroupAssignment = () => {
-    if (selectedGroup) {
-      const updatedContacts = contacts.map(contact => 
-        selectedContacts.includes(contact.id)
-          ? { 
-              ...contact, 
-              groups: contact.groups.includes(selectedGroup) 
-                ? contact.groups 
-                : [...contact.groups, selectedGroup] 
-            }
-          : contact
-      );
-      setContacts(updatedContacts);
-      setShowGroupModal(false);
-      setSelectedGroup('');
-      setSelectedContacts([]);
+  // Handle individual contact selection
+  const handleSelectContact = (contactId) => {
+    if (selectedContacts.includes(contactId)) {
+      setSelectedContacts(selectedContacts.filter(id => id !== contactId));
       setIsAllSelected(false);
     } else {
-      alert('Please select a group');
+      const newSelected = [...selectedContacts, contactId];
+      setSelectedContacts(newSelected);
+      setIsAllSelected(newSelected.length === contacts.length);
     }
   };
 
-  // Modal component for reusability
-  const Modal = ({ isOpen, onClose, title, children, actions }) => {
-    if (!isOpen) return null;
-
-    return (
-      <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
-        <div className="relative mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white transform transition-all duration-300 scale-95 opacity-0 animate-modal-in">
-          <div className="mt-3">
-            <div className="flex items-center justify-between pb-3 border-b">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">
-                {title}
-              </h3>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-500 focus:outline-none"
-              >
-                <FiX className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="mt-4 max-h-96 overflow-y-auto">
-              {children}
-            </div>
-            <div className="items-center px-4 py-3 mt-4 flex justify-end space-x-4 border-t">
-              {actions}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  // Pagination handlers
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
   };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Filter contacts based on favorites filter
+  const filteredContacts = showFavoritesOnly
+    ? contacts.filter(contact => favoriteContacts.has(contact.id))
+    : contacts;
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
       <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
 
-      {/* Delete Confirmation Modal */}
-      <Modal
-        isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        title="Confirm Delete"
-        actions={
-          <>
-            <button
-              className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              onClick={() => setShowDeleteModal(false)}
-            >
-              Cancel
-            </button>
-            <button
-              className="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              onClick={confirmDelete}
-            >
-              Delete
-            </button>
-          </>
-        }
-      >
-        <div className="px-4 py-3">
-          <p className="text-sm text-gray-500">
-            Are you sure you want to delete {selectedContacts.length} contact(s)? This action cannot be undone.
-          </p>
-        </div>
-      </Modal>
-
-      {/* Add Contact Modal */}
-      <Modal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        title="Add New Contact"
-        actions={
-          <>
-            <button
-              className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              onClick={() => setShowAddModal(false)}
-            >
-              Cancel
-            </button>
-            <button
-              className="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              onClick={saveNewContact}
-            >
-              Save Contact
-            </button>
-          </>
-        }
-      >
-        <div className="px-4 py-3 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-            <input
-              type="text"
-              name="name"
-              value={newContact.name}
-              onChange={handleInputChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                formErrors.name ? 'border-red-500' : 'border-gray-300'
-              }`}
-              placeholder="Enter name"
-            />
-            {formErrors.name && <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mobile *</label>
-            <input
-              type="text"
-              name="mobile"
-              value={newContact.mobile}
-              onChange={handleInputChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                formErrors.mobile ? 'border-red-500' : 'border-gray-300'
-              }`}
-              placeholder="Enter mobile number"
-            />
-            {formErrors.mobile && <p className="mt-1 text-sm text-red-600">{formErrors.mobile}</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Language Code</label>
-            <select
-              name="languageCode"
-              value={newContact.languageCode}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="en">English (en)</option>
-              <option value="es">Spanish (es)</option>
-              <option value="fr">French (fr)</option>
-              <option value="de">German (de)</option>
-              <option value="zh">Chinese (zh)</option>
-              <option value="ja">Japanese (ja)</option>
-              <option value="ru">Russian (ru)</option>
-              <option value="ar">Arabic (ar)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Country *</label>
-            <input
-              type="text"
-              name="country"
-              value={newContact.country}
-              onChange={handleInputChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                formErrors.country ? 'border-red-500' : 'border-gray-300'
-              }`}
-              placeholder="Enter country"
-            />
-            {formErrors.country && <p className="mt-1 text-sm text-red-600">{formErrors.country}</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Groups</label>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {groups.map(group => (
-                <button
-                  key={group}
-                  type="button"
-                  onClick={() => toggleGroupSelection(group)}
-                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                    newContact.groups.includes(group)
-                      ? 'bg-green-100 text-green-800 border border-green-300'
-                      : 'bg-gray-100 text-gray-800 border border-gray-300 hover:bg-gray-200'
-                  }`}
-                >
-                  {group}
-                </button>
-              ))}
-            </div>
-            <p className="mt-1 text-xs text-gray-500">
-              Selected: {newContact.groups.length > 0 ? newContact.groups.join(', ') : 'None'}
-            </p>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Edit Contact Modal */}
-      <Modal
-        isOpen={showEditModal}
-        onClose={() => setShowEditModal(false)}
-        title="Edit Contact"
-        actions={
-          <>
-            <button
-              className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              onClick={() => setShowEditModal(false)}
-            >
-              Cancel
-            </button>
-            <button
-              className="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              onClick={saveEditedContact}
-            >
-              Save Changes
-            </button>
-          </>
-        }
-      >
-        <div className="px-4 py-3 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-            <input
-              type="text"
-              name="name"
-              value={newContact.name}
-              onChange={handleInputChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                formErrors.name ? 'border-red-500' : 'border-gray-300'
-              }`}
-            />
-            {formErrors.name && <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mobile *</label>
-            <input
-              type="text"
-              name="mobile"
-              value={newContact.mobile}
-              onChange={handleInputChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                formErrors.mobile ? 'border-red-500' : 'border-gray-300'
-              }`}
-            />
-            {formErrors.mobile && <p className="mt-1 text-sm text-red-600">{formErrors.mobile}</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Language Code</label>
-            <select
-              name="languageCode"
-              value={newContact.languageCode}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="en">English (en)</option>
-              <option value="es">Spanish (es)</option>
-              <option value="fr">French (fr)</option>
-              <option value="de">German (de)</option>
-              <option value="zh">Chinese (zh)</option>
-              <option value="ja">Japanese (ja)</option>
-              <option value="ru">Russian (ru)</option>
-              <option value="ar">Arabic (ar)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Country *</label>
-            <input
-              type="text"
-              name="country"
-              value={newContact.country}
-              onChange={handleInputChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                formErrors.country ? 'border-red-500' : 'border-gray-300'
-              }`}
-            />
-            {formErrors.country && <p className="mt-1 text-sm text-red-600">{formErrors.country}</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Groups</label>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {groups.map(group => (
-                <button
-                  key={group}
-                  type="button"
-                  onClick={() => toggleGroupSelection(group)}
-                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                    newContact.groups.includes(group)
-                      ? 'bg-green-100 text-green-800 border border-green-300'
-                      : 'bg-gray-100 text-gray-800 border border-gray-300 hover:bg-gray-200'
-                  }`}
-                >
-                  {group}
-                </button>
-              ))}
-            </div>
-            <p className="mt-1 text-xs text-gray-500">
-              Selected: {newContact.groups.length > 0 ? newContact.groups.join(', ') : 'None'}
-            </p>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Import Modal */}
-      <Modal
-        isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
-        title="Import Contacts from Excel"
-        actions={
-          <>
-            <button
-              className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              onClick={() => setShowImportModal(false)}
-            >
-              Cancel
-            </button>
-            <button
-              className="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              onClick={confirmImport}
-            >
-              Import
-            </button>
-          </>
-        }
-      >
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-center w-full">
-            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer border-gray-300 hover:border-indigo-500">
-              <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                <FiUpload className="w-8 h-8 mb-3 text-gray-400" />
-                <p className="mb-2 text-sm text-gray-500">
-                  <span className="font-semibold">Click to upload</span> or drag and drop
-                </p>
-                <p className="text-xs text-gray-500">Excel files only</p>
-              </div>
-              <input 
-                type="file" 
-                className="hidden" 
-                accept=".xlsx,.xls,.csv"
-                onChange={handleFileUpload}
-              />
-            </label>
-          </div>
-          {importFile && (
-            <div className="mt-4 p-3 bg-gray-50 rounded-md">
-              <div className="flex items-center">
-                <FiFile className="text-indigo-600 mr-2" />
-                <span className="text-sm font-medium">{importFile.name}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </Modal>
-
-      {/* Export Modal */}
-      <Modal
-        isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        title="Export Contacts to Excel"
-        actions={
-          <>
-            <button
-              className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              onClick={() => setShowExportModal(false)}
-            >
-              Cancel
-            </button>
-            <button
-              className="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              onClick={confirmExport}
-            >
-              Export
-            </button>
-          </>
-        }
-      >
-        <div className="px-4 py-3">
-          <p className="text-sm text-gray-500">
-            {selectedContacts.length > 0 
-              ? `Export ${selectedContacts.length} selected contacts to Excel?`
-              : `Export all ${contacts.length} contacts to Excel?`
-            }
-          </p>
-        </div>
-      </Modal>
-
-      {/* Group Assignment Modal */}
-      <Modal
-        isOpen={showGroupModal}
-        onClose={() => setShowGroupModal(false)}
-        title="Assign to Group"
-        actions={
-          <>
-            <button
-              className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              onClick={() => setShowGroupModal(false)}
-            >
-              Cancel
-            </button>
-            <button
-              className="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              onClick={confirmGroupAssignment}
-            >
-              Assign
-            </button>
-          </>
-        }
-      >
-        <div className="px-4 py-3">
-          <p className="text-sm text-gray-500 mb-3">
-            Assign {selectedContacts.length} selected contacts to:
-          </p>
-          <select
-            value={selectedGroup}
-            onChange={(e) => setSelectedGroup(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">Select a group</option>
-            {groups.map(group => (
-              <option key={group} value={group}>{group}</option>
-            ))}
-          </select>
-        </div>
-      </Modal>
-
-      {/* Main content */}
-      <div className="pt-16 md:pl-64">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
-          {/* Page header */}
-          <div className="md:flex md:items-center md:justify-between mb-6">
-            <div className="flex-1 min-w-0">
-              <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
-                Contact Management
-              </h2>
-            </div>
-            <div className="mt-4 flex md:mt-0 md:ml-4 space-x-3">
-              <button
-                onClick={handleExport}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <FiDownload className="mr-2" />
-                Export to Excel
-              </button>
-              <button
-                onClick={handleImport}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <FiUpload className="mr-2" />
-                Import from Excel
-              </button>
-              <button
-                onClick={handleAddContact}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <FiUserPlus className="mr-2" />
-                Add Contact
-              </button>
-            </div>
-          </div>
-
-          {/* Bulk Actions Dropdown */}
-          {showBulkActions && (
-            <div className="mb-4 bg-indigo-50 p-3 rounded-md flex items-center justify-between">
-              <div className="flex items-center">
-                <span className="text-indigo-800 font-medium">
-                  {selectedContacts.length} contact(s) selected
-                </span>
-              </div>
-              <div className="relative inline-block text-left">
-                <div>
-                  <button
-                    type="button"
-                    className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    onClick={() => setShowBulkDropdown(!showBulkDropdown)}
-                  >
-                    Bulk Actions
-                    <FiChevronDown className="-mr-1 ml-2 h-5 w-5" />
-                  </button>
-                </div>
-
-                {showBulkDropdown && (
-                  <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
-                    <div className="py-1">
-                      <button
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                        onClick={handleGroupAssignment}
-                      >
-                        Assign to Group
-                      </button>
-                      <button
-                        className="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100 w-full text-left"
-                        onClick={handleBulkDelete}
-                      >
-                        Delete Selected
-                      </button>
+      <div className="md:ml-64 pt-16">
+        <div className="p-4 sm:p-6 md:p-8">
+          {/* Header Section */}
+          <div className="mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <h1 className="text-base font-bold text-gray-900">Contact Management</h1>
+                  {syncing && (
+                    <div className="flex items-center text-sm text-blue-600">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      Syncing...
                     </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Contacts table */}
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      <div className="flex items-center">
-                        <button onClick={toggleSelectAll} className="mr-2 focus:outline-none">
-                          {isAllSelected ? <FiCheckSquare className="h-5 w-5 text-indigo-600" /> : <FiSquare className="h-5 w-5 text-gray-400" />}
-                        </button>
-                        Name
-                      </div>
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Mobile
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Language Code
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Country
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Groups
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Created On
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {loading ? (
-                    // Skeleton loading rows
-                    Array.from({ length: itemsPerPage }).map((_, index) => (
-                      <tr key={index}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="h-4 bg-gray-200 rounded w-4 mr-2 animate-pulse"></div>
-                            <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="h-6 bg-gray-200 rounded w-16 animate-pulse ml-auto"></div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    // Actual data rows
-                    currentContacts.map((contact) => (
-                      <tr key={contact.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <button 
-                              onClick={() => toggleContactSelection(contact.id)}
-                              className="mr-2 focus:outline-none"
-                            >
-                              {selectedContacts.includes(contact.id) ? 
-                                <FiCheckSquare className="h-5 w-5 text-indigo-600" /> : 
-                                <FiSquare className="h-5 w-5 text-gray-400" />
-                              }
-                            </button>
-                            <div className="text-sm font-medium text-gray-900">{contact.name}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">{contact.mobile}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">{contact.languageCode}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">{contact.country}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex flex-wrap gap-1">
-                            {contact.groups.map(group => (
-                              <span key={group} className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                                {group}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {contact.createdOn}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="flex justify-end space-x-2">
-                            <button 
-                              className="text-indigo-600 hover:text-indigo-900"
-                              onClick={() => handleEditContact(contact)}
-                            >
-                              <FiEdit size={18} />
-                            </button>
-                            <button 
-                              className="text-red-600 hover:text-red-900"
-                              onClick={() => {
-                                setSelectedContacts([contact.id]);
-                                setShowDeleteModal(true);
-                              }}
-                            >
-                              <FiTrash2 size={18} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
                   )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            {!loading && (
-              <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm text-gray-700">
-                      Showing <span className="font-medium">{indexOfFirstItem + 1}</span> to{' '}
-                      <span className="font-medium">
-                        {Math.min(indexOfLastItem, contacts.length)}
-                      </span>{' '}
-                      of <span className="font-medium">{contacts.length}</span> results
-                    </p>
-                  </div>
-                  <div>
-                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                      <button
-                        onClick={() => paginate(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1}
-                        className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium 
-                          ${currentPage === 1 ? 'text-gray-300' : 'text-gray-500 hover:bg-gray-50'}`}
-                      >
-                        <span className="sr-only">Previous</span>
-                        <FiChevronLeft className="h-5 w-5" aria-hidden="true" />
-                      </button>
-                      
-                      {/* Page numbers */}
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                        <button
-                          key={page}
-                          onClick={() => paginate(page)}
-                          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium
-                            ${currentPage === page 
-                              ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600' 
-                              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'}`}
-                        >
-                          {page}
-                        </button>
-                      ))}
-                      
-                      <button
-                        onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
-                        disabled={currentPage === totalPages}
-                        className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium 
-                          ${currentPage === totalPages ? 'text-gray-300' : 'text-gray-500 hover:bg-gray-50'}`}
-                      >
-                        <span className="sr-only">Next</span>
-                        <FiChevronRight className="h-5 w-5" aria-hidden="true" />
-                      </button>
-                    </nav>
-                  </div>
                 </div>
+                <p className="text-gray-600 text-sm">Manage your contacts and customer information</p>
               </div>
-            )}
+
+              <div className="flex flex-wrap gap-3 mt-4 sm:mt-0">
+                <button
+                  onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+                  className={`inline-flex items-center px-4 py-2 border rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${showFavoritesOnly
+                      ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
+                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                >
+                  <FiFilter className="mr-2 h-4 w-4 text-sm" />
+                  {showFavoritesOnly ? 'Show All' : 'Favorites Only'}
+                </button>
+
+                <button
+                  onClick={handleExportToExcel}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <FiDownload className="mr-2 h-4 w-4" />
+                  Export to Excel
+                </button>
+
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <FiUpload className="mr-2 h-4 w-4" />
+                  Import from Excel
+                </button>
+
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <FiPlus className="mr-2 h-4 w-4" />
+                  Create Contact
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Contacts Table */}
+          <div className="bg-white shadow rounded-lg overflow-hidden">
+            <div className="px-4 py-5 sm:p-6">
+              {loading ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                  <span className="ml-2 text-gray-600">Loading contacts...</span>
+                </div>
+              ) : (
+                <>
+                  {/* Table Header */}
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <input
+                              type="checkbox"
+                              checked={isAllSelected}
+                              onChange={handleSelectAll}
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            />
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Name
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Mobile
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Email
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Company
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredContacts.length === 0 ? (
+                          <tr>
+                            <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                              {showFavoritesOnly
+                                ? 'No favorite contacts found. Mark some contacts as favorites to see them here.'
+                                : 'No contacts found. Create your first contact to get started.'
+                              }
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredContacts.map((contact) => (
+                            <tr key={contact.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedContacts.includes(contact.id)}
+                                  onChange={() => handleSelectContact(contact.id)}
+                                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                />
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <div className="flex-shrink-0 h-10 w-10">
+                                    <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                                      <FiUser className="h-5 w-5 text-indigo-600" />
+                                    </div>
+                                  </div>
+                                  <div className="ml-4">
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {contact.name}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {contact.mobile}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {contact.email || '-'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {contact.firm_name || '-'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => handleOpenEditModal(contact)}
+                                    className="text-indigo-600 hover:text-indigo-900"
+                                    title="Edit contact"
+                                  >
+                                    <FiEdit className="h-4 w-4" />
+                                  </button>
+                                      <button
+                                    onClick={() => handleToggleFavorite(contact)}
+                                    className="ml-2 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                                    title={favoriteContacts.has(contact.id) ? 'Remove from favorites' : 'Add to favorites'}
+                                  >
+                                    <FiStar
+                                      className={`h-4 w-4 ${favoriteContacts.has(contact.id)
+                                          ? 'text-yellow-400 fill-current'
+                                          : 'text-gray-300 hover:text-yellow-400'
+                                        }`}
+                                    />
+                                  </button>
+
+                                  <button className="text-red-600 hover:text-red-900" title="Delete contact">
+                                    <FiTrash2 className="h-4 w-4" />
+                                  </button>
+
+
+
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200 sm:px-6">
+                      <div className="flex justify-between flex-1 sm:hidden">
+                        <button
+                          onClick={handlePreviousPage}
+                          disabled={currentPage === 1}
+                          className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          onClick={handleNextPage}
+                          disabled={currentPage === totalPages}
+                          className="relative ml-3 inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Next
+                        </button>
+                      </div>
+                      <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm text-gray-700">
+                            Page <span className="font-medium">{currentPage}</span> of{' '}
+                            <span className="font-medium">{totalPages}</span>
+                          </p>
+                        </div>
+                        <div>
+                          <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                            <button
+                              onClick={handlePreviousPage}
+                              disabled={currentPage === 1}
+                              className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <FiChevronLeft className="h-5 w-5" />
+                            </button>
+                            <button
+                              onClick={handleNextPage}
+                              disabled={currentPage === totalPages}
+                              className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <FiChevronRight className="h-5 w-5" />
+                            </button>
+                          </nav>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* CSS for animations */}
-      <style jsx>{`
-        @keyframes modalIn {
-          0% {
-            transform: scale(0.95);
-            opacity: 0;
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-        .animate-modal-in {
-          animation: modalIn 0.2s ease-out forwards;
-        }
-      `}</style>
+      {/* Create Contact Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-5/6 sm:w-3/6 md:w-3/6 lg:w-2/6 xl:w-6/9 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Create New Contact</h3>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <FiX className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiPhone className="inline h-4 w-4 mr-1" />
+                    Mobile Number *
+                  </label>
+                  <input
+                    type="tel"
+                    value={newContact.number}
+                    onChange={(e) => setNewContact({ ...newContact, number: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter mobile number"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiUser className="inline h-4 w-4 mr-1" />
+                    Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={newContact.name}
+                    onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter full name"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiMail className="inline h-4 w-4 mr-1" />
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={newContact.email}
+                    onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter email address"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiHome className="inline h-4 w-4 mr-1" />
+                    Company Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newContact.firm_name}
+                    onChange={(e) => setNewContact({ ...newContact, firm_name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter company name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiGlobe className="inline h-4 w-4 mr-1" />
+                    Website
+                  </label>
+                  <input
+                    type="url"
+                    value={newContact.website}
+                    onChange={(e) => setNewContact({ ...newContact, website: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter website URL"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiFileText className="inline h-4 w-4 mr-1" />
+                    Remark
+                  </label>
+                  <textarea
+                    value={newContact.remark}
+                    onChange={(e) => setNewContact({ ...newContact, remark: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter any remarks"
+                    rows="3"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateContact}
+                  disabled={!newContact.number || !newContact.name}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Create Contact
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Contact Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-5/6 sm:w-3/6 md:w-3/6 lg:w-2/6 xl:w-6/9 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Edit Contact</h3>
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingContact(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <FiX className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiPhone className="inline h-4 w-4 mr-1" />
+                    Mobile Number *
+                  </label>
+                  <input
+                    type="tel"
+                    value={editContact.number}
+                    onChange={(e) => setEditContact({ ...editContact, number: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter mobile number"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiUser className="inline h-4 w-4 mr-1" />
+                    Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={editContact.name}
+                    onChange={(e) => setEditContact({ ...editContact, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter full name"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiMail className="inline h-4 w-4 mr-1" />
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={editContact.email}
+                    onChange={(e) => setEditContact({ ...editContact, email: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter email address"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiHome className="inline h-4 w-4 mr-1" />
+                    Company Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editContact.firm_name}
+                    onChange={(e) => setEditContact({ ...editContact, firm_name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter company name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiGlobe className="inline h-4 w-4 mr-1" />
+                    Website
+                  </label>
+                  <input
+                    type="url"
+                    value={editContact.website}
+                    onChange={(e) => setEditContact({ ...editContact, website: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter website URL"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiFileText className="inline h-4 w-4 mr-1" />
+                    Remark
+                  </label>
+                  <textarea
+                    value={editContact.remark}
+                    onChange={(e) => setEditContact({ ...editContact, remark: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter any remarks"
+                    rows="3"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingContact(null);
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateContact}
+                  disabled={!editContact.number || !editContact.name}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Update Contact
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Import from Excel</h3>
+                <button
+                  onClick={() => setShowImportModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <FiX className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Excel File
+                  </label>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="text-sm text-gray-600">
+                  <p className="mb-2">File format requirements:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Columns: Name, Mobile, Email, Company, Website, Remark</li>
+                    <li>Supported formats: .xlsx, .xls, .csv</li>
+                    <li>Maximum 1000 contacts per import</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setShowImportModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    alert('Import functionality will be implemented');
+                    setShowImportModal(false);
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Import Contacts
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
