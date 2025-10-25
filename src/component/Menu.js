@@ -35,7 +35,8 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen }) => {
     <header className="fixed top-0 inset-x-0 bg-white shadow-sm z-30">
       <div className="flex items-center justify-between h-16 px-4 sm:px-6 md:px-8">
         {/* Mobile menu button */}
-        <button
+      <div className='left flex'>
+      <button
           className="md:hidden text-gray-500 hover:text-gray-600 focus:outline-none"
           onClick={() => setMobileMenuOpen(true)}
           aria-label="Open menu"
@@ -44,13 +45,14 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen }) => {
         </button>
 
         {/* Logo */}
-        <h1 className="text-xl font-bold text-indigo-600">WICHAT</h1>
+        <h1 className="text-xl ml-3 font-bold text-indigo-600">WICHAT</h1>
+      </div>
 
         {/* Right side - Notifications and Profile */}
-        <div className="flex items-center space-x-4">
-          <div>API Status : <span className='text-red-700 font-semibold'>PENDING</span></div>
+        <div className="flex items-center space-x-4 text-xs sm:text-sm">
+          {/* <div>API Status : <span className='text-red-700 font-semibold'>PENDING</span></div> */}
           {/* Success Button */}
-          <button className="bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700 text-sm font-medium">
+          <button className="bg-green-600 text-white px-2 py-1 rounded-md hover:bg-green-700  font-medium text-[10px] sm:text-sm">
             Apply Now
           </button>
           <button className="relative p-1 text-gray-500 hover:text-gray-600 focus:outline-none">
