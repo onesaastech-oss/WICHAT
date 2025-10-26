@@ -48,7 +48,6 @@ function TemplateAdd() {
     }
   });
   const [bodyVariables, setBodyVariables] = useState([]);
-  const [headerVariable, setHeaderVariable] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const textareaRef = useRef(null);
 
@@ -114,7 +113,6 @@ function TemplateAdd() {
         }
       }
     }));
-    setHeaderVariable(null);
   };
 
   // Handle header media upload
@@ -164,39 +162,6 @@ function TemplateAdd() {
     }));
   };
 
-  // Add a variable to header (only one allowed)
-  const addHeaderVariable = () => {
-    if (headerVariable) {
-      alert('Header can only have one variable');
-      return;
-    }
-    
-    const newVariable = {
-      id: Date.now(),
-      name: 'var1',
-      sample: ''
-    };
-    
-    setHeaderVariable(newVariable);
-    handleHeaderTextChange(formData.components.header.text + ' {{1}}');
-  };
-
-  // Update header variable sample
-  const updateHeaderVariable = (sample) => {
-    if (headerVariable) {
-      setHeaderVariable(prev => ({ ...prev, sample }));
-    }
-  };
-
-  // Remove header variable
-  const removeHeaderVariable = () => {
-    if (headerVariable) {
-      // Remove variable from header text
-      const newHeaderText = formData.components.header.text.replace(/\{\{1\}\}/g, '');
-      handleHeaderTextChange(newHeaderText);
-      setHeaderVariable(null);
-    }
-  };
 
   // Handle body text change
   const handleBodyTextChange = (text) => {
@@ -448,11 +413,7 @@ function TemplateAdd() {
 
         if (formData.components.header.format === 'TEXT') {
           headerComponent.text = formData.components.header.text;
-          if (headerVariable && headerVariable.sample) {
-            headerComponent.example = {
-              header_text: [headerVariable.sample]
-            };
-          }
+          // No variables allowed in header text for WhatsApp
         } else {
           headerComponent.example = formData.components.header.example;
         }
@@ -557,15 +518,19 @@ function TemplateAdd() {
         }
       );
 
-      if (!response?.data?.error && response?.data?.data) {
+      console.log('Full API response:', response);
+      console.log('Response data:', response?.data);
+      console.log('Response status:', response?.status);
+
+      if (!response?.data?.error) {
         const result = response.data;
         console.log('Submission successful:', result);
         
         // Display success message with template details
-        if (result.data && result.data.template_id) {
-          alert(`Template created successfully!\n\nTemplate ID: ${result.data.template_id}\nTemplate Name: ${result.data.template_name}\nStatus: ${result.data.status}\nCategory: ${result.data.category}`);
+        if (result.template_id) {
+          // alert(`Template created successfully!\n\nTemplate ID: ${result.template_id}\nTemplate Name: ${result.template_name}\nStatus: ${result.status}\nLanguage: ${result.language_code}`);
         } else {
-          alert('Template submitted for approval!');
+          // alert('Template submitted for approval!');
         }
         
         // Reset form after successful submission
@@ -596,15 +561,14 @@ function TemplateAdd() {
           }
         });
         setBodyVariables([]);
-        setHeaderVariable(null);
         
       } else {
-        throw new Error(`API Error: ${response?.data?.message || 'Unknown error'}`);
+        throw new Error(`API Error: ${response?.data?.message || response?.data?.error || 'Unknown error'}`);
       }
 
     } catch (error) {
       console.error('Error submitting template:', error);
-      alert(`Failed to submit template: ${error.message}`);
+      // alert(`Failed to submit template: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -748,55 +712,18 @@ function TemplateAdd() {
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-gray-600">Header Text</span>
-                          {!headerVariable && (
-                            <button
-                              type="button"
-                              onClick={addHeaderVariable}
-                              className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200"
-                            >
-                              + Add Variable
-                            </button>
-                          )}
                         </div>
                         <textarea
                           rows={2}
                           value={formData.components.header.text}
                           onChange={(e) => handleHeaderTextChange(e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          placeholder="Enter header text"
+                          placeholder="Enter header text (no variables allowed)"
                           maxLength={60}
                         />
                         <p className="text-xs text-gray-500">
-                          {formData.components.header.text.length}/60 characters
+                          {formData.components.header.text.length}/60 characters. Variables are not allowed in header text.
                         </p>
-                        
-                        {/* Header Variable - Only One Allowed */}
-                        {headerVariable && (
-                          <div className="p-3 bg-white border rounded-md">
-                            <div className="flex justify-between items-center mb-2">
-                              <span className="text-sm font-medium text-gray-700">
-                                Variable: {headerVariable.name}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={removeHeaderVariable}
-                                className="text-red-500 hover:text-red-700"
-                              >
-                                <FiTrash2 size={14} />
-                              </button>
-                            </div>
-                            <input
-                              type="text"
-                              placeholder="Enter sample value"
-                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                              value={headerVariable.sample}
-                              onChange={e => updateHeaderVariable(e.target.value)}
-                            />
-                            <p className="mt-1 text-xs text-gray-500">
-                              Header can only have one variable. This will be sent as: ["sample_value"]
-                            </p>
-                          </div>
-                        )}
                       </div>
                     )}
                     
@@ -1107,10 +1034,7 @@ function TemplateAdd() {
                       {formData.components.header.format === 'TEXT' && formData.components.header.text && (
                         <div className="p-3 bg-indigo-50">
                           <p className="text-sm font-medium text-indigo-800">
-                            {headerVariable 
-                              ? generatePreviewText(formData.components.header.text, [headerVariable])
-                              : formData.components.header.text
-                            }
+                            {formData.components.header.text}
                           </p>
                         </div>
                       )}
@@ -1198,11 +1122,7 @@ function TemplateAdd() {
                         
                         if (formData.components.header.format === 'TEXT') {
                           headerComp.text = formData.components.header.text;
-                          if (headerVariable && headerVariable.sample) {
-                            headerComp.example = {
-                              header_text: [headerVariable.sample]
-                            };
-                          }
+                          // No variables allowed in header text for WhatsApp
                         } else {
                           headerComp.example = formData.components.header.example;
                         }
