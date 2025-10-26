@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
 import { Link } from 'react-router-dom'
+import axios from 'axios';
+import { Encrypt } from './encryption/payload-encryption';
 import {
   FiMessageSquare,
   FiMail,
@@ -15,7 +17,9 @@ import {
   FiTrash2,
   FiChevronLeft,
   FiChevronRight,
-  FiFacebook
+  FiFacebook,
+  FiFilter,
+  FiRefreshCw
 } from 'react-icons/fi';
 
 function Template() {
@@ -24,6 +28,19 @@ function Template() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [lastId, setLastId] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [tokens, setTokens] = useState(null);
+
+  // Get user tokens from localStorage
+  useEffect(() => {
+    const userData = localStorage.getItem('userData');
+    if (userData) {
+      const parsedData = JSON.parse(userData);
+      setTokens(parsedData);
+    }
+  }, []);
 
   // Prevent background scrolling when mobile menu is open
   useEffect(() => {
@@ -37,40 +54,85 @@ function Template() {
     };
   }, [mobileMenuOpen]);
 
-  // Fetch templates data (simulated)
-  useEffect(() => {
-    const fetchTemplates = async () => {
-      // Simulate API call
-      setLoading(true);
-      try {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Mock data
-        const mockTemplates = [
-          { id: 1, name: 'Order Confirmation', language: 'English', category: 'Transaction', status: 'Approved', updatedOn: '2023-06-15' },
-          { id: 2, name: 'Shipping Update', language: 'English', category: 'Transaction', status: 'Pending', updatedOn: '2023-06-10' },
-          { id: 3, name: 'Appointment Reminder', language: 'Spanish', category: 'Appointment', status: 'Approved', updatedOn: '2023-06-05' },
-          { id: 4, name: 'Payment Receipt', language: 'English', category: 'Transaction', status: 'Rejected', updatedOn: '2023-05-28' },
-          { id: 5, name: 'Customer Feedback', language: 'French', category: 'Marketing', status: 'Approved', updatedOn: '2023-05-20' },
-          { id: 6, name: 'Welcome Message', language: 'German', category: 'Authentication', status: 'Approved', updatedOn: '2023-05-15' },
-          { id: 7, name: 'Password Reset', language: 'English', category: 'Authentication', status: 'Pending', updatedOn: '2023-05-10' },
-          { id: 8, name: 'Special Offer', language: 'Italian', category: 'Marketing', status: 'Approved', updatedOn: '2023-05-05' },
-          { id: 9, name: 'Account Verification', language: 'English', category: 'Authentication', status: 'Approved', updatedOn: '2023-04-28' },
-          { id: 10, name: 'Event Invitation', language: 'Portuguese', category: 'Marketing', status: 'Rejected', updatedOn: '2023-04-20' },
-          { id: 11, name: 'Back in Stock', language: 'English', category: 'Marketing', status: 'Pending', updatedOn: '2023-04-15' },
-          { id: 12, name: 'Delivery Notification', language: 'Spanish', category: 'Transaction', status: 'Approved', updatedOn: '2023-04-10' },
-        ];
-        
-        setTemplates(mockTemplates);
-      } catch (error) {
-        console.error('Failed to fetch templates:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Fetch templates from API
+  const fetchTemplates = async (resetData = false) => {
+    if (!tokens?.token || !tokens?.username) return;
 
-    fetchTemplates();
-  }, []);
+    setLoading(true);
+    try {
+      const payload = {
+        project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+        status: statusFilter,
+        last_id: resetData ? 0 : lastId
+      };
+
+      const { data, key } = Encrypt(payload);
+      const data_pass = JSON.stringify({ data, key });
+
+      const response = await axios.post(
+        'https://api.w1chat.com/template/template-list',
+        data_pass,
+        {
+          headers: {
+            'token': tokens.token,
+            'username': tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response?.data?.error && response?.data?.data) {
+        const apiTemplates = response.data.data.map(template => ({
+          id: template.template_id,
+          name: template.template_name,
+          language: template.template?.language?.toUpperCase() || 'EN',
+          category: template.category,
+          status: template.status,
+          updatedOn: new Date(template.create_date).toLocaleDateString(),
+          waba_template_id: template.waba_template_id,
+          reject_reason: template.reject_reason,
+          template_data: template.template
+        }));
+
+        if (resetData) {
+          setTemplates(apiTemplates);
+          setCurrentPage(1);
+        } else {
+          setTemplates(prev => [...prev, ...apiTemplates]);
+        }
+
+        setLastId(response.data.last_id);
+        setHasMore(response.data.has_more);
+      } else {
+        console.error('API Error:', response?.data?.message);
+        if (resetData) {
+          setTemplates([]);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch templates:', error);
+      if (resetData) {
+        setTemplates([]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial fetch when tokens are available
+  useEffect(() => {
+    if (tokens) {
+      fetchTemplates(true);
+    }
+  }, [tokens]);
+
+  // Refetch when status filter changes
+  useEffect(() => {
+    if (tokens) {
+      setLastId(0);
+      fetchTemplates(true);
+    }
+  }, [statusFilter]);
 
   // Get current templates for pagination
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -97,12 +159,27 @@ function Template() {
               </h2>
             </div>
             <div className="mt-4 flex md:mt-0 md:ml-4 space-x-3">
-              <button
-                type="button"
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                <FiFacebook className="mr-2" />
-                Template Manager
+                <option value="">All Status</option>
+                <option value="APPROVED">Approved</option>
+                <option value="PENDING">Pending</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+              <button
+                onClick={() => {
+                  setLastId(0);
+                  fetchTemplates(true);
+                }}
+                disabled={loading}
+                type="button"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              >
+                <FiRefreshCw className={`mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
               </button>
               <Link
                to={'../template-add'}
@@ -166,6 +243,28 @@ function Template() {
                         </td>
                       </tr>
                     ))
+                  ) : templates.length === 0 ? (
+                    // Empty state
+                    <tr>
+                      <td colSpan="6" className="px-6 py-12 text-center">
+                        <div className="text-gray-500">
+                          <FiFacebook className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No templates found</h3>
+                          <p className="text-sm">
+                            {statusFilter ? `No templates with status "${statusFilter}" found.` : 'No templates available. Create your first template to get started.'}
+                          </p>
+                          {!statusFilter && (
+                            <Link
+                              to="../template-add"
+                              className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                            >
+                              <FiPlus className="mr-2" />
+                              Add Template
+                            </Link>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
                   ) : (
                     // Actual data rows
                     currentTemplates.map((template) => (
@@ -181,8 +280,8 @@ function Template() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                            ${template.status === 'Approved' ? 'bg-green-100 text-green-800' : 
-                              template.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 
+                            ${template.status === 'APPROVED' ? 'bg-green-100 text-green-800' : 
+                              template.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : 
                               'bg-red-100 text-red-800'}`}>
                             {template.status}
                           </span>
@@ -210,10 +309,10 @@ function Template() {
               </table>
             </div>
 
-            {/* Pagination */}
+            {/* Load More / Pagination */}
             {!loading && (
               <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div className="flex-1 flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-700">
                       Showing <span className="font-medium">{indexOfFirstItem + 1}</span> to{' '}
@@ -221,44 +320,69 @@ function Template() {
                         {Math.min(indexOfLastItem, templates.length)}
                       </span>{' '}
                       of <span className="font-medium">{templates.length}</span> results
+                      {hasMore && <span className="text-indigo-600"> (more available)</span>}
                     </p>
                   </div>
-                  <div>
-                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                      <button
-                        onClick={() => paginate(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1}
-                        className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium 
-                          ${currentPage === 1 ? 'text-gray-300' : 'text-gray-500 hover:bg-gray-50'}`}
-                      >
-                        <span className="sr-only">Previous</span>
-                        <FiChevronLeft className="h-5 w-5" aria-hidden="true" />
-                      </button>
-                      
-                      {/* Page numbers */}
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <div className="flex space-x-2">
+                    {/* Traditional pagination for current loaded data */}
+                    {totalPages > 1 && (
+                      <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px mr-4" aria-label="Pagination">
                         <button
-                          key={page}
-                          onClick={() => paginate(page)}
-                          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium
-                            ${currentPage === page 
-                              ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600' 
-                              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'}`}
+                          onClick={() => paginate(Math.max(1, currentPage - 1))}
+                          disabled={currentPage === 1}
+                          className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium 
+                            ${currentPage === 1 ? 'text-gray-300' : 'text-gray-500 hover:bg-gray-50'}`}
                         >
-                          {page}
+                          <span className="sr-only">Previous</span>
+                          <FiChevronLeft className="h-5 w-5" aria-hidden="true" />
                         </button>
-                      ))}
-                      
+                        
+                        {/* Page numbers */}
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                          <button
+                            key={page}
+                            onClick={() => paginate(page)}
+                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium
+                              ${currentPage === page 
+                                ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600' 
+                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'}`}
+                          >
+                            {page}
+                          </button>
+                        ))}
+                        
+                        <button
+                          onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
+                          disabled={currentPage === totalPages}
+                          className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium 
+                            ${currentPage === totalPages ? 'text-gray-300' : 'text-gray-500 hover:bg-gray-50'}`}
+                        >
+                          <span className="sr-only">Next</span>
+                          <FiChevronRight className="h-5 w-5" aria-hidden="true" />
+                        </button>
+                      </nav>
+                    )}
+                    
+                    {/* Load More button */}
+                    {hasMore && (
                       <button
-                        onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
-                        disabled={currentPage === totalPages}
-                        className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium 
-                          ${currentPage === totalPages ? 'text-gray-300' : 'text-gray-500 hover:bg-gray-50'}`}
+                        onClick={() => fetchTemplates(false)}
+                        disabled={loading}
+                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                       >
-                        <span className="sr-only">Next</span>
-                        <FiChevronRight className="h-5 w-5" aria-hidden="true" />
+                        {loading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Loading...
+                          </>
+                        ) : (
+                          <>
+                            <FiPlus className="mr-2" />
+                            Load More
+                          </>
+                        )}
                       </button>
-                    </nav>
+                    )}
                   </div>
                 </div>
               </div>
