@@ -373,8 +373,28 @@ function Contact() {
           remark: ''
         });
 
-        // Trigger refetch by updating tokens state
-        setTokens({ ...tokens });
+        // Refresh the contacts list to show updated data
+        const refreshedResult = await contactDbHelper.getContacts(currentPage, 10);
+        const mappedRefreshed = refreshedResult.contacts.map(c => ({
+          id: c.contact_id,
+          name: c.name,
+          mobile: c.number,
+          email: c.email,
+          firm_name: c.firm_name,
+          website: c.website,
+          remark: c.remark,
+          languageCode: c.language_code,
+          country: c.country,
+          createdOn: c.create_date,
+          is_favorite: c.is_favorite || false
+        }));
+
+        // Update favorites from refreshed data
+        const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
+        setFavoriteContacts(refreshedFavorites);
+
+        setContacts(mappedRefreshed);
+        setTotalPages(refreshedResult.totalPages);
       } else {
         alert('Failed to update contact: ' + (response?.data?.message || 'Unknown error'));
       }
