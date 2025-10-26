@@ -8,6 +8,7 @@ import Register from './pages/Register';
 import LiveChat from './pages/LiveChat';
 import Template from './pages/Template';
 import TemplateAdd from './pages/TemplateAdd';
+import TemplateEdit from './pages/TemplateEdit';
 import Contact from './pages/Contact';
 import ContactGroup from './pages/ContactGroup';
 import ContactInputField from './pages/ContactInputField';
@@ -23,6 +24,7 @@ root.render(
       <Route path="/live-chat" element={<LiveChat />} />
       <Route path="/template" element={<Template />} />
       <Route path="/template-add" element={<TemplateAdd />} />
+      <Route path="/template-edit/:templateId" element={<TemplateEdit />} />
       <Route path="/contact" element={<Contact />} />
       <Route path="/contact-group" element={<ContactGroup />} />
       <Route path="/contact-input-field" element={<ContactInputField />} />

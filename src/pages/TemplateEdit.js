@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
-import { Encrypt } from './encryption/payload-encryption';
+import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
   FiChevronDown,
@@ -16,11 +16,17 @@ import {
   FiItalic,
   FiUnderline,
   FiCode,
-  FiTrash2
+  FiTrash2,
+  FiArrowLeft,
+  FiSave
 } from 'react-icons/fi';
 
-function TemplateAdd() {
+function TemplateEdit() {
+  const { templateId } = useParams();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [tokens, setTokens] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     category: '',
@@ -51,6 +57,15 @@ function TemplateAdd() {
   const [headerVariable, setHeaderVariable] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const textareaRef = useRef(null);
+
+  // Get user tokens from localStorage
+  useEffect(() => {
+    const userData = localStorage.getItem('userData');
+    if (userData) {
+      const parsedData = JSON.parse(userData);
+      setTokens(parsedData);
+    }
+  }, []);
 
   // Language options
   const languages = [
@@ -91,6 +106,213 @@ function TemplateAdd() {
     { type: 'COPY_CODE', label: 'Copy Code', icon: <FiCopy /> }
   ];
 
+  // Fetch template data for editing
+  useEffect(() => {
+    const fetchTemplate = async () => {
+      if (!tokens?.token || !templateId) return;
+
+      setLoading(true);
+      try {
+        // First try to get template data from localStorage (from Template.js)
+        const templatesData = localStorage.getItem('templatesData');
+        let templateFound = false;
+        
+        if (templatesData) {
+          const templates = JSON.parse(templatesData);
+          const template = templates.find(t => t.id === templateId);
+          
+          if (template && template.template_data) {
+            console.log('Found template in localStorage:', template);
+            populateFormFromTemplate(template);
+            templateFound = true;
+          }
+        }
+        
+        // If not found in localStorage, try to fetch from API
+        if (!templateFound) {
+          console.log('Template not found in localStorage, fetching from API...');
+          
+          try {
+            // Use the same API structure as Template.js for consistency
+            const { Encrypt } = await import('./encryption/payload-encryption');
+            
+            const payload = {
+              project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+              template_id: templateId
+            };
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            const response = await axios.post(
+              'https://api.w1chat.com/template/template-detail', // Assuming this endpoint exists
+              data_pass,
+              {
+                headers: {
+                  'token': tokens.token,
+                  'username': tokens.username,
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+
+            if (!response?.data?.error && response?.data?.data) {
+              const templateData = response.data.data;
+              const template = {
+                id: templateData.template_id,
+                name: templateData.template_name,
+                language: templateData.template?.language || 'en',
+                category: templateData.category,
+                status: templateData.status,
+                template_data: templateData.template
+              };
+              
+              console.log('Fetched template from API:', template);
+              populateFormFromTemplate(template);
+              templateFound = true;
+            }
+          } catch (apiError) {
+            console.error('API fetch failed:', apiError);
+            // Fall back to sample data if API fails
+          }
+        }
+        
+        // If still not found, show error and redirect
+        if (!templateFound) {
+          console.error('Template not found:', templateId);
+          alert('Template not found. Redirecting to template list.');
+          navigate('/template');
+          return;
+        }
+        
+      } catch (error) {
+        console.error('Failed to fetch template:', error);
+        alert('Failed to load template data');
+        navigate('/template');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (tokens) {
+      fetchTemplate();
+    }
+  }, [tokens, templateId, navigate]);
+
+  // Populate form from template data
+  const populateFormFromTemplate = (template) => {
+    console.log('Populating form with template:', template);
+    const components = template.template_data?.components || [];
+    
+    // Initialize form data
+    const newFormData = {
+      name: template.name || '',
+      category: template.category || '',
+      language: template.language || 'en',
+      components: {
+        header: {
+          type: 'HEADER',
+          format: 'NONE',
+          text: '',
+          example: { header_handle: [] }
+        },
+        body: {
+          type: 'BODY',
+          text: '',
+          example: { body_text: [] }
+        },
+        footer: {
+          type: 'FOOTER',
+          text: ''
+        },
+        buttons: {
+          type: 'BUTTONS',
+          buttons: []
+        }
+      }
+    };
+
+    const newBodyVariables = [];
+    let newHeaderVariable = null;
+
+    // Process each component
+    components.forEach(component => {
+      switch (component.type) {
+        case 'HEADER':
+          newFormData.components.header = {
+            type: 'HEADER',
+            format: component.format || 'TEXT',
+            text: component.text || '',
+            example: component.example || { header_handle: [] }
+          };
+          
+          // Extract header variable if exists
+          if (component.text && component.text.includes('{{1}}')) {
+            newHeaderVariable = {
+              id: Date.now(),
+              name: 'var1',
+              sample: component.example?.header_text?.[0] || ''
+            };
+          }
+          break;
+
+        case 'BODY':
+          newFormData.components.body = {
+            type: 'BODY',
+            text: component.text || '',
+            example: component.example || { body_text: [] }
+          };
+
+          // Extract body variables
+          if (component.text) {
+            const variableMatches = component.text.match(/\{\{(\d+)\}\}/g);
+            if (variableMatches) {
+              const samples = component.example?.body_text?.[0] || [];
+              variableMatches.forEach((match, index) => {
+                const varNum = parseInt(match.replace(/[{}]/g, ''));
+                newBodyVariables.push({
+                  id: Date.now() + index,
+                  name: `var${varNum}`,
+                  sample: samples[index] || ''
+                });
+              });
+            }
+          }
+          break;
+
+        case 'FOOTER':
+          newFormData.components.footer = {
+            type: 'FOOTER',
+            text: component.text || ''
+          };
+          break;
+
+        case 'BUTTONS':
+          newFormData.components.buttons = {
+            type: 'BUTTONS',
+            buttons: component.buttons?.map(btn => {
+              if (btn.type === 'otp' && btn.otp_type === 'copy_code') {
+                return {
+                  type: 'COPY_CODE',
+                  text: btn.text,
+                  copy_code: ''
+                };
+              }
+              return btn;
+            }) || []
+          };
+          break;
+
+        default:
+          break;
+      }
+    });
+
+    setFormData(newFormData);
+    setBodyVariables(newBodyVariables);
+    setHeaderVariable(newHeaderVariable);
+  };
+
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -114,7 +336,9 @@ function TemplateAdd() {
         }
       }
     }));
-    setHeaderVariable(null);
+    if (format !== 'TEXT') {
+      setHeaderVariable(null);
+    }
   };
 
   // Handle header media upload
@@ -433,6 +657,11 @@ function TemplateAdd() {
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!tokens?.token) {
+      alert('Authentication required');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -477,14 +706,6 @@ function TemplateAdd() {
         components.push(bodyComponent);
       }
 
-      // Add footer if exists
-      if (formData.components.footer.text) {
-        components.push({
-          type: 'FOOTER',
-          text: formData.components.footer.text
-        });
-      }
-
       // Add buttons if any
       if (formData.components.buttons.buttons.length > 0) {
         components.push({
@@ -523,88 +744,47 @@ function TemplateAdd() {
         });
       }
 
-      // Get user data from localStorage
-      const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+      // Add footer if exists
+      if (formData.components.footer.text) {
+        components.push({
+          type: 'FOOTER',
+          text: formData.components.footer.text
+        });
+      }
 
-      // Prepare payload with project_id (matching working API pattern)
-      const payload = {
-        project_id: userData.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
-        template: {
-          name: formData.name,
-          category: formData.category,
-          language: formData.language,
-          components: components
-        }
+      // Prepare payload for template update using your backend API format
+      const templatePayload = {
+        category: formData.category,
+        components: components
       };
 
-      console.log('Submitting template payload:', JSON.stringify(payload, null, 2));
+      console.log('Updating template payload:', JSON.stringify(templatePayload, null, 2));
 
-      // Encrypt the payload (matching working API pattern)
-      const { data, key } = Encrypt(payload);
-      const data_pass = JSON.stringify({ data, key });
-      console.log('Encrypted payload:', data_pass);
-
-      // Submit to the API endpoint using axios (matching working API pattern)
+      // Use the correct API endpoint for editing templates
       const response = await axios.post(
-        'https://api.w1chat.com/template/create-template',
-        data_pass,
+        `https://api.w1chat.com/template/edit-template/${templateId}`,
+        templatePayload,
         {
           headers: {
-            'token': userData.token || '',
-            'username': userData.username || '',
+            'token': tokens.token,
             'Content-Type': 'application/json'
           }
         }
       );
 
-      if (!response?.data?.error && response?.data?.data) {
-        const result = response.data;
-        console.log('Submission successful:', result);
-        
-        // Display success message with template details
-        if (result.data && result.data.template_id) {
-          alert(`Template created successfully!\n\nTemplate ID: ${result.data.template_id}\nTemplate Name: ${result.data.template_name}\nStatus: ${result.data.status}\nCategory: ${result.data.category}`);
-        } else {
-          alert('Template submitted for approval!');
-        }
-        
-        // Reset form after successful submission
-        setFormData({
-          name: '',
-          category: '',
-          language: '',
-          components: {
-            header: {
-              type: 'HEADER',
-              format: 'NONE',
-              text: '',
-              example: { header_text: [] }
-            },
-            body: {
-              type: 'BODY',
-              text: '',
-              example: { body_text: [] }
-            },
-            footer: {
-              type: 'FOOTER',
-              text: ''
-            },
-            buttons: {
-              type: 'BUTTONS',
-              buttons: []
-            }
-          }
-        });
-        setBodyVariables([]);
-        setHeaderVariable(null);
-        
+      // Check for successful response (assuming 200/201 status codes indicate success)
+      if (response.status === 200 || response.status === 201) {
+        alert('Template updated successfully! Changes have been saved and will be reflected in your template list.');
+        // Clear localStorage to force refresh of template list
+        localStorage.removeItem('templatesData');
+        navigate('/template');
       } else {
-        throw new Error(`API Error: ${response?.data?.message || 'Unknown error'}`);
+        throw new Error(response.data?.message || 'Failed to update template');
       }
 
     } catch (error) {
-      console.error('Error submitting template:', error);
-      alert(`Failed to submit template: ${error.message}`);
+      console.error('Error updating template:', error);
+      alert(`Failed to update template: ${error.response?.data?.message || error.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -631,6 +811,23 @@ function TemplateAdd() {
       .replace(/```(.*?)```/gs, '<code>$1</code>');
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+        <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+        <div className="pt-16 md:pl-64">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+              <span className="ml-3 text-lg text-gray-600">Loading template...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
@@ -641,32 +838,40 @@ function TemplateAdd() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
           {/* Page header */}
           <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Create New WhatsApp Template</h2>
-            <p className="mt-1 text-sm text-gray-600">
-              Create a new WhatsApp message template following Aisensy API structure
-            </p>
+            <div className="flex items-center mb-4">
+              <button
+                onClick={() => navigate('/template')}
+                className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
+              >
+                <FiArrowLeft size={20} />
+              </button>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Edit WhatsApp Template</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Edit your WhatsApp message template - Template ID: {templateId}
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Form section */}
             <div className="bg-white shadow rounded-lg p-6">
               <form onSubmit={handleSubmit}>
-                {/* Template Name */}
+                {/* Template Name - Read Only */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Template Name *
+                    Template Name
                   </label>
                   <input
                     type="text"
-                    name="name"
                     value={formData.name}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    required
-                    placeholder="e.g., welcome_message"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600"
+                    disabled
+                    placeholder="Template name (read-only)"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    Use lowercase with underscores (e.g., order_confirmation)
+                    Template name cannot be changed after creation
                   </p>
                 </div>
 
@@ -692,26 +897,21 @@ function TemplateAdd() {
                   </div>
                 </div>
 
-                {/* Language */}
+                {/* Language - Read Only */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Language *
+                    Language
                   </label>
-                  <div className="relative">
-                    <select
-                      name="language"
-                      value={formData.language}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
-                      required
-                    >
-                      <option value="">Select a language</option>
-                      {languages.map(lang => (
-                        <option key={lang.code} value={lang.code}>{lang.name}</option>
-                      ))}
-                    </select>
-                    <FiChevronDown className="absolute right-3 top-3 text-gray-400" />
-                  </div>
+                  <input
+                    type="text"
+                    value={languages.find(lang => lang.code === formData.language)?.name || formData.language}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600"
+                    disabled
+                    placeholder="Language (read-only)"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Language cannot be changed after creation
+                  </p>
                 </div>
 
                 {/* Header Format */}
@@ -860,7 +1060,7 @@ function TemplateAdd() {
                     ref={textareaRef}
                     rows={4}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="Enter your message content here. Use {{1}} for variables."
+                    placeholder="Enter your message content here. Use {1} for variables."
                     value={formData.components.body.text}
                     onChange={(e) => handleBodyTextChange(e.target.value)}
                     required
@@ -903,7 +1103,7 @@ function TemplateAdd() {
                   </div>
                   
                   <p className="mt-1 text-xs text-gray-500">
-                    Use variables like {`{1}`} to personalize your message. Select text and use formatting buttons.
+                    Use variables like {`{{1}}`} to personalize your message. Select text and use formatting buttons.
                   </p>
                   
                   {/* Body Variables */}
@@ -1026,7 +1226,7 @@ function TemplateAdd() {
                           <div className="space-y-2">
                             <input
                               type="url"
-                              placeholder="URL (e.g., https://example.com/{{1}})"
+                              placeholder="URL (e.g., https://example.com/{1})"
                               className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
                               value={btn.url}
                               onChange={e => updateButton(index, 'url', e.target.value)}
@@ -1083,13 +1283,30 @@ function TemplateAdd() {
                 </div>
 
                 {/* Submit button */}
-                <div className="mt-8">
+                <div className="mt-8 flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/template')}
+                    className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                  >
+                    Cancel
+                  </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center"
                   >
-                    {isSubmitting ? 'Submitting...' : 'Submit Template for Approval'}
+                    {isSubmitting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <FiSave className="mr-2" />
+                        Update Template
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -1165,28 +1382,22 @@ function TemplateAdd() {
               </div>
               
               <div className="mt-4 text-sm text-gray-600">
-                <p className="font-medium">Template Guidelines:</p>
+                <p className="font-medium">Edit Guidelines:</p>
                 <ul className="list-disc pl-5 mt-1 space-y-1">
-                  <li>Template name should be lowercase with underscores</li>
-                  <li>Header is optional but recommended for better engagement</li>
-                  <li>Body must contain the main message content</li>
-                  <li>Footer is limited to 60 characters</li>
-                  <li>You can add up to 3 buttons of different types</li>
+                  <li>Template name and language cannot be changed</li>
+                  <li>Only category and components can be modified</li>
+                  <li>Changes require re-approval from WhatsApp</li>
                   <li>Use *text* for bold, _text_ for italics, and ~text~ for strikethrough</li>
                 </ul>
               </div>
 
               {/* JSON Preview */}
               <div className="mt-6">
-                <h4 className="text-md font-medium text-gray-900 mb-2">API Payload Preview</h4>
+                <h4 className="text-md font-medium text-gray-900 mb-2">JSON Payload Preview</h4>
                 <pre className="bg-gray-800 text-green-400 p-4 rounded-md text-xs overflow-auto max-h-64">
                   {JSON.stringify({
-                    project_id: "689d783e207f0b0c309fa07c",
-                    template: {
-                      name: formData.name || 'template_name',
-                      category: formData.category || 'CATEGORY',
-                      language: formData.language || 'en',
-                      components: (() => {
+                    category: formData.category || 'CATEGORY',
+                    components: (() => {
                       const comps = [];
                       
                       // Header component
@@ -1223,14 +1434,6 @@ function TemplateAdd() {
                           };
                         }
                         comps.push(bodyComp);
-                      }
-                      
-                      // Footer component
-                      if (formData.components.footer.text) {
-                        comps.push({
-                          type: 'FOOTER',
-                          text: formData.components.footer.text
-                        });
                       }
                       
                       // Buttons component
@@ -1270,9 +1473,16 @@ function TemplateAdd() {
                         });
                       }
                       
+                      // Footer component
+                      if (formData.components.footer.text) {
+                        comps.push({
+                          type: 'FOOTER',
+                          text: formData.components.footer.text
+                        });
+                      }
+                      
                       return comps;
                     })()
-                    }
                   }, null, 2)}
                 </pre>
               </div>
@@ -1284,4 +1494,4 @@ function TemplateAdd() {
   );
 }
 
-export default TemplateAdd;
+export default TemplateEdit;

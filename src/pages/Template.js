@@ -101,6 +101,10 @@ function Template() {
           setTemplates(prev => [...prev, ...apiTemplates]);
         }
 
+        // Store templates data in localStorage for edit functionality
+        const currentTemplates = resetData ? apiTemplates : [...templates, ...apiTemplates];
+        localStorage.setItem('templatesData', JSON.stringify(currentTemplates));
+
         setLastId(response.data.last_id);
         setHasMore(response.data.has_more);
       } else {
@@ -294,9 +298,13 @@ function Template() {
                             <button className="text-indigo-600 hover:text-indigo-900">
                               <FiDownload size={18} />
                             </button>
-                            <button className="text-gray-600 hover:text-gray-900">
+                            <Link 
+                              to={`/template-edit/${template.id}`}
+                              className="text-gray-600 hover:text-gray-900"
+                              title="Edit Template"
+                            >
                               <FiEdit size={18} />
-                            </button>
+                            </Link>
                             <button className="text-red-600 hover:text-red-900">
                               <FiTrash2 size={18} />
                             </button>
