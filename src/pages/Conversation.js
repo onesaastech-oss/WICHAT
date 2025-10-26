@@ -1008,6 +1008,23 @@ const ContactPreview = ({ contactInfo, isOwnMessage }) => {
     );
 };
 
+// Date Separator Component
+const DateSeparator = ({ displayDate }) => {
+    return (
+        <div className="flex items-center justify-center my-4 sm:my-6">
+            <div className="flex items-center space-x-3 sm:space-x-4">
+                <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600"></div>
+                <div className="px-3 sm:px-4 py-1 sm:py-2 bg-gray-100 dark:bg-gray-700 rounded-full">
+                    <span className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-300">
+                        {displayDate}
+                    </span>
+                </div>
+                <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600"></div>
+            </div>
+        </div>
+    );
+};
+
 // Message Item Component with Info Button
 const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime }) => {
     const [showInfoModal, setShowInfoModal] = useState(false);
@@ -1857,26 +1874,36 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             </div>
 
             {/* Messages */}
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gray-50 dark:bg-gray-900 w-full scroll-smooth">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 w-full scroll-smooth">
                 {loadingHistory ? (
                     <div className="flex items-center justify-center py-6 sm:py-8">
                         <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-blue-500"></div>
                     </div>
                 ) : (
                     <>
-                        {messages.map((msg) => (
-                            <MessageItem
-                                key={msg.id}
-                                msg={msg}
-                                activeChat={activeChat}
-                                darkMode={darkMode}
-                                renderFilePreview={renderFilePreview}
-                                formatTime={formatTime}
-                            />
+                        {groupMessagesByDate(messages).map((dateGroup, groupIndex) => (
+                            <div key={dateGroup.date}>
+                                {/* Date Separator */}
+                                <DateSeparator displayDate={dateGroup.displayDate} />
+                                
+                                {/* Messages for this date */}
+                                <div className="space-y-3 sm:space-y-4">
+                                    {dateGroup.messages.map((msg) => (
+                                        <MessageItem
+                                            key={msg.id}
+                                            msg={msg}
+                                            activeChat={activeChat}
+                                            darkMode={darkMode}
+                                            renderFilePreview={renderFilePreview}
+                                            formatTime={formatTime}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
                         ))}
 
                         {isUploading && (
-                            <div className="flex justify-end w-full">
+                            <div className="flex justify-end w-full mt-3 sm:mt-4">
                                 <div className="max-w-[80%] p-3 sm:p-4 rounded-2xl bg-blue-500 text-white rounded-br-md">
                                     <div className="flex items-center space-x-2 sm:space-x-3">
                                         <div className="w-4 h-4 sm:w-6 sm:h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1986,6 +2013,73 @@ const formatTime = (value) => {
     } catch {
         return '';
     }
+};
+
+// Helper function to get date string for grouping
+const getDateString = (timestamp) => {
+    if (!timestamp) return '';
+    try {
+        const date = typeof timestamp === 'number' ? new Date(timestamp) : new Date(timestamp);
+        return date.toDateString(); // Returns format like "Mon Oct 26 2025"
+    } catch {
+        return '';
+    }
+};
+
+// Helper function to format date for display
+const formatDateForDisplay = (timestamp) => {
+    if (!timestamp) return '';
+    try {
+        const date = typeof timestamp === 'number' ? new Date(timestamp) : new Date(timestamp);
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        // Reset time to compare only dates
+        const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const yesterdayDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+        
+        if (messageDate.getTime() === todayDate.getTime()) {
+            return 'Today';
+        } else if (messageDate.getTime() === yesterdayDate.getTime()) {
+            return 'Yesterday';
+        } else {
+            // Format as DD/MM/YYYY
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+    } catch {
+        return '';
+    }
+};
+
+// Helper function to group messages by date
+const groupMessagesByDate = (messages) => {
+    const groups = {};
+    
+    messages.forEach(message => {
+        const dateString = getDateString(message.timestamp || message.create_date);
+        if (dateString) {
+            if (!groups[dateString]) {
+                groups[dateString] = [];
+            }
+            groups[dateString].push(message);
+        }
+    });
+    
+    // Sort groups by date (newest first)
+    const sortedGroups = Object.keys(groups)
+        .sort((a, b) => new Date(a) - new Date(b))
+        .map(dateString => ({
+            date: dateString,
+            displayDate: formatDateForDisplay(new Date(dateString)),
+            messages: groups[dateString]
+        }));
+    
+    return sortedGroups;
 };
 
 export default Conversation;
