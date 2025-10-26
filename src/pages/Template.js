@@ -294,10 +294,10 @@ function Template() {
                           {template.updatedOn}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="flex justify-end space-x-2">
-                            <button className="text-indigo-600 hover:text-indigo-900">
+                          <div className="flex justify-end space-x-4">
+                            {/* <button className="text-indigo-600 hover:text-indigo-900">
                               <FiDownload size={18} />
-                            </button>
+                            </button> */}
                             <Link 
                               to={`/template-edit/${template.id}`}
                               className="text-gray-600 hover:text-gray-900"
