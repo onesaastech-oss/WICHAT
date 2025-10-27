@@ -20,7 +20,11 @@ import {
     FiCheck,
     FiClock,
     FiAlertCircle,
-    FiInfo
+    FiInfo,
+    FiActivity,
+    FiMessageSquare,
+    FiLayers,
+    FiEye
 } from 'react-icons/fi';
 import { FaRegEye } from "react-icons/fa6";
 import { MdOutlineCancel } from "react-icons/md";
@@ -31,6 +35,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Encrypt } from './encryption/payload-encryption';
 import { dbHelper } from './db';
 import ReactPlayer from 'react-player';
+import ChatTemplateModal from '../component/Modals/ChatTemplateModal';
+import TemplatePreview from '../component/Modals/TemplatePreview';
 
 // Error Modal Component
 const ErrorModal = ({ isOpen, onClose, errorMessage }) => {
@@ -1051,12 +1057,12 @@ const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime 
                                 renderFilePreview(msg)
                             )}
                             <div className={`flex items-center space-x-1 sm:space-x-2 mt-1 sm:mt-2 ${msg.type === 'out' ? 'justify-end' : 'justify-start'}`}>
-                               
-                             
+
+
                                 <span className="text-xs opacity-75">
                                     {formatTime(msg.timestamp || msg.create_date)}
                                 </span>
-                                
+
                                 <MessageStatusIndicator
                                     status={msg.status || 'pending'}
                                     isOwnMessage={msg.type === 'out'}
@@ -1064,19 +1070,19 @@ const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime 
                                     failedReason={msg.failed_reason}
                                 />
 
-<button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowInfoModal(true);
-                                }}
-                                className={`top-2 bg-gray-200 ${msg.type === 'out' ? 'left-2' : 'right-2'} 
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowInfoModal(true);
+                                    }}
+                                    className={`top-2 bg-gray-200 ${msg.type === 'out' ? 'left-2' : 'right-2'} 
                                      group-hover:opacity-100 transition-opacity duration-200
                                     p-1 rounded-full hover:bg-black hover:bg-opacity-10 dark:hover:bg-white dark:hover:bg-opacity-10
                                     focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1`}
-                                title="View message details"
-                            >
-                                <FiInfo className="w-2.5 h-2.5 text-gray-700 dark:text-gray-400" />
-                            </button>
+                                    title="View message details"
+                                >
+                                    <FiInfo className="w-2.5 h-2.5 text-gray-700 dark:text-gray-400" />
+                                </button>
                             </div>
 
                             {/* Info Button */}
@@ -1100,6 +1106,9 @@ const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime 
 function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socketMessage = null, onMessageStatusUpdate }) {
     const [messageInput, setMessageInput] = useState('');
     const [showMediaModal, setShowMediaModal] = useState(false);
+    const [showTemplateModal, setShowTemplateModal] = useState(false);
+    const [showTemplatePreview, setShowTemplatePreview] = useState(false);
+    const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [selectedFile, setSelectedFile] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -1130,7 +1139,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 const updatedMessage = await dbHelper.getMessages(activeChat.number);
                 setMessages(updatedMessage);
             }
-            
+
             // Ensure scroll to bottom after loading messages
             setTimeout(() => scrollToBottomImmediate(), 200);
         })();
@@ -1163,21 +1172,25 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             // Use ResizeObserver to detect when container size changes due to image loads
             const resizeObserver = new ResizeObserver(() => {
                 // Check if we're near the bottom, and if so, scroll to bottom
-                const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-                const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
-                
-                if (isNearBottom) {
-                    setTimeout(() => scrollToBottomImmediate(), 100);
+                if (messagesContainerRef.current) {
+                    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+                    const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
+
+                    if (isNearBottom) {
+                        setTimeout(() => scrollToBottomImmediate(), 100);
+                    }
                 }
             });
 
             // Also use MutationObserver for DOM changes
             const mutationObserver = new MutationObserver(() => {
-                const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-                const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
-                
-                if (isNearBottom) {
-                    setTimeout(() => scrollToBottomImmediate(), 100);
+                if (messagesContainerRef.current) {
+                    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+                    const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
+
+                    if (isNearBottom) {
+                        setTimeout(() => scrollToBottomImmediate(), 100);
+                    }
                 }
             });
 
@@ -1200,8 +1213,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         // Use setTimeout to ensure DOM is updated
         setTimeout(() => {
             if (messagesEndRef.current) {
-                messagesEndRef.current.scrollIntoView({ 
-                    behavior: "smooth", 
+                messagesEndRef.current.scrollIntoView({
+                    behavior: "smooth",
                     block: "end",
                     inline: "nearest"
                 });
@@ -1212,8 +1225,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     // Alternative scroll method for immediate scrolling
     const scrollToBottomImmediate = () => {
         if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ 
-                behavior: "auto", 
+            messagesEndRef.current.scrollIntoView({
+                behavior: "auto",
                 block: "end",
                 inline: "nearest"
             });
@@ -1407,6 +1420,27 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
     };
 
+    // Handle template selection
+    const handleTemplateSelect = (template) => {
+        // Extract template content and set it as message input
+        if (template.template_data?.body) {
+            setMessageInput(template.template_data.body);
+        } else if (template.template_data?.components) {
+            // Handle structured templates
+            const textComponents = template.template_data.components.filter(comp => comp.type === 'BODY');
+            if (textComponents.length > 0) {
+                setMessageInput(textComponents[0].text || '');
+            }
+        }
+    };
+
+    // Handle template preview
+    const handleTemplatePreview = (template) => {
+        setSelectedTemplate(template);
+        setShowTemplatePreview(true);
+    };
+
+
     const handleSendMessage = async () => {
         if (!messageInput.trim() && !selectedFile) return;
 
@@ -1431,10 +1465,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             chat_number: activeChat.number
         };
 
-                setMessages(prev => [...prev, newMessage]);
-                setMessageInput('');
-                // Scroll immediately for new messages
-                setTimeout(() => scrollToBottomImmediate(), 50);
+        setMessages(prev => [...prev, newMessage]);
+        setMessageInput('');
+        // Scroll immediately for new messages
+        setTimeout(() => scrollToBottomImmediate(), 50);
 
         // Persist temp message and update chat list immediately
         try {
@@ -1781,6 +1815,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         setSelectedFile(null);
     };
 
+    // Handle template use from preview
+    const handleTemplateUse = (finalContent) => {
+        setMessageInput(finalContent);
+        setShowTemplatePreview(false);
+        setSelectedTemplate(null);
+    };
+
     const MediaSelectionModal = () => (
         <AnimatePresence>
             {showMediaModal && (
@@ -1885,7 +1926,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                             <div key={dateGroup.date}>
                                 {/* Date Separator */}
                                 <DateSeparator displayDate={dateGroup.displayDate} />
-                                
+
                                 {/* Messages for this date */}
                                 <div className="space-y-3 sm:space-y-4">
                                     {dateGroup.messages.map((msg) => (
@@ -1983,6 +2024,12 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         <button className="ml-2 sm:ml-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
                             <FiMic className="w-4 h-4 sm:w-5 sm:h-5" />
                         </button>
+                        <button
+                            onClick={() => setShowTemplateModal(true)}
+                            className="Templates ml-2 sm:ml-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                        >
+                            <FiLayers className="w-4 h-4 sm:w-5 sm:h-5" />
+                        </button>
                     </div>
 
                     <button
@@ -2000,6 +2047,28 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
             {/* Media Selection Modal */}
             <MediaSelectionModal />
+
+            {/* Template Selection Modal */}
+            <ChatTemplateModal
+                isOpen={showTemplateModal}
+                onClose={() => setShowTemplateModal(false)}
+                tokens={tokens}
+                onTemplateSelect={handleTemplateSelect}
+                onTemplatePreview={handleTemplatePreview}
+                darkMode={darkMode}
+            />
+
+            {/* Template Preview Modal */}
+            <TemplatePreview
+                isOpen={showTemplatePreview}
+                onClose={() => {
+                    setShowTemplatePreview(false);
+                    setSelectedTemplate(null);
+                }}
+                selectedTemplate={selectedTemplate}
+                darkMode={darkMode}
+                onUseTemplate={handleTemplateUse}
+            />
         </div>
     );
 }
@@ -2034,12 +2103,12 @@ const formatDateForDisplay = (timestamp) => {
         const today = new Date();
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
-        
+
         // Reset time to compare only dates
         const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
         const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
         const yesterdayDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-        
+
         if (messageDate.getTime() === todayDate.getTime()) {
             return 'Today';
         } else if (messageDate.getTime() === yesterdayDate.getTime()) {
@@ -2059,7 +2128,7 @@ const formatDateForDisplay = (timestamp) => {
 // Helper function to group messages by date
 const groupMessagesByDate = (messages) => {
     const groups = {};
-    
+
     messages.forEach(message => {
         const dateString = getDateString(message.timestamp || message.create_date);
         if (dateString) {
@@ -2069,7 +2138,7 @@ const groupMessagesByDate = (messages) => {
             groups[dateString].push(message);
         }
     });
-    
+
     // Sort groups by date (newest first)
     const sortedGroups = Object.keys(groups)
         .sort((a, b) => new Date(a) - new Date(b))
@@ -2078,7 +2147,7 @@ const groupMessagesByDate = (messages) => {
             displayDate: formatDateForDisplay(new Date(dateString)),
             messages: groups[dateString]
         }));
-    
+
     return sortedGroups;
 };
 
