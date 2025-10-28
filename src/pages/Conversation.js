@@ -1051,7 +1051,7 @@ const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime 
                                 : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-md border border-gray-200 dark:border-gray-700'
                                 } max-w-full relative`}
                         >
-                            {msg.message_type === 'text' ? (
+                            {(msg.message_type === 'text' || msg.is_template) ? (
                                 <p className="whitespace-pre-wrap break-words text-sm sm:text-base">{msg.message}</p>
                             ) : (
                                 renderFilePreview(msg)
@@ -1145,19 +1145,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         })();
     }, [tokens, activeChat?.number]);
 
-    // 🔹 When a new socket message arrives
+    // 🔹 When a new socket-driven refresh arrives (messages for active chat)
     useEffect(() => {
-        console.log("live update", socketMessage);
-        if (socketMessage.length > 0) {
-            console.log(socketMessage[0].chat_number);
-            // Ensure it's for the currently active chat
-            if (socketMessage[0].chat_number === activeChat.number) {
-                console.log("💬 New socket message for active chat:", socketMessage);
-                // Append it safely without duplicating
-                setMessages(socketMessage);
-                // Scroll immediately for new socket messages
-                setTimeout(() => scrollToBottomImmediate(), 50);
-            }
+        if (Array.isArray(socketMessage) && socketMessage.length > 0 && activeChat?.number) {
+            setMessages(socketMessage);
+            setTimeout(() => scrollToBottomImmediate(), 50);
         }
     }, [socketMessage, activeChat]);
 
@@ -1278,13 +1270,33 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
     const processApiResponse = async (apiMessages) => {
         try {
-            const messageList = apiMessages.map(apiMessage => ({
+            const messageList = apiMessages.map(apiMessage => {
+                // Build readable text for template if server message is missing/empty
+                let resolvedMessage = apiMessage.message || '';
+                if ((apiMessage.message_type === 'template' || apiMessage.is_template) && (!resolvedMessage || resolvedMessage.length === 0)) {
+                    // Prefer template.body if present
+                    let bodyText = '';
+                    if (apiMessage.template?.components) {
+                        const bodyComp = apiMessage.template.components.find(c => c.type === 'BODY');
+                        bodyText = bodyComp?.text || '';
+                    } else if (apiMessage.template?.body) {
+                        bodyText = apiMessage.template.body;
+                    }
+                    const params = (apiMessage.component || []).find(c => c.type?.toLowerCase() === 'body')?.parameters || [];
+                    const matches = bodyText.match(/\{\{\d+\}\}/g) || [];
+                    resolvedMessage = matches.reduce((acc, ph, idx) => {
+                        const val = params[idx]?.text || `Variable ${idx + 1}`;
+                        return acc.replace(ph, val);
+                    }, bodyText) || '';
+                }
+
+                return ({
                 message_id: apiMessage.message_id || '',
                 wamid: apiMessage.wamid || '',
                 create_date: apiMessage.create_date || '',
-                type: apiMessage.type || '',
-                message_type: apiMessage.message_type || '',
-                message: apiMessage.message || '',
+                    type: apiMessage.type || '',
+                    message_type: apiMessage.message_type || '',
+                    message: resolvedMessage,
                 is_template: apiMessage.is_template || false,
                 is_forwarded: apiMessage.is_forwarded || false,
                 is_reply: apiMessage.is_reply || false,
@@ -1313,7 +1325,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 timestamp: apiMessage.timestamp || (apiMessage.create_date ? new Date(apiMessage.create_date).getTime() : ''),
                 retryCount: apiMessage.retryCount || '',
                 chat_number: activeChat.number
-            }));
+                });
+            });
 
             if (dbAvailable) {
                 await dbHelper.saveMessage(messageList);
@@ -1822,6 +1835,178 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         setSelectedTemplate(null);
     };
 
+    // Send Template (append to conversation immediately with pending status and update on API response)
+    const sendTemplateMessage = async (template, providedComponents = null, previewText = '') => {
+        try {
+            if (!tokens?.token || !tokens?.username || !activeChat?.number || !template?.id) {
+                console.error('Missing data to send template');
+                return;
+            }
+
+            // Build components if not provided
+            let formattedComponents = providedComponents || [];
+            if (!providedComponents || providedComponents.length === 0) {
+                if (template.template_data?.components) {
+                    template.template_data.components.forEach((component) => {
+                        if (component.type === 'BODY' && component.text) {
+                            const variableMatches = component.text.match(/\{\{\d+\}\}/g);
+                            const parameters = [];
+                            if (variableMatches) {
+                                variableMatches.forEach((match, index) => {
+                                    const exampleValue = component.example?.body_text?.[0]?.[index] || `Variable ${index + 1}`;
+                                    parameters.push({ type: 'text', text: exampleValue });
+                                });
+                            }
+                            formattedComponents.push({ type: 'body', parameters });
+                        }
+                    });
+                }
+            }
+
+            // Resolve message body text for local echo
+            let messageBody = previewText;
+            if (!messageBody) {
+                let content = '';
+                if (template.template_data?.body) {
+                    content = template.template_data.body;
+                } else if (template.template_data?.components) {
+                    const bodyComponent = template.template_data.components.find((c) => c.type === 'BODY');
+                    content = bodyComponent?.text || '';
+                }
+                // Replace placeholders with parameter values if present
+                const params = formattedComponents.find((c) => c.type === 'body')?.parameters || [];
+                const matches = content.match(/\{\{\d+\}\}/g) || [];
+                messageBody = matches.reduce((acc, ph, idx) => {
+                    const val = params[idx]?.text || `Variable ${idx + 1}`;
+                    return acc.replace(ph, val);
+                }, content);
+            }
+
+            const tempMessageId = `temp_${Date.now()}`;
+            const tempMessage = {
+                id: Date.now().toString(),
+                message_id: tempMessageId,
+                type: 'out',
+                message_type: 'text',
+                message: messageBody,
+                is_template: true,
+                status: 'pending',
+                timestamp: Date.now(),
+                send_by: 'You',
+                chat_number: activeChat.number,
+                create_date: new Date().toISOString()
+            };
+
+            // Update UI immediately
+            setMessages((prev) => [...prev, tempMessage]);
+            setTimeout(() => scrollToBottomImmediate(), 50);
+
+            // Persist to DB and chat list
+            try {
+                if (dbAvailable) {
+                    await dbHelper.addMessage(activeChat.number, tempMessage);
+                    await dbHelper.saveChats([
+                        {
+                            number: activeChat.number,
+                            name: activeChat.name,
+                            is_favorite: activeChat.is_favorite || false,
+                            wamid: '',
+                            create_date: tempMessage.create_date,
+                            type: 'out',
+                            message_type: 'text',
+                            message: messageBody,
+                            status: 'pending',
+                            unique_id: tempMessageId,
+                            last_id: Date.now(),
+                            send_by_username: tokens?.username || '',
+                            send_by_mobile: ''
+                        }
+                    ]);
+                }
+                if (onMessageStatusUpdate) {
+                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
+                }
+            } catch (e) {
+                console.error('Failed to persist temp template message/chat row:', e);
+            }
+
+            // Send template via API
+            const payload = {
+                project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                number: activeChat.number,
+                template_id: template.id,
+                component: formattedComponents
+            };
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            const response = await axios.post(
+                'https://api.w1chat.com/message/send-template',
+                data_pass,
+                {
+                    headers: {
+                        token: tokens.token,
+                        username: tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (!response?.data?.error) {
+                const serverWamid = response?.data?.wamid || '';
+
+                if (dbAvailable) {
+                    // Mark temp as sent and set wamid; KEEP temp message_id so UI mapping by temp id remains consistent
+                    await dbHelper.updateMessageStatus(tempMessageId, 'sent');
+                    await dbHelper.updateMessageIdentifiersByMessageId(tempMessageId, {
+                        wamid: serverWamid
+                    });
+                    // Update chats row with latest identifiers
+                    await dbHelper.saveChats([
+                        {
+                            number: activeChat.number,
+                            name: activeChat.name,
+                            is_favorite: activeChat.is_favorite || false,
+                            wamid: serverWamid,
+                            create_date: new Date().toISOString(),
+                            type: 'out',
+                            message_type: 'text',
+                            message: messageBody,
+                            status: 'sent',
+                            unique_id: serverWamid,
+                            last_id: Date.now(),
+                            send_by_username: tokens?.username || '',
+                            send_by_mobile: ''
+                        }
+                    ]);
+                }
+
+                // Update UI: mark sent and set wamid (do not swap message_id)
+                setMessages((prev) => prev.map((m) => (
+                    m.message_id === tempMessageId
+                        ? { ...m, status: 'sent', wamid: serverWamid }
+                        : m
+                )));
+
+                if (onMessageStatusUpdate) {
+                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'sent');
+                }
+            } else {
+                // Failed
+                if (dbAvailable) {
+                    await dbHelper.updateMessageStatus(tempMessageId, 'failed');
+                }
+                setMessages((prev) => prev.map((m) => (m.message_id === tempMessageId ? { ...m, status: 'failed' } : m)));
+                if (onMessageStatusUpdate) {
+                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
+                }
+            }
+        } catch (error) {
+            console.error('Failed to send template:', error);
+        }
+    };
+
     const MediaSelectionModal = () => (
         <AnimatePresence>
             {showMediaModal && (
@@ -2056,6 +2241,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 onTemplateSelect={handleTemplateSelect}
                 onTemplatePreview={handleTemplatePreview}
                 darkMode={darkMode}
+                activeChat={activeChat}
+                onSendTemplate={sendTemplateMessage}
             />
 
             {/* Template Preview Modal */}
@@ -2068,6 +2255,9 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 selectedTemplate={selectedTemplate}
                 darkMode={darkMode}
                 onUseTemplate={handleTemplateUse}
+                tokens={tokens}
+                activeChat={activeChat}
+                onSendTemplate={sendTemplateMessage}
             />
         </div>
     );

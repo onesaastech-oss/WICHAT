@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
 import { FiX, FiSend, FiClock, FiCheck, FiCheckCircle } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
+import { Encrypt } from '../../pages/encryption/payload-encryption';
 
 const TemplatePreview = ({ 
     isOpen, 
     onClose, 
     selectedTemplate, 
     darkMode = false, 
-    onUseTemplate 
+    onUseTemplate,
+    tokens,
+    activeChat,
+    onSendTemplate
 }) => {
     const [variableValues, setVariableValues] = useState({});
+    const [sendingTemplate, setSendingTemplate] = useState(false);
     
     if (!selectedTemplate) return null;
 
@@ -62,10 +68,108 @@ const TemplatePreview = ({
         return previewContent;
     };
 
+    // Send template via API
+    const sendTemplate = async () => {
+        if (!tokens?.token || !tokens?.username || !activeChat?.number) {
+            console.error('Missing required data for sending template');
+            return;
+        }
+
+        setSendingTemplate(true);
+        try {
+            // Format components according to WhatsApp API specification
+            const formattedComponents = [];
+            
+            if (selectedTemplate.template_data?.components) {
+                selectedTemplate.template_data.components.forEach(component => {
+                    if (component.type === 'BODY' && component.text) {
+                        // Extract variables from the body text (e.g., {{1}}, {{2}})
+                        const variableMatches = component.text.match(/\{\{\d+\}\}/g);
+                        const parameters = [];
+                        
+                        if (variableMatches) {
+                            // Use user-entered values for variables
+                            variableMatches.forEach((match) => {
+                                const variableNumber = parseInt(match.match(/\d+/)[0]);
+                                const userValue = variableValues[variableNumber] || '';
+                                
+                                if (userValue) {
+                                    parameters.push({
+                                        type: "text",
+                                        text: userValue
+                                    });
+                                } else {
+                                    // Use example value if user didn't provide one
+                                    const exampleValue = component.example?.body_text?.[0]?.[variableNumber - 1] || `Variable ${variableNumber}`;
+                                    parameters.push({
+                                        type: "text",
+                                        text: exampleValue
+                                    });
+                                }
+                            });
+                        }
+                        
+                        formattedComponents.push({
+                            type: "body",
+                            parameters: parameters
+                        });
+                    }
+                    // Add other component types (header, footer, buttons) if needed
+                });
+            }
+
+            const payload = {
+                project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+                number: activeChat.number,
+                template_id: selectedTemplate.id,
+                component: formattedComponents
+            };
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            console.log('Sending template with payload:', payload);
+
+            // Delegate actual send + optimistic UI to Conversation handler if provided
+            if (onSendTemplate) {
+                await onSendTemplate(selectedTemplate, formattedComponents, renderPreviewContent());
+                onClose();
+            } else {
+                const response = await axios.post(
+                    'https://api.w1chat.com/message/send-template',
+                    data_pass,
+                    {
+                        headers: {
+                            'token': tokens.token,
+                            'username': tokens.username,
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                );
+
+                console.log('Send template response:', response.data);
+
+                if (!response?.data?.error) {
+                    console.log('Template sent successfully:', response.data);
+                    if (onUseTemplate) {
+                        onUseTemplate(renderPreviewContent());
+                    }
+                    onClose();
+                } else {
+                    console.error('API Error:', response?.data?.message);
+                    alert('Failed to send template: ' + (response?.data?.message || 'Unknown error'));
+                }
+            }
+        } catch (error) {
+            console.error('Failed to send template:', error);
+            alert('Failed to send template: ' + (error.message || 'Network error'));
+        } finally {
+            setSendingTemplate(false);
+        }
+    };
+
     const handleUseTemplate = () => {
-        const finalContent = renderPreviewContent();
-        onUseTemplate(finalContent);
-        onClose();
+        sendTemplate();
     };
 
     return (
@@ -179,7 +283,7 @@ const TemplatePreview = ({
                                     {/* Chat Messages */}
                                     <div className="p-4 space-y-3 min-h-[200px] max-h-[300px] overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
                                         {/* Previous message context */}
-                                        <div className="flex justify-start">
+                                        {/* <div className="flex justify-start">
                                             <div className="flex items-end gap-2 max-w-[80%]">
                                                 <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
                                                     <span className="text-gray-600 text-xs">C</span>
@@ -193,7 +297,7 @@ const TemplatePreview = ({
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        </div> */}
 
                                         {/* Template message */}
                                         <div className="flex justify-end">
@@ -255,10 +359,24 @@ const TemplatePreview = ({
                                 </button>
                                 <button
                                     onClick={handleUseTemplate}
-                                    className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+                                    disabled={sendingTemplate}
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                                        sendingTemplate
+                                            ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                                            : 'bg-green-500 hover:bg-green-600 text-white'
+                                    }`}
                                 >
-                                    <FiSend className="w-4 h-4" />
-                                    Use Template
+                                    {sendingTemplate ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                            Sending...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FiSend className="w-4 h-4" />
+                                            Send Template
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>

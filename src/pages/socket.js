@@ -124,13 +124,31 @@ class SocketManager {
             }
 
             // New Message
+            // If template message has null body, attempt to render readable text from template + component
+            let resolvedMessage = messageData.message.message || '';
+            if ((messageData.message.message_type === 'template' || messageData.message.is_template) && (!resolvedMessage || resolvedMessage.length === 0)) {
+                let bodyText = '';
+                if (messageData.message.template?.components) {
+                    const bodyComp = messageData.message.template.components.find(c => c.type === 'BODY');
+                    bodyText = bodyComp?.text || '';
+                } else if (messageData.message.template?.body) {
+                    bodyText = messageData.message.template.body;
+                }
+                const params = (messageData.message.component || []).find(c => (c.type || '').toLowerCase() === 'body')?.parameters || [];
+                const matches = bodyText.match(/\{\{\d+\}\}/g) || [];
+                resolvedMessage = matches.reduce((acc, ph, idx) => {
+                    const val = params[idx]?.text || `Variable ${idx + 1}`;
+                    return acc.replace(ph, val);
+                }, bodyText) || '';
+            }
+
             const messageList = [{
                 message_id: messageData.message.message_id || '',
                 wamid: messageData.message.wamid || '',
                 create_date: messageData.message.create_date || '',
                 type: messageData.message.type || '',
                 message_type: messageData.message.message_type || '',
-                message: messageData.message.message || '',
+                message: resolvedMessage,
                 is_template: messageData.message.is_template || false,
                 is_forwarded: messageData.message.is_forwarded || false,
                 is_reply: messageData.message.is_reply || false,

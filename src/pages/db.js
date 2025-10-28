@@ -293,7 +293,15 @@ export const dbHelper = {
                         chat_number: message.chat_number
                     };
 
-                    const existing = await db.messages.where('message_id').equals(message.message_id).first();
+                    // Prefer exact match by server message_id
+                    let existing = message.message_id
+                        ? await db.messages.where('message_id').equals(message.message_id).first()
+                        : null;
+
+                    // If not found, try matching by wamid (useful for merging temp → server message)
+                    if (!existing && message.wamid) {
+                        existing = await db.messages.where('wamid').equals(message.wamid).first();
+                    }
 
                     if (existing) {
                         await db.messages.update(existing.id, data);
@@ -424,6 +432,23 @@ export const dbHelper = {
         }
     },
 
+    async updateMessageIdentifiersByMessageId(messageId, updates) {
+        try {
+            const db = this.db;
+            if (!messageId || !updates || typeof updates !== 'object') {
+                console.warn('⚠️ Invalid params to updateMessageIdentifiersByMessageId');
+                return;
+            }
+            await db.messages
+                .where('message_id')
+                .equals(messageId)
+                .modify(updates);
+            console.log(`✅ Message ${messageId} identifiers updated`, updates);
+        } catch (error) {
+            console.error('❌ Error updating message identifiers:', error);
+        }
+    },
+
     async incrementRetryCount(messageId) {
         try {
             const db = this.db;
@@ -444,7 +469,7 @@ export const dbHelper = {
             const db = this.db;
 
             const mediaUrl = serverMessage.media_url || '';
-            const isText = !mediaUrl && (serverMessage.message_type === 'text' || !serverMessage.message_type);
+            const isText = !mediaUrl && (serverMessage.message_type === 'text' || serverMessage.message_type === 'template' || !serverMessage.message_type);
 
             // Find a recent outgoing temp message in the same chat matching media or text
             const recentMessages = await db.messages
@@ -459,7 +484,10 @@ export const dbHelper = {
                 // Prefer temp ids for safer merge
                 const isTempId = typeof m.message_id === 'string' && m.message_id.startsWith('temp_');
                 if (isText) {
-                    return (m.message_type === 'text') && (m.message === serverMessage.message) && isTempId;
+                    // For template: message may be null in history; match by is_template true
+                    const matchesTemplate = (serverMessage.message_type === 'template' && m.is_template === true);
+                    const matchesText = (serverMessage.message_type === 'text' && m.message_type === 'text' && m.message === serverMessage.message);
+                    return (matchesTemplate || matchesText) && isTempId;
                 }
                 return m.media_url === mediaUrl;
             });
@@ -473,7 +501,7 @@ export const dbHelper = {
                     create_date: serverMessage.create_date || candidate.create_date,
                     status: serverMessage.status || candidate.status,
                     message_type: serverMessage.message_type || candidate.message_type,
-                    message: serverMessage.message || candidate.message,
+                    message: serverMessage.message !== null && serverMessage.message !== undefined ? serverMessage.message : candidate.message,
                     timestamp: (
                         serverMessage.timestamp
                         || (serverMessage.create_date ? new Date(serverMessage.create_date).getTime() : undefined)
@@ -490,7 +518,7 @@ export const dbHelper = {
                     create_date: serverMessage.create_date || '',
                     type: serverMessage.type || 'out',
                     message_type: serverMessage.message_type || candidate.message_type,
-                    message: serverMessage.message || candidate.message,
+                    message: serverMessage.message !== null && serverMessage.message !== undefined ? serverMessage.message : candidate.message,
                     status: serverMessage.status || candidate.status,
                     unique_id: serverMessage.message_id || candidate.message_id,
                     last_id: serverMessage.id || candidate.id,

@@ -3,7 +3,7 @@ import { FiX, FiSearch, FiChevronDown, FiChevronUp, FiCheck, FiClock, FiAlertCir
 import axios from 'axios';
 import { Encrypt } from '../../pages/encryption/payload-encryption';
 
-const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTemplatePreview, darkMode = false }) => {
+const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTemplatePreview, darkMode = false, activeChat, onSendTemplate }) => {
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -14,6 +14,7 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
     const [currentPage, setCurrentPage] = useState(1);
     const [showStatusDropdown, setShowStatusDropdown] = useState(false);
     const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+    const [sendingTemplate, setSendingTemplate] = useState(null);
 
     // Fetch templates from API
     const fetchTemplates = async (resetData = false) => {
@@ -82,6 +83,91 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
         }
     };
 
+    // Send template via API
+    const sendTemplate = async (template) => {
+        if (!tokens?.token || !tokens?.username || !activeChat?.number) {
+            console.error('Missing required data for sending template');
+            return;
+        }
+
+        setSendingTemplate(template.id);
+        try {
+            // Format components according to WhatsApp API specification
+            const formattedComponents = [];
+            
+            if (template.template_data?.components) {
+                template.template_data.components.forEach(component => {
+                    if (component.type === 'BODY' && component.text) {
+                        // Extract variables from the body text (e.g., {{1}}, {{2}})
+                        const variableMatches = component.text.match(/\{\{\d+\}\}/g);
+                        const parameters = [];
+                        
+                        if (variableMatches) {
+                            // For now, use example values or empty strings
+                            // In a real implementation, you'd collect these from user input
+                            variableMatches.forEach((match, index) => {
+                                const exampleValue = component.example?.body_text?.[0]?.[index] || `Variable ${index + 1}`;
+                                parameters.push({
+                                    type: "text",
+                                    text: exampleValue
+                                });
+                            });
+                        }
+                        
+                        formattedComponents.push({
+                            type: "body",
+                            parameters: parameters
+                        });
+                    }
+                    // Add other component types (header, footer, buttons) if needed
+                });
+            }
+
+            const payload = {
+                project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+                number: activeChat.number,
+                template_id: template.id,
+                component: formattedComponents
+            };
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            console.log('Sending template with payload:', payload);
+
+            const response = await axios.post(
+                'https://api.w1chat.com/message/send-template',
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            console.log('Send template response:', response.data);
+
+            if (!response?.data?.error) {
+                console.log('Template sent successfully:', response.data);
+                // Call the original onTemplateSelect if needed for any additional handling
+                if (onTemplateSelect) {
+                    onTemplateSelect(template);
+                }
+                onClose();
+            } else {
+                console.error('API Error:', response?.data?.message);
+                alert('Failed to send template: ' + (response?.data?.message || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Failed to send template:', error);
+            alert('Failed to send template: ' + (error.message || 'Network error'));
+        } finally {
+            setSendingTemplate(null);
+        }
+    };
+
     // Load templates when modal opens
     useEffect(() => {
         if (isOpen) {
@@ -105,8 +191,30 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
 
     // Handle template selection
     const handleTemplateSelect = (template) => {
-        onTemplateSelect(template);
-        onClose();
+        console.log('Template selected:', template);
+        if (onSendTemplate) {
+            // Let Conversation own the send + optimistic UI. Build components similarly.
+            const formattedComponents = [];
+            if (template.template_data?.components) {
+                template.template_data.components.forEach(component => {
+                    if (component.type === 'BODY' && component.text) {
+                        const variableMatches = component.text.match(/\{\{\d+\}\}/g);
+                        const parameters = [];
+                        if (variableMatches) {
+                            variableMatches.forEach((match, index) => {
+                                const exampleValue = component.example?.body_text?.[0]?.[index] || `Variable ${index + 1}`;
+                                parameters.push({ type: 'text', text: exampleValue });
+                            });
+                        }
+                        formattedComponents.push({ type: 'body', parameters });
+                    }
+                });
+            }
+            onSendTemplate(template, formattedComponents);
+            onClose();
+        } else {
+            sendTemplate(template);
+        }
     };
 
     // Load more templates
@@ -262,6 +370,7 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                     ) : (
                         <div className="space-y-3">
                             {filteredTemplates.map((template) => {
+                                
                                 return (
                                     <div
                                         key={template.id}
@@ -308,10 +417,24 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                                             </button>
                                             <button
                                                 onClick={() => handleTemplateSelect(template)}
-                                                className="flex items-center gap-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
+                                                disabled={sendingTemplate === template.id}
+                                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                    sendingTemplate === template.id
+                                                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                                                        : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                                }`}
                                             >
-                                                <FiCheck className="w-4 h-4" />
-                                                Use Template
+                                                {sendingTemplate === template.id ? (
+                                                    <>
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                        Sending...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <FiCheck className="w-4 h-4" />
+                                                        Send Template
+                                                    </>
+                                                )}
                                             </button>
                                         </div>
                                     </div>
