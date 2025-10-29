@@ -290,7 +290,9 @@ export const dbHelper = {
                             || Date.now()
                         ),
                         retryCount: message.retryCount || '',
-                        chat_number: message.chat_number
+                        chat_number: message.chat_number,
+                        template: message.template || null,
+                        component: message.component || null
                     };
 
                     // Prefer exact match by server message_id

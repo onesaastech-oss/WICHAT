@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FiX, FiSend, FiClock, FiCheck, FiCheckCircle } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -16,38 +16,67 @@ const TemplatePreview = ({
 }) => {
     const [variableValues, setVariableValues] = useState({});
     const [sendingTemplate, setSendingTemplate] = useState(false);
-    
-    if (!selectedTemplate) return null;
+    const [headerMediaUrl, setHeaderMediaUrl] = useState('');
+    const [isUploading, setIsUploading] = useState(false);
 
-    // Parse template content for preview
+    // Normalize template structures and parse for preview
     const parseTemplateContent = (template) => {
-        if (!template.template_data) return { content: '', variables: [] };
+        const templateData = template?.template_data || template?.template || {};
+        const components = templateData?.components || [];
 
         let content = '';
         let variables = [];
+        let footerText = '';
+        let buttons = [];
 
-        if (template.template_data.body) {
-            content = template.template_data.body;
-        } else if (template.template_data.components) {
-            const bodyComponent = template.template_data.components.find(comp => comp.type === 'BODY');
-            if (bodyComponent) {
-                content = bodyComponent.text || '';
-            }
+        const bodyComponent = components.find((comp) => comp.type === 'BODY');
+        if (bodyComponent) {
+            content = bodyComponent.text || '';
+        } else if (templateData.body) {
+            content = templateData.body;
+        }
+
+        const footerComponent = components.find((comp) => comp.type === 'FOOTER');
+        if (footerComponent) {
+            footerText = footerComponent.text || '';
+        }
+
+        const buttonsComponent = components.find((comp) => comp.type === 'BUTTONS');
+        if (buttonsComponent && Array.isArray(buttonsComponent.buttons)) {
+            buttons = buttonsComponent.buttons;
         }
 
         // Extract variables from content (e.g., {{1}}, {{2}}, etc.)
         const variableMatches = content.match(/\{\{\d+\}\}/g);
         if (variableMatches) {
-            variables = variableMatches.map(match => {
+            variables = variableMatches.map((match) => {
                 const num = match.match(/\d+/)[0];
                 return { placeholder: match, number: parseInt(num) };
             });
         }
 
-        return { content, variables };
+        return { content, variables, footerText, buttons, components, templateData };
     };
 
-    const { content, variables } = parseTemplateContent(selectedTemplate);
+    const { content, variables, footerText, buttons, components } = parseTemplateContent(selectedTemplate);
+
+    // Detect header media requirement and preset default link from example if present
+    const headerComponent = components?.find((c) => c.type === 'HEADER');
+    const headerFormat = headerComponent?.format || 'NONE';
+    const requiresHeaderMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
+
+    // Initialize default header media link from example on open/change
+    useEffect(() => {
+        if (requiresHeaderMedia) {
+            const exampleLink = headerComponent?.example?.header_handle?.[0] || '';
+            setHeaderMediaUrl((prev) => prev || exampleLink || '');
+        } else {
+            setHeaderMediaUrl('');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedTemplate?.id]);
+
+    if (!selectedTemplate) return null;
 
     const handleVariableChange = (variableNumber, value) => {
         setVariableValues(prev => ({
@@ -68,6 +97,36 @@ const TemplatePreview = ({
         return previewContent;
     };
 
+    const uploadHeaderMedia = async (file) => {
+        if (!file || !tokens?.token || !tokens?.username) return;
+        setIsUploading(true);
+        try {
+            const form = new FormData();
+            form.append('file', file);
+            const res = await axios.post(
+                'https://api.w1chat.com/upload/upload-media',
+                form,
+                {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                        'token': tokens.token,
+                        'username': tokens.username
+                    }
+                }
+            );
+            if (res?.data && !res.data.error && res.data.link) {
+                setHeaderMediaUrl(res.data.link);
+            } else {
+                alert('Failed to upload media for header');
+            }
+        } catch (e) {
+            console.error('Header media upload failed:', e);
+            alert('Header media upload failed');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
     // Send template via API
     const sendTemplate = async () => {
         if (!tokens?.token || !tokens?.username || !activeChat?.number) {
@@ -81,6 +140,23 @@ const TemplatePreview = ({
             const formattedComponents = [];
             
             if (selectedTemplate.template_data?.components) {
+                // Header media parameter if required
+                if (requiresHeaderMedia) {
+                    const mediaType = headerFormat.toLowerCase(); // image | video | document
+                    const mediaLink = headerMediaUrl || headerComponent?.example?.header_handle?.[0] || '';
+                    if (!mediaLink) {
+                        alert('Please provide a media for the header');
+                        setSendingTemplate(false);
+                        return;
+                    }
+                    const mediaParam = { type: mediaType };
+                    mediaParam[mediaType] = { link: mediaLink };
+                    formattedComponents.push({
+                        type: 'header',
+                        parameters: [mediaParam]
+                    });
+                }
+
                 selectedTemplate.template_data.components.forEach(component => {
                     if (component.type === 'BODY' && component.text) {
                         // Extract variables from the body text (e.g., {{1}}, {{2}})
@@ -226,6 +302,44 @@ const TemplatePreview = ({
                                 </div>
                             </div>
 
+                            {/* Header media selector when template requires media */}
+                            {requiresHeaderMedia && (
+                                <div className="mb-4">
+                                    <h3 className={`text-sm font-semibold mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                        Header Media ({headerFormat.toLowerCase()})
+                                    </h3>
+                                    <div className={`p-4 rounded-xl border ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'}`}>
+                                        <div className="flex flex-col sm:flex-row gap-3">
+                                            <input
+                                                type="url"
+                                                placeholder={`Paste ${headerFormat.toLowerCase()} link or upload below`}
+                                                value={headerMediaUrl}
+                                                onChange={(e) => setHeaderMediaUrl(e.target.value)}
+                                                className={`flex-1 px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'}`}
+                                            />
+                                            <label className={`inline-flex items-center justify-center px-4 py-2 rounded-lg cursor-pointer ${isUploading ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-gray-100 hover:bg-gray-200 text-gray-800'}`}>
+                                                {isUploading ? 'Uploading...' : 'Upload'}
+                                                <input
+                                                    type="file"
+                                                    className="hidden"
+                                                    accept={headerFormat === 'IMAGE' ? 'image/*' : headerFormat === 'VIDEO' ? 'video/*' : '*'}
+                                                    disabled={isUploading}
+                                                    onChange={(e) => {
+                                                        const f = e.target.files?.[0];
+                                                        if (f) uploadHeaderMedia(f);
+                                                    }}
+                                                />
+                                            </label>
+                                        </div>
+                                        {headerMediaUrl && (
+                                            <div className="mt-3 text-xs break-all opacity-80">
+                                                Using: {headerMediaUrl}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Variable Inputs */}
                             {variables.length > 0 && (
                                 <div className="mb-4">
@@ -303,9 +417,44 @@ const TemplatePreview = ({
                                         <div className="flex justify-end">
                                             <div className="flex items-end gap-2 max-w-[80%]">
                                                 <div className={`px-3 py-2 rounded-2xl rounded-br-md bg-green-500 relative shadow-sm border border-green-400`}>
+                                                    {requiresHeaderMedia && headerMediaUrl && (
+                                                        <div className="mb-2 bg-white rounded-lg overflow-hidden">
+                                                            <div className="w-48 h-28 bg-gray-200 flex items-center justify-center">
+                                                                <span className="text-xs text-gray-600">{headerFormat.toLowerCase()} header</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                     <div className="text-sm text-white leading-relaxed whitespace-pre-wrap">
                                                         {renderPreviewContent()}
                                                     </div>
+                                                    {footerText ? (
+                                                        <div className="text-xs text-green-50/80 mt-2 whitespace-pre-wrap">
+                                                            {footerText}
+                                                        </div>
+                                                    ) : null}
+                                                    {buttons && buttons.length > 0 ? (
+                                                        <div className="flex flex-wrap gap-2 mt-3">
+                                                            {buttons.map((btn, idx) => {
+                                                                const type = btn.type || '';
+                                                                const text = btn.text || 'Button';
+                                                                const isUrl = type === 'URL';
+                                                                const isPhone = type === 'PHONE_NUMBER';
+                                                                const pillBase = 'px-3 py-1 rounded-full text-xs font-medium border bg-white/10 text-white border-white/30 hover:bg-white/20';
+                                                                return (
+                                                                    <a
+                                                                        key={idx}
+                                                                        href={isUrl ? (btn.url || '#') : isPhone ? `tel:${btn.phone_number || ''}` : undefined}
+                                                                        target={isUrl ? '_blank' : undefined}
+                                                                        rel={isUrl ? 'noreferrer' : undefined}
+                                                                        className={pillBase}
+                                                                        onClick={(e) => { if (!isUrl && !isPhone) e.preventDefault(); }}
+                                                                    >
+                                                                        {text}
+                                                                    </a>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    ) : null}
                                                     <div className="flex items-center justify-end gap-1 mt-1">
                                                         <div className="text-xs text-green-100">
                                                             10:32 AM

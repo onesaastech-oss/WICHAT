@@ -1031,6 +1031,125 @@ const DateSeparator = ({ displayDate }) => {
     );
 };
 
+// Template Message Renderer Component
+const TemplateMessageRenderer = ({ msg, darkMode, renderFilePreview, isOwnMessage }) => {
+    const template = msg.template || {};
+    const components = template.components || [];
+    const componentList = Array.isArray(msg.component) ? msg.component : [];
+    
+    // Extract components
+    const headerComponent = components.find(c => c.type === 'HEADER');
+    const componentHeader = componentList.find(c => c.type?.toLowerCase() === 'header');
+    const bodyComponent = components.find(c => c.type === 'BODY');
+    const footerComponent = components.find(c => c.type === 'FOOTER');
+    const buttonsComponent = components.find(c => c.type === 'BUTTONS');
+    
+    // Get header media info
+    const headerParamType = componentHeader?.parameters?.[0]?.type?.toUpperCase();
+    const headerFormat = headerComponent?.format || headerParamType || 'NONE';
+    const hasHeaderMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
+    
+    // Get body text (already resolved message with variables replaced)
+    const bodyText = msg.message || bodyComponent?.text || '';
+    
+    // Get footer text
+    const footerText = footerComponent?.text || '';
+    
+    // Get buttons
+    const buttons = buttonsComponent?.buttons || [];
+    
+    // Determine text colors based on message type (outgoing has white text on blue bg)
+    const textColorClass = isOwnMessage 
+        ? 'text-white' 
+        : (darkMode ? 'text-white' : 'text-gray-900');
+    const footerColorClass = isOwnMessage 
+        ? 'text-white/80' 
+        : (darkMode ? 'text-gray-300' : 'text-gray-600');
+    const buttonClass = isOwnMessage
+        ? 'bg-white/20 text-white border border-white/30 hover:bg-white/30'
+        : (darkMode 
+            ? 'bg-white/20 text-white border border-white/30 hover:bg-white/30' 
+            : 'bg-white text-gray-800 border border-gray-200 hover:bg-gray-50');
+    
+    return (
+        <div className="space-y-2">
+            {/* Header Media */}
+            {hasHeaderMedia && msg.media_url && (
+                <div className="mb-2">
+                    {renderFilePreview({
+                        ...msg,
+                        message_type: headerFormat.toLowerCase() === 'document' ? 'document' : 
+                                    headerFormat.toLowerCase() === 'video' ? 'video' : 
+                                    headerFormat.toLowerCase() === 'image' ? 'image' : 'document',
+                        send_by: isOwnMessage ? 'You' : (msg.send_by || msg.send_by_name || '')
+                    })}
+                </div>
+            )}
+            
+            {/* Body Text */}
+            {bodyText && (
+                <div className={`text-sm sm:text-base whitespace-pre-wrap break-words ${textColorClass}`}>
+                    {bodyText}
+                </div>
+            )}
+            
+            {/* Footer */}
+            {footerText && (
+                <div className={`text-xs mt-2 ${footerColorClass}`}>
+                    {footerText}
+                </div>
+            )}
+            
+            {/* Buttons */}
+            {buttons && buttons.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                    {buttons.map((btn, idx) => {
+                        const isUrl = btn.type === 'URL';
+                        const isPhone = btn.type === 'PHONE_NUMBER';
+                        const buttonText = btn.text || 'Button';
+                        
+                        if (isUrl) {
+                            return (
+                                <a
+                                    key={idx}
+                                    href={btn.url || '#'}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${buttonClass}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    {buttonText}
+                                </a>
+                            );
+                        } else if (isPhone) {
+                            return (
+                                <a
+                                    key={idx}
+                                    href={`tel:${btn.phone_number || ''}`}
+                                    className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${buttonClass}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    {buttonText}
+                                </a>
+                            );
+                        } else {
+                            return (
+                                <button
+                                    key={idx}
+                                    className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${buttonClass}`}
+                                    disabled
+                                >
+                                    {buttonText}
+                                </button>
+                            );
+                        }
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
+
 // Message Item Component with Info Button
 const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime }) => {
     const [showInfoModal, setShowInfoModal] = useState(false);
@@ -1051,7 +1170,14 @@ const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime 
                                 : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-md border border-gray-200 dark:border-gray-700'
                                 } max-w-full relative`}
                         >
-                            {(msg.message_type === 'text' || msg.is_template) ? (
+                            {msg.is_template ? (
+                                <TemplateMessageRenderer
+                                    msg={msg}
+                                    darkMode={darkMode}
+                                    renderFilePreview={renderFilePreview}
+                                    isOwnMessage={msg.type === 'out'}
+                                />
+                            ) : msg.message_type === 'text' ? (
                                 <p className="whitespace-pre-wrap break-words text-sm sm:text-base">{msg.message}</p>
                             ) : (
                                 renderFilePreview(msg)
@@ -1290,12 +1416,46 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     }, bodyText) || '';
                 }
 
+                // Extract header media URL from component parameters for templates
+                let headerMediaUrl = apiMessage.media_url || '';
+                let headerMediaName = apiMessage.media_name || '';
+                let derivedMessageType = apiMessage.message_type || '';
+                
+                if (apiMessage.is_template && apiMessage.component) {
+                    const headerComp = apiMessage.component.find(c => c.type?.toLowerCase() === 'header');
+                    if (headerComp && headerComp.parameters && headerComp.parameters.length > 0) {
+                        const param = headerComp.parameters[0];
+                        if (param?.type === 'image' && param.image?.link) {
+                            headerMediaUrl = param.image.link;
+                            derivedMessageType = 'image';
+                            headerMediaName = headerMediaUrl.split('/').pop() || 'Image';
+                        } else if (param?.type === 'video' && param.video?.link) {
+                            headerMediaUrl = param.video.link;
+                            derivedMessageType = 'video';
+                            headerMediaName = headerMediaUrl.split('/').pop() || 'Video';
+                        } else if (param?.type === 'document' && param.document?.link) {
+                            headerMediaUrl = param.document.link;
+                            derivedMessageType = 'document';
+                            headerMediaName = headerMediaUrl.split('/').pop() || 'Document';
+                        }
+                    }
+                }
+
+                // Fallback: Determine header media for templates if API provides media_url
+                if (apiMessage.is_template && headerMediaUrl && !derivedMessageType) {
+                    const lower = (headerMediaUrl || '').toLowerCase();
+                    if (/(\.jpg|\.jpeg|\.png|\.gif|\.webp)$/.test(lower)) derivedMessageType = 'image';
+                    else if (/(\.mp4|\.mov|\.avi|\.webm)$/.test(lower)) derivedMessageType = 'video';
+                    else if (/(\.mp3|\.wav|\.ogg|\.m4a)$/.test(lower)) derivedMessageType = 'audio';
+                    else derivedMessageType = 'document';
+                }
+
                 return ({
                 message_id: apiMessage.message_id || '',
                 wamid: apiMessage.wamid || '',
                 create_date: apiMessage.create_date || '',
                     type: apiMessage.type || '',
-                    message_type: apiMessage.message_type || '',
+                    message_type: derivedMessageType || apiMessage.message_type || '',
                     message: resolvedMessage,
                 is_template: apiMessage.is_template || false,
                 is_forwarded: apiMessage.is_forwarded || false,
@@ -1314,8 +1474,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 read_by_email: apiMessage.read_by?.email || '',
                 read_by_status: apiMessage.read_by?.status || false,
                 failed_reason: apiMessage.failed_reason || '',
-                media_url: apiMessage.media_url || '',
-                media_name: apiMessage.media_name || '',
+                media_url: headerMediaUrl || apiMessage.media_url || '',
+                media_name: headerMediaName || apiMessage.media_name || '',
                 is_voice: apiMessage.is_voice || false,
                 address: apiMessage.address || '',
                 latitude: apiMessage.latitude || '',
@@ -1324,7 +1484,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 reply_wamid: apiMessage.reply_wamid || '',
                 timestamp: apiMessage.timestamp || (apiMessage.create_date ? new Date(apiMessage.create_date).getTime() : ''),
                 retryCount: apiMessage.retryCount || '',
-                chat_number: activeChat.number
+                chat_number: activeChat.number,
+                // Store template and component data for rendering
+                template: apiMessage.template || null,
+                component: apiMessage.component || null
                 });
             });
 
@@ -1883,18 +2046,35 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             }
 
             const tempMessageId = `temp_${Date.now()}`;
+            // Detect header media from providedComponents for local preview
+            let headerMediaLink = '';
+            let headerMediaType = '';
+            const headerComp = (formattedComponents || []).find((c) => (c.type || '').toLowerCase() === 'header');
+            if (headerComp && Array.isArray(headerComp.parameters) && headerComp.parameters.length > 0) {
+                const p = headerComp.parameters[0];
+                if (p?.type === 'image' && p.image?.link) { headerMediaType = 'image'; headerMediaLink = p.image.link; }
+                if (p?.type === 'video' && p.video?.link) { headerMediaType = 'video'; headerMediaLink = p.video.link; }
+                if (p?.type === 'document' && p.document?.link) { headerMediaType = 'document'; headerMediaLink = p.document.link; }
+            }
+
+            const templatePayload = template.template_data || template.template || {};
+
             const tempMessage = {
                 id: Date.now().toString(),
                 message_id: tempMessageId,
                 type: 'out',
-                message_type: 'text',
+                message_type: headerMediaType || 'text',
                 message: messageBody,
                 is_template: true,
                 status: 'pending',
                 timestamp: Date.now(),
                 send_by: 'You',
                 chat_number: activeChat.number,
-                create_date: new Date().toISOString()
+                create_date: new Date().toISOString(),
+                media_url: headerMediaLink || '',
+                media_name: headerMediaLink ? (headerMediaLink.split('/').pop() || 'File') : '',
+                template: templatePayload,
+                component: formattedComponents
             };
 
             // Update UI immediately

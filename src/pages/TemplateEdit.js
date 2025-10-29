@@ -18,7 +18,9 @@ import {
   FiCode,
   FiTrash2,
   FiArrowLeft,
-  FiSave
+  FiSave,
+  FiCheckCircle,
+  FiAlertCircle
 } from 'react-icons/fi';
 
 function TemplateEdit() {
@@ -56,6 +58,10 @@ function TemplateEdit() {
   const [bodyVariables, setBodyVariables] = useState([]);
   const [headerVariable, setHeaderVariable] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [successData, setSuccessData] = useState(null);
+  const [errorMessage, setErrorMessage] = useState('');
   const textareaRef = useRef(null);
 
   // Get user tokens from localStorage
@@ -342,7 +348,7 @@ function TemplateEdit() {
   };
 
   // Handle header media upload
-  const handleHeaderMediaUpload = (e) => {
+  const handleHeaderMediaUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
       // Check file size (5MB limit)
@@ -351,26 +357,48 @@ function TemplateEdit() {
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        // In real implementation, you would upload to your server and get the URL
-        // For demo, we'll use a placeholder
-        const exampleUrl = `https://example.com/${file.name}`;
-        
-        setFormData(prev => ({
-          ...prev,
-          components: {
-            ...prev.components,
-            header: {
-              ...prev.components.header,
-              example: {
-                header_handle: [exampleUrl]
-              }
+      setIsUploading(true);
+      try {
+        // Create FormData for file upload
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Upload file to API
+        const response = await axios.post(
+          'https://api.w1chat.com/upload/upload-media',
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+              'token': tokens?.token || '',
+              'username': tokens?.username || ''
             }
           }
-        }));
-      };
-      reader.readAsDataURL(file);
+        );
+
+        if (response.data && !response.data.error && response.data.link) {
+          // Update form data with the uploaded file URL
+          setFormData(prev => ({
+            ...prev,
+            components: {
+              ...prev.components,
+              header: {
+                ...prev.components.header,
+                example: {
+                  header_handle: [response.data.link]
+                }
+              }
+            }
+          }));
+        } else {
+          throw new Error('Upload failed: Invalid response from server');
+        }
+      } catch (error) {
+        console.error('Error uploading file:', error);
+        alert(`Failed to upload file: ${error.message}`);
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -774,20 +802,43 @@ function TemplateEdit() {
 
       // Check for successful response (assuming 200/201 status codes indicate success)
       if (response.status === 200 || response.status === 201) {
-        alert('Template updated successfully! Changes have been saved and will be reflected in your template list.');
+        // Set success data and show popup
+        setSuccessData({
+          template_name: formData.name,
+          template_id: templateId,
+          status: 'UPDATED',
+          message: 'Template updated successfully!'
+        });
+        setShowSuccessPopup(true);
+        
         // Clear localStorage to force refresh of template list
         localStorage.removeItem('templatesData');
-        navigate('/template');
       } else {
         throw new Error(response.data?.message || 'Failed to update template');
       }
 
     } catch (error) {
       console.error('Error updating template:', error);
-      alert(`Failed to update template: ${error.response?.data?.message || error.message}`);
+      setErrorMessage(error.response?.data?.message || error.message);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Handle redirect to templates page
+  const handleRedirectToTemplates = () => {
+    navigate('/template');
+  };
+
+  // Close success popup
+  const closeSuccessPopup = () => {
+    setShowSuccessPopup(false);
+    setSuccessData(null);
+  };
+
+  // Clear error message
+  const clearErrorMessage = () => {
+    setErrorMessage('');
   };
 
   // Generate preview text with variables replaced
@@ -1019,16 +1070,26 @@ function TemplateEdit() {
                             </button>
                           </div>
                         ) : (
-                          <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:border-gray-400">
+                          <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-md ${isUploading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-gray-400'}`}>
                             <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                              <FiPaperclip className="w-8 h-8 text-gray-400 mb-2" />
-                              <p className="text-sm text-gray-500">Click to upload {formData.components.header.format.toLowerCase()}</p>
-                              <p className="text-xs text-gray-400">MAX. 5MB</p>
+                              {isUploading ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-2"></div>
+                                  <p className="text-sm text-gray-500">Uploading...</p>
+                                </>
+                              ) : (
+                                <>
+                                  <FiPaperclip className="w-8 h-8 text-gray-400 mb-2" />
+                                  <p className="text-sm text-gray-500">Click to upload {formData.components.header.format.toLowerCase()}</p>
+                                  <p className="text-xs text-gray-400">MAX. 5MB</p>
+                                </>
+                              )}
                             </div>
                             <input
                               type="file"
                               className="hidden"
                               onChange={handleHeaderMediaUpload}
+                              disabled={isUploading}
                               accept={
                                 formData.components.header.format === 'IMAGE' ? 'image/*' : 
                                 formData.components.header.format === 'VIDEO' ? 'video/*' : 
@@ -1490,6 +1551,77 @@ function TemplateEdit() {
           </div>
         </div>
       </div>
+
+      {/* Success Popup Modal */}
+      {showSuccessPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-center mb-4">
+              <FiCheckCircle className="text-green-500 text-4xl" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+              Template Updated Successfully!
+            </h3>
+            {successData && (
+              <div className="bg-gray-50 rounded-md p-4 mb-4">
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Template Name:</span>
+                    <span className="font-medium">{successData.template_name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Template ID:</span>
+                    <span className="font-medium text-xs">{successData.template_id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Status:</span>
+                    <span className="font-medium">{successData.status}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="flex space-x-3">
+              <button
+                onClick={closeSuccessPopup}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                Stay Here
+              </button>
+              <button
+                onClick={handleRedirectToTemplates}
+                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                Go to Templates
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Message Modal */}
+      {errorMessage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-center mb-4">
+              <FiAlertCircle className="text-red-500 text-4xl" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+              Template Update Failed
+            </h3>
+            <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
+              <p className="text-sm text-red-800">{errorMessage}</p>
+            </div>
+            <div className="flex justify-center">
+              <button
+                onClick={clearErrorMessage}
+                className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
