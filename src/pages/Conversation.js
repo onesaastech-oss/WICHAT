@@ -2577,6 +2577,12 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 tokens={tokens}
                 activeChat={activeChat}
                 onSendTemplate={sendTemplateMessage}
+                onCloseAll={() => {
+                    // Close both Preview and Template selection modal after successful send
+                    setShowTemplatePreview(false);
+                    setSelectedTemplate(null);
+                    setShowTemplateModal(false);
+                }}
             />
         </div>
     );

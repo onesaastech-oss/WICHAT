@@ -12,7 +12,8 @@ const TemplatePreview = ({
     onUseTemplate,
     tokens,
     activeChat,
-    onSendTemplate
+    onSendTemplate,
+    onCloseAll
 }) => {
     const [variableValues, setVariableValues] = useState({});
     const [sendingTemplate, setSendingTemplate] = useState(false);
@@ -229,6 +230,9 @@ const TemplatePreview = ({
             if (onSendTemplate) {
                 await onSendTemplate(selectedTemplate, formattedComponents, renderPreviewContent());
                 onClose();
+                if (typeof onCloseAll === 'function') {
+                    onCloseAll();
+                }
             } else {
                 const response = await axios.post(
                     'https://api.w1chat.com/message/send-template',
@@ -250,6 +254,9 @@ const TemplatePreview = ({
                         onUseTemplate(renderPreviewContent());
                     }
                     onClose();
+                    if (typeof onCloseAll === 'function') {
+                        onCloseAll();
+                    }
                 } else {
                     console.error('API Error:', response?.data?.message);
                     alert('Failed to send template: ' + (response?.data?.message || 'Unknown error'));
