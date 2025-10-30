@@ -415,27 +415,6 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                                                 <FiEye className="w-4 h-4" />
                                                 Preview
                                             </button>
-                                            <button
-                                                onClick={() => handleTemplateSelect(template)}
-                                                disabled={sendingTemplate === template.id}
-                                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                                    sendingTemplate === template.id
-                                                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                                                        : 'bg-blue-500 hover:bg-blue-600 text-white'
-                                                }`}
-                                            >
-                                                {sendingTemplate === template.id ? (
-                                                    <>
-                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                                        Sending...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <FiCheck className="w-4 h-4" />
-                                                        Send Template
-                                                    </>
-                                                )}
-                                            </button>
                                         </div>
                                     </div>
                                 );

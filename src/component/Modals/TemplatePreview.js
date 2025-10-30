@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiX, FiSend, FiClock, FiCheck, FiCheckCircle } from 'react-icons/fi';
+import { FiX, FiSend, FiClock, FiCheck, FiCheckCircle, FiFileText } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { Encrypt } from '../../pages/encryption/payload-encryption';
@@ -18,6 +18,26 @@ const TemplatePreview = ({
     const [sendingTemplate, setSendingTemplate] = useState(false);
     const [headerMediaUrl, setHeaderMediaUrl] = useState('');
     const [isUploading, setIsUploading] = useState(false);
+
+    // Helpers for document preview metadata
+    const getFileNameFromUrl = (url) => {
+        if (!url) return 'document';
+        try {
+            const pathname = new URL(url).pathname;
+            const last = pathname.split('/').pop();
+            return decodeURIComponent(last || 'document');
+        } catch (e) {
+            const stripped = url.split('?')[0];
+            const parts = stripped.split('/');
+            return decodeURIComponent(parts.pop() || 'document');
+        }
+    };
+
+    const getFileExtension = (name) => {
+        if (!name) return '';
+        const match = name.match(/\.([a-zA-Z0-9]+)$/);
+        return match ? match[1].toLowerCase() : '';
+    };
 
     // Normalize template structures and parse for preview
     const parseTemplateContent = (template) => {
@@ -134,6 +154,15 @@ const TemplatePreview = ({
             return;
         }
 
+        // Validate that all variables are provided (mandatory)
+        if (variables && variables.length > 0) {
+            const missing = variables.filter(v => !((variableValues[v.number] || '').trim()));
+            if (missing.length > 0) {
+                alert('Please fill in all required template variables before sending.');
+                return;
+            }
+        }
+
         setSendingTemplate(true);
         try {
             // Format components according to WhatsApp API specification
@@ -164,24 +193,14 @@ const TemplatePreview = ({
                         const parameters = [];
                         
                         if (variableMatches) {
-                            // Use user-entered values for variables
+                            // Use user-entered values for variables (mandatory, already validated)
                             variableMatches.forEach((match) => {
                                 const variableNumber = parseInt(match.match(/\d+/)[0]);
-                                const userValue = variableValues[variableNumber] || '';
-                                
-                                if (userValue) {
-                                    parameters.push({
-                                        type: "text",
-                                        text: userValue
-                                    });
-                                } else {
-                                    // Use example value if user didn't provide one
-                                    const exampleValue = component.example?.body_text?.[0]?.[variableNumber - 1] || `Variable ${variableNumber}`;
-                                    parameters.push({
-                                        type: "text",
-                                        text: exampleValue
-                                    });
-                                }
+                                const userValue = (variableValues[variableNumber] || '').trim();
+                                parameters.push({
+                                    type: "text",
+                                    text: userValue
+                                });
                             });
                         }
                         
@@ -247,6 +266,10 @@ const TemplatePreview = ({
     const handleUseTemplate = () => {
         sendTemplate();
     };
+
+    // Determine if send should be disabled due to missing required variables
+    const hasEmptyRequiredVariables = variables && variables.length > 0 && variables.some(v => !((variableValues[v.number] || '').trim()));
+    const isSendDisabled = sendingTemplate || hasEmptyRequiredVariables;
 
     return (
         <AnimatePresence>
@@ -415,15 +438,99 @@ const TemplatePreview = ({
 
                                         {/* Template message */}
                                         <div className="flex justify-end">
-                                            <div className="flex items-end gap-2 max-w-[80%]">
-                                                <div className={`px-3 py-2 rounded-2xl rounded-br-md bg-green-500 relative shadow-sm border border-green-400`}>
-                                                    {requiresHeaderMedia && headerMediaUrl && (
-                                                        <div className="mb-2 bg-white rounded-lg overflow-hidden">
-                                                            <div className="w-48 h-28 bg-gray-200 flex items-center justify-center">
-                                                                <span className="text-xs text-gray-600">{headerFormat.toLowerCase()} header</span>
+                                            <div className="flex items-end gap-2 max-w-[90%]">
+                                                <div className={`px-3 py-2 rounded-2xl w-56 rounded-br-md bg-green-500 relative shadow-sm border border-green-400`}>
+                                                    {requiresHeaderMedia && headerMediaUrl && (() => {
+                                                        const url = headerMediaUrl;
+                                                        const isImageUrl = /\.(png|jpe?g|webp|gif)$/i.test(url);
+                                                        const isVideoUrl = /\.(mp4|webm|ogg|mov)$/i.test(url);
+                                                        const name = getFileNameFromUrl(url);
+                                                        const ext = getFileExtension(name);
+                                                        const isPdf = ext === 'pdf' || /\.pdf($|\?)/i.test(url);
+
+                                                        // If template says IMAGE or the URL clearly is an image
+                                                        if (headerFormat === 'IMAGE' || isImageUrl) {
+                                                            return (
+                                                                <div className="mb-2 bg-white rounded-lg overflow-hidden w-full">
+                                                                    <img src={url} alt={name} className="w-full h-32 object-cover" />
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        // If template says VIDEO or URL is video, render lightweight inline video
+                                                        if (headerFormat === 'VIDEO' || isVideoUrl) {
+                                                            return (
+                                                                <div className="mb-2 bg-white rounded-lg overflow-hidden w-full">
+                                                                    <video src={url} className="w-full h-32 object-cover" muted playsInline loop />
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        // DOCUMENT handling
+                                                        if (headerFormat === 'DOCUMENT') {
+                                                            // Some users attach images as documents; show image if URL is image
+                                                            if (isImageUrl) {
+                                                                return (
+                                                                    <div className="mb-2 bg-white rounded-lg overflow-hidden w-full">
+                                                                        <img src={url} alt={name} className="w-full h-32 object-cover" />
+                                                                    </div>
+                                                                );
+                                                            }
+
+                                                            // Try to inline-preview PDFs; fallback to icon card if embed fails/blocked
+                                                            if (isPdf) {
+                                                                return (
+                                                                    <div className="mb-2 bg-white rounded-lg overflow-hidden border border-gray-200 w-full">
+                                                                        <div className="w-full h-32 bg-gray-50 overflow-hidden relative">
+                                                                            <iframe 
+                                                                                src={`${url}#toolbar=0&navpanes=0&scrollbar=0&page=1&view=FitH&zoom=page-width`} 
+                                                                                title={name} 
+                                                                                className="w-full h-full border-0 pointer-events-none"
+                                                                                style={{ 
+                                                                                    minWidth: '100%',
+                                                                                    minHeight: '100%',
+                                                                                    objectFit: 'cover'
+                                                                                }}
+                                                                            />
+                                                                        </div>
+                                                                        <div className="flex items-center p-2 border-t border-gray-200">
+                                                                            <div className="flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center bg-red-100 text-red-600">
+                                                                                <FiFileText className="w-4 h-4" />
+                                                                            </div>
+                                                                            <div className="ml-2 min-w-0 flex-1">
+                                                                                <div className="text-xs font-medium text-gray-900 truncate" title={name}>{name}</div>
+                                                                                <div className="text-[10px] text-gray-500 uppercase">PDF document</div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            }
+
+                                                            // Generic document card fallback
+                                                            return (
+                                                                <div className="mb-2 bg-white rounded-lg overflow-hidden border border-gray-200">
+                                                                    <div className="flex items-center p-3 w-56">
+                                                                        <div className={`flex-shrink-0 w-10 h-12 rounded-md flex items-center justify-center ${isPdf ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                                            <FiFileText className="w-6 h-6" />
+                                                                        </div>
+                                                                        <div className="ml-3 min-w-0">
+                                                                            <div className="text-sm font-medium text-gray-900 truncate" title={name}>{name}</div>
+                                                                            <div className="text-xs text-gray-500 uppercase">{ext || 'file'} document</div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        // Fallback placeholder (should rarely hit)
+                                                        return (
+                                                            <div className="mb-2 bg-white rounded-lg overflow-hidden w-full">
+                                                                <div className="w-full h-32 bg-gray-200 flex items-center justify-center">
+                                                                    <span className="text-xs text-gray-600">{headerFormat.toLowerCase()} header</span>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    )}
+                                                        );
+                                                    })()}
                                                     <div className="text-sm text-white leading-relaxed whitespace-pre-wrap">
                                                         {renderPreviewContent()}
                                                     </div>
@@ -508,9 +615,9 @@ const TemplatePreview = ({
                                 </button>
                                 <button
                                     onClick={handleUseTemplate}
-                                    disabled={sendingTemplate}
+                                    disabled={isSendDisabled}
                                     className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                                        sendingTemplate
+                                        isSendDisabled
                                             ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
                                             : 'bg-green-500 hover:bg-green-600 text-white'
                                     }`}

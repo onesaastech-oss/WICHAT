@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import {
     FiPaperclip,
     FiMic,
@@ -1239,9 +1239,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [loadingHistory, setLoadingHistory] = useState(false);
+    const [loadingPrevious, setLoadingPrevious] = useState(false);
     const [messages, setMessages] = useState([]);
+    const [lastId, setLastId] = useState("0");
+    const [hasMoreMessages, setHasMoreMessages] = useState(true);
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
+    const initialScrollDoneRef = useRef(false);
 
     useEffect(() => {
         markAsRead(activeChat.number);
@@ -1252,6 +1256,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         if (!tokens || !activeChat) return;
 
         (async () => {
+            // Reset initial scroll state for new chat so first scroll is instant
+            initialScrollDoneRef.current = false;
+            // Reset pagination state for new chat
+            setLastId("0");
+            setHasMoreMessages(true);
+            setLoadingPrevious(false);
+            
             if (dbAvailable) {
                 const localMessage = await dbHelper.getMessages(activeChat.number);
                 if (localMessage.length > 0) {
@@ -1267,7 +1278,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             }
 
             // Ensure scroll to bottom after loading messages
-            setTimeout(() => scrollToBottomImmediate(), 200);
+            setTimeout(() => scrollToBottomImmediate(), 220);
         })();
     }, [tokens, activeChat?.number]);
 
@@ -1275,69 +1286,91 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     useEffect(() => {
         if (Array.isArray(socketMessage) && socketMessage.length > 0 && activeChat?.number) {
             setMessages(socketMessage);
-            setTimeout(() => scrollToBottomImmediate(), 50);
+            // setTimeout(() => scrollToBottomImmediate(), 50);
         }
     }, [socketMessage, activeChat]);
 
-    // Scroll to bottom when messages change
-    useEffect(() => {
-        scrollToBottom();
+    // Ensure we render from the bottom with no visible scroll on first paint
+    useLayoutEffect(() => {
+        scrollToBottomSync();
     }, [messages]);
+
+    // Add scroll event handler for infinite scroll
+    useEffect(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+
+        const handleScroll = () => {
+            const { scrollTop, scrollHeight, clientHeight } = container;
+            
+            // Check if user has scrolled to the top (within 100px threshold)
+            if (scrollTop <= 100 && hasMoreMessages && !loadingPrevious) {
+                loadPreviousMessages();
+            }
+        };
+
+        container.addEventListener('scroll', handleScroll);
+        return () => container.removeEventListener('scroll', handleScroll);
+    }, [hasMoreMessages, loadingPrevious]);
+
+
+
 
     // Additional scroll update for media loading
-    useEffect(() => {
-        if (messagesContainerRef.current) {
-            // Use ResizeObserver to detect when container size changes due to image loads
-            const resizeObserver = new ResizeObserver(() => {
-                // Check if we're near the bottom, and if so, scroll to bottom
-                if (messagesContainerRef.current) {
-                    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-                    const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
+    // useEffect(() => {
+    //     if (messagesContainerRef.current) {
+    //         // Use ResizeObserver to detect when container size changes due to image loads
+    //         const resizeObserver = new ResizeObserver(() => {
+    //             // Check if we're near the bottom, and if so, scroll to bottom
+    //             if (messagesContainerRef.current) {
+    //                 const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    //                 const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
 
-                    if (isNearBottom) {
-                        setTimeout(() => scrollToBottomImmediate(), 100);
-                    }
-                }
-            });
+    //                 if (isNearBottom) {
+    //                     // setTimeout(() => scrollToBottomImmediate(), 100);
+    //                 }
+    //             }
+    //         });
 
-            // Also use MutationObserver for DOM changes
-            const mutationObserver = new MutationObserver(() => {
-                if (messagesContainerRef.current) {
-                    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-                    const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
+    //         // Also use MutationObserver for DOM changes
+    //         const mutationObserver = new MutationObserver(() => {
+    //             if (messagesContainerRef.current) {
+    //                 const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    //                 const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
 
-                    if (isNearBottom) {
-                        setTimeout(() => scrollToBottomImmediate(), 100);
-                    }
-                }
-            });
+    //                 if (isNearBottom) {
+    //                   //  setTimeout(() => scrollToBottomImmediate(), 100);
+    //                 }
+    //             }
+    //         });
 
-            resizeObserver.observe(messagesContainerRef.current);
-            mutationObserver.observe(messagesContainerRef.current, {
-                childList: true,
-                subtree: true,
-                attributes: true,
-                attributeFilter: ['style', 'class']
-            });
+    //         resizeObserver.observe(messagesContainerRef.current);
+    //         mutationObserver.observe(messagesContainerRef.current, {
+    //             childList: true,
+    //             subtree: true,
+    //             attributes: true,
+    //             attributeFilter: ['style', 'class']
+    //         });
 
-            return () => {
-                resizeObserver.disconnect();
-                mutationObserver.disconnect();
-            };
-        }
-    }, [messages]);
+    //         return () => {
+    //             resizeObserver.disconnect();
+    //             mutationObserver.disconnect();
+    //         };
+    //     }
+    // }, [messages]);
 
     const scrollToBottom = () => {
         // Use setTimeout to ensure DOM is updated
         setTimeout(() => {
             if (messagesEndRef.current) {
                 messagesEndRef.current.scrollIntoView({
-                    behavior: "smooth",
+                    behavior: "auto",
                     block: "end",
                     inline: "nearest"
                 });
+                initialScrollDoneRef.current = true;
             }
-        }, 100);
+        }, 0);
     };
 
     // Alternative scroll method for immediate scrolling
@@ -1348,6 +1381,17 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 block: "end",
                 inline: "nearest"
             });
+            initialScrollDoneRef.current = true;
+        }
+    };
+
+    // Synchronous bottom scroll used in layout effect to avoid visual jump
+    const scrollToBottomSync = () => {
+        if (messagesEndRef.current) {
+            try {
+                messagesEndRef.current.scrollIntoView({ behavior: "auto", block: "end", inline: "nearest" });
+                initialScrollDoneRef.current = true;
+            } catch (_) {}
         }
     };
 
@@ -1355,18 +1399,24 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const handleMediaLoad = () => {
         // Use a small delay to ensure DOM has updated
         setTimeout(() => {
-            scrollToBottomImmediate();
+            // scrollToBottomImmediate();
         }, 50);
     };
 
-    const syncWithAPI = async () => {
-        if (!activeChat || loadingHistory) return;
-        setLoadingHistory(true);
+    const syncWithAPI = async (isLoadingPrevious = false) => {
+        if (!activeChat || (isLoadingPrevious ? loadingPrevious : loadingHistory)) return;
+        
+        if (isLoadingPrevious) {
+            setLoadingPrevious(true);
+        } else {
+            setLoadingHistory(true);
+        }
+        
         try {
             const messagePayload = {
                 project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
                 number: activeChat.number,
-                last_id: "0"
+                last_id: isLoadingPrevious ? lastId : "0"
             };
 
             const { data, key } = Encrypt(messagePayload);
@@ -1385,19 +1435,43 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             );
 
             if (!response.data.error && response.data.data) {
-                await processApiResponse(response.data.data);
+                // Extract last_id from response
+                const apiLastId = response.data.last_id;
+                console.log('API Response:', {
+                    messageCount: response.data.data.length,
+                    lastId: apiLastId,
+                    isLoadingPrevious,
+                    currentLastId: lastId
+                });
+                await processApiResponse(response.data.data, isLoadingPrevious, apiLastId);
+            } else if (isLoadingPrevious && (!response.data.data || response.data.data.length === 0)) {
+                // No more messages to load
+                setHasMoreMessages(false);
             }
         } catch (error) {
             console.error('Failed to fetch message history:', error);
         } finally {
-            setLoadingHistory(false);
+            if (isLoadingPrevious) {
+                setLoadingPrevious(false);
+            } else {
+                setLoadingHistory(false);
+            }
         }
     };
 
-    const processApiResponse = async (apiMessages) => {
+    const loadPreviousMessages = async () => {
+        if (!hasMoreMessages || loadingPrevious) return;
+        await syncWithAPI(true);
+    };
+
+    const processApiResponse = async (apiMessages, isLoadingPrevious = false, apiLastId = null) => {
         try {
+            console.log(apiMessages);
             const messageList = apiMessages.map(apiMessage => {
                 // Build readable text for template if server message is missing/empty
+
+                
+                
                 let resolvedMessage = apiMessage.message || '';
                 if ((apiMessage.message_type === 'template' || apiMessage.is_template) && (!resolvedMessage || resolvedMessage.length === 0)) {
                     // Prefer template.body if present
@@ -1491,11 +1565,68 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 });
             });
 
+            if (isLoadingPrevious) {
+                // Store current scroll position before prepending
+                const container = messagesContainerRef.current;
+                const scrollHeightBefore = container ? container.scrollHeight : 0;
+                const scrollTopBefore = container ? container.scrollTop : 0;
+                
+                // Filter out duplicates by checking message_id and id
+                setMessages(prev => {
+                    const existingIds = new Set([
+                        ...prev.map(m => m.message_id),
+                        ...prev.map(m => m.id)
+                    ]);
+                    
+                    const newMessages = messageList.filter(msg => 
+                        !existingIds.has(msg.message_id) && !existingIds.has(msg.id)
+                    );
+                    
+                    console.log('Duplicate filtering:', {
+                        totalReceived: messageList.length,
+                        duplicatesFiltered: messageList.length - newMessages.length,
+                        newMessagesAdded: newMessages.length,
+                        existingCount: prev.length
+                    });
+                    
+                    return [...newMessages, ...prev];
+                });
+                
+                // Update lastId from API response (last_id + 20)
+                if (apiLastId !== null && apiLastId !== undefined) {
+                    const nextLastId = parseInt(apiLastId);
+                    console.log('Updating lastId:', { currentLastId: apiLastId, nextLastId });
+                    setLastId(nextLastId.toString());
+                }
+                
+                // If we got no messages or fewer than expected, we might be at the end
+                if (messageList.length === 0) {
+                    setHasMoreMessages(false);
+                }
+                
+                // Restore scroll position after DOM updates
+                setTimeout(() => {
+                    if (container) {
+                        const scrollHeightAfter = container.scrollHeight;
+                        const scrollDifference = scrollHeightAfter - scrollHeightBefore;
+                        container.scrollTop = scrollTopBefore + scrollDifference;
+                    }
+                }, 50);
+            } else {
+                // Initial load - replace all messages
+                setMessages(messageList);
+                
+                // Set lastId from API response for pagination
+                if (apiLastId !== null && apiLastId !== undefined) {
+                    const nextLastId = parseInt(apiLastId);
+                    setLastId(nextLastId.toString());
+                }
+            }
+            
+            // Save to local DB (without duplicates)
             if (dbAvailable) {
                 await dbHelper.saveMessage(messageList);
             }
-
-            setMessages(messageList);
         } catch (error) {
             console.error('Error processing API response:', error);
         }
@@ -1644,7 +1775,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         setMessages(prev => [...prev, newMessage]);
         setMessageInput('');
         // Scroll immediately for new messages
-        setTimeout(() => scrollToBottomImmediate(), 50);
+        // setTimeout(() => scrollToBottomImmediate(), 50);
 
         // Persist temp message and update chat list immediately
         try {
@@ -1887,7 +2018,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 setSelectedFile(null);
                 setMessageInput('');
                 // Scroll immediately for file uploads
-                setTimeout(() => scrollToBottomImmediate(), 50);
+                // setTimeout(() => scrollToBottomImmediate(), 50);
 
                 // Trigger parent to refresh chat list with pending state immediately
                 if (onMessageStatusUpdate) {
@@ -2079,7 +2210,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
             // Update UI immediately
             setMessages((prev) => [...prev, tempMessage]);
-            setTimeout(() => scrollToBottomImmediate(), 50);
+            // setTimeout(() => scrollToBottomImmediate(), 50);
 
             // Persist to DB and chat list
             try {
@@ -2280,13 +2411,21 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             </div>
 
             {/* Messages */}
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 w-full scroll-smooth">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 w-full">
                 {loadingHistory ? (
                     <div className="flex items-center justify-center py-6 sm:py-8">
                         <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-blue-500"></div>
                     </div>
                 ) : (
                     <>
+                        {/* Loading indicator for previous messages */}
+                        {loadingPrevious && (
+                            <div className="flex items-center justify-center py-3 sm:py-4">
+                                <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-blue-500"></div>
+                                <span className="ml-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">Loading previous messages...</span>
+                            </div>
+                        )}
+                        
                         {groupMessagesByDate(messages).map((dateGroup, groupIndex) => (
                             <div key={dateGroup.date}>
                                 {/* Date Separator */}
