@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import {
     FiPaperclip,
     FiMic,
@@ -24,7 +24,9 @@ import {
     FiActivity,
     FiMessageSquare,
     FiLayers,
-    FiEye
+    FiEye,
+    FiSearch,
+    FiEdit2
 } from 'react-icons/fi';
 import { FaRegEye } from "react-icons/fa6";
 import { MdOutlineCancel } from "react-icons/md";
@@ -33,7 +35,7 @@ import { FaDownload, FaFilePdf, FaFileWord, FaFileExcel, FaFile, FaFileImage, Fa
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Encrypt } from './encryption/payload-encryption';
-import { dbHelper } from './db';
+import { dbHelper, contactDbHelper } from './db';
 import ReactPlayer from 'react-player';
 import ChatTemplateModal from '../component/Modals/ChatTemplateModal';
 import TemplatePreview from '../component/Modals/TemplatePreview';
@@ -1015,6 +1017,457 @@ const ContactPreview = ({ contactInfo, isOwnMessage }) => {
     );
 };
 
+const escapeRegExp = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const computeSimpleHash = (value) => {
+    const str = String(value || '');
+    let hash = 0;
+    for (let i = 0; i < str.length; i += 1) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36);
+};
+
+const getMessageKey = (msg) => {
+    if (!msg) return 'message-unknown';
+    const candidates = [
+        msg.message_id,
+        msg.wamid,
+        msg.id,
+        msg.unique_id,
+        msg.local_id,
+        msg.timestamp,
+        msg.create_date
+    ];
+
+    for (const candidate of candidates) {
+        if (candidate !== undefined && candidate !== null && candidate !== '') {
+            return String(candidate);
+        }
+    }
+
+    const fallbackPayload = JSON.stringify({
+        type: msg.type,
+        message: msg.message,
+        media: msg.media_url,
+        name: msg.name,
+        timestamp: msg.timestamp,
+        create_date: msg.create_date
+    });
+
+    return `msg-${computeSimpleHash(fallbackPayload)}`;
+};
+
+const getSearchableTextFromMessage = (msg) => {
+    if (!msg) return '';
+
+    if (msg.is_template) {
+        if (typeof msg.message === 'string' && msg.message.trim().length > 0) {
+            return msg.message;
+        }
+
+        const templateBody = msg.template?.template_data?.body;
+        if (templateBody) {
+            return templateBody;
+        }
+
+        const templateComponents = msg.template?.template_data?.components;
+        if (Array.isArray(templateComponents)) {
+            const bodyComponent = templateComponents.find((component) => component.type === 'BODY');
+            if (bodyComponent?.text) {
+                return bodyComponent.text;
+            }
+        }
+    }
+
+    const type = (msg.message_type || '').toLowerCase();
+
+    if (type === 'text' || type === '' || type === 'template') {
+        return msg.message || '';
+    }
+
+    if (type === 'location') {
+        return [msg.name, msg.address, msg.latitude, msg.longitude]
+            .filter(Boolean)
+            .join(' ');
+    }
+
+    if (type === 'contact') {
+        const contactInfo = msg.contact || msg.contact_info || msg.contactInfo || {};
+        return [
+            msg.name,
+            contactInfo.name,
+            contactInfo.phone,
+            contactInfo.email,
+            msg.message
+        ].filter(Boolean).join(' ');
+    }
+
+    if (['image', 'video', 'audio', 'document'].includes(type)) {
+        return [msg.caption, msg.media_name, msg.message]
+            .filter(Boolean)
+            .join(' ');
+    }
+
+    return msg.message || '';
+};
+
+const getSnippetAroundTerm = (text, term, radius = 32) => {
+    if (!text) return '';
+    if (!term) return text.length > 160 ? `${text.slice(0, 160)}…` : text;
+
+    const normalizedText = text.toLowerCase();
+    const normalizedTerm = term.toLowerCase();
+    const index = normalizedText.indexOf(normalizedTerm);
+
+    if (index === -1) {
+        return text.length > 160 ? `${text.slice(0, 160)}…` : text;
+    }
+
+    const start = Math.max(0, index - radius);
+    const end = Math.min(text.length, index + normalizedTerm.length + radius);
+    const prefix = start > 0 ? '…' : '';
+    const suffix = end < text.length ? '…' : '';
+
+    return `${prefix}${text.slice(start, end)}${suffix}`;
+};
+
+const HighlightedText = ({ text, term }) => {
+    if (!term || !text) {
+        return <>{text}</>;
+    }
+
+    const safeTerm = escapeRegExp(term);
+    if (!safeTerm) {
+        return <>{text}</>;
+    }
+
+    const regex = new RegExp(`(${safeTerm})`, 'ig');
+    const segments = text.split(regex);
+    const termLower = term.toLowerCase();
+
+    return (
+        <>
+            {segments.map((segment, idx) => (
+                segment.toLowerCase() === termLower ? (
+                    <span
+                        key={`${segment}-${idx}`}
+                        className="bg-yellow-200 dark:bg-yellow-500/40 px-1 py-0.5 rounded"
+                    >
+                        {segment}
+                    </span>
+                ) : (
+                    <React.Fragment key={`${segment}-${idx}`}>
+                        {segment}
+                    </React.Fragment>
+                )
+            ))}
+        </>
+    );
+};
+
+const ContactFormModal = ({
+    isOpen,
+    onClose,
+    formData,
+    onChange,
+    onSubmit,
+    loading,
+    submitting,
+    error,
+    isExistingContact
+}) => {
+    if (!isOpen) return null;
+
+    return (
+        <AnimatePresence>
+            {isOpen && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4"
+                    onClick={onClose}
+                >
+                    <motion.div
+                        initial={{ scale: 0.95, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.95, opacity: 0 }}
+                        transition={{ type: 'spring', duration: 0.25 }}
+                        className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 shadow-xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-5 py-4">
+                            <div className="flex items-center space-x-2">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40">
+                                    <FiEdit2 className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                                        {isExistingContact ? 'Edit Contact' : 'Save Contact'}
+                                    </h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        Details are stored locally on this device.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={onClose}
+                                className="rounded-full p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                                aria-label="Close contact modal"
+                            >
+                                <FiX className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 px-5 py-4">
+                            {error && (
+                                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-900/30 dark:text-red-200">
+                                    {error}
+                                </div>
+                            )}
+
+                            {loading && (
+                                <div className="flex items-center space-x-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-600 dark:border-blue-500/30 dark:bg-blue-900/30 dark:text-blue-200">
+                                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-400 border-r-transparent" />
+                                    <span>Loading contact details…</span>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 gap-4">
+                                <label className="flex flex-col space-y-1 text-sm">
+                                    <span className="font-medium text-gray-700 dark:text-gray-300">Name</span>
+                                    <input
+                                        value={formData.name}
+                                        onChange={(e) => onChange('name', e.target.value)}
+                                        placeholder="Contact name"
+                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                        disabled={loading || submitting}
+                                    />
+                                </label>
+
+                                <label className="flex flex-col space-y-1 text-sm">
+                                    <span className="font-medium text-gray-700 dark:text-gray-300">Mobile Number</span>
+                                    <input
+                                        value={formData.number}
+                                        onChange={(e) => onChange('number', e.target.value)}
+                                        placeholder="WhatsApp number"
+                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                        disabled={loading || submitting}
+                                    />
+                                </label>
+
+                                <label className="flex flex-col space-y-1 text-sm">
+                                    <span className="font-medium text-gray-700 dark:text-gray-300">Email</span>
+                                    <input
+                                        value={formData.email}
+                                        onChange={(e) => onChange('email', e.target.value)}
+                                        placeholder="Email address"
+                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                        disabled={loading || submitting}
+                                    />
+                                </label>
+
+                                <label className="flex flex-col space-y-1 text-sm">
+                                    <span className="font-medium text-gray-700 dark:text-gray-300">Company / Firm</span>
+                                    <input
+                                        value={formData.firm_name}
+                                        onChange={(e) => onChange('firm_name', e.target.value)}
+                                        placeholder="Company name"
+                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                        disabled={loading || submitting}
+                                    />
+                                </label>
+
+                                <label className="flex flex-col space-y-1 text-sm">
+                                    <span className="font-medium text-gray-700 dark:text-gray-300">Website</span>
+                                    <input
+                                        value={formData.website}
+                                        onChange={(e) => onChange('website', e.target.value)}
+                                        placeholder="https://example.com"
+                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                        disabled={loading || submitting}
+                                    />
+                                </label>
+
+                                <label className="flex flex-col space-y-1 text-sm">
+                                    <span className="font-medium text-gray-700 dark:text-gray-300">Country</span>
+                                    <input
+                                        value={formData.country}
+                                        onChange={(e) => onChange('country', e.target.value)}
+                                        placeholder="Country"
+                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                        disabled={loading || submitting}
+                                    />
+                                </label>
+
+                                <label className="flex flex-col space-y-1 text-sm">
+                                    <span className="font-medium text-gray-700 dark:text-gray-300">Language</span>
+                                    <input
+                                        value={formData.language_code}
+                                        onChange={(e) => onChange('language_code', e.target.value)}
+                                        placeholder="Preferred language"
+                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                        disabled={loading || submitting}
+                                    />
+                                </label>
+
+                                <label className="flex flex-col space-y-1 text-sm">
+                                    <span className="font-medium text-gray-700 dark:text-gray-300">Remark</span>
+                                    <textarea
+                                        value={formData.remark}
+                                        onChange={(e) => onChange('remark', e.target.value)}
+                                        placeholder="Internal notes"
+                                        rows={3}
+                                        className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                        disabled={loading || submitting}
+                                    />
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-5 py-4 dark:border-gray-700 dark:bg-gray-900/60">
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                                Saved contacts sync with this browser only.
+                            </div>
+                            <button
+                                onClick={onSubmit}
+                                disabled={loading || submitting}
+                                className={`inline-flex items-center space-x-2 rounded-full px-4 py-2 text-sm font-semibold text-white transition ${
+                                    loading || submitting
+                                        ? 'cursor-not-allowed bg-blue-300 dark:bg-blue-700'
+                                        : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'
+                                }`}
+                            >
+                                {submitting ? (
+                                    <span className="flex items-center space-x-2">
+                                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-r-transparent" />
+                                        <span>Saving…</span>
+                                    </span>
+                                ) : (
+                                    <>
+                                        <FiCheck className="h-4 w-4" />
+                                        <span>{isExistingContact ? 'Update Contact' : 'Save Contact'}</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
+};
+
+const SearchChatModal = ({
+    isOpen,
+    onClose,
+    query,
+    onQueryChange,
+    results,
+    onResultClick
+}) => {
+    const inputRef = useRef(null);
+
+    useEffect(() => {
+        if (isOpen && inputRef.current) {
+            const id = requestAnimationFrame(() => {
+                inputRef.current?.focus();
+            });
+            return () => cancelAnimationFrame(id);
+        }
+    }, [isOpen]);
+
+    if (!isOpen) return null;
+
+    return (
+        <AnimatePresence>
+            {isOpen && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4"
+                    onClick={onClose}
+                >
+                    <motion.div
+                        initial={{ scale: 0.95, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.95, opacity: 0 }}
+                        transition={{ type: 'spring', duration: 0.25 }}
+                        className="w-full max-w-2xl rounded-2xl bg-white shadow-xl dark:bg-gray-800"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
+                            <h3 className="text-base font-semibold text-gray-900 dark:text-white">Search Chat</h3>
+                            <button
+                                onClick={onClose}
+                                className="rounded-full p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                                aria-label="Close search modal"
+                            >
+                                <FiX className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 px-5 py-4">
+                            <div className="relative">
+                                <FiSearch className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                <input
+                                    ref={inputRef}
+                                    value={query}
+                                    onChange={(e) => onQueryChange(e.target.value)}
+                                    placeholder="Search messages, media captions, locations..."
+                                    className="w-full rounded-xl border border-gray-300 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                />
+                            </div>
+
+                            <div className="max-h-80 space-y-2 overflow-y-auto">
+                                {!query.trim() ? (
+                                    <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
+                                        Start typing to search within the loaded messages for this chat.
+                                    </div>
+                                ) : results.length === 0 ? (
+                                    <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
+                                        No messages matched "{query}".
+                                    </div>
+                                ) : (
+                                    results.map((result) => (
+                                        <button
+                                            key={result.messageKey}
+                                            onClick={() => onResultClick(result.messageKey)}
+                                            className="w-full rounded-xl border border-transparent bg-gray-50 px-4 py-3 text-left transition hover:bg-gray-100 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300 dark:bg-gray-900 dark:hover:bg-gray-700"
+                                        >
+                                            <div className="flex items-start justify-between space-x-3">
+                                                <div className="flex items-start space-x-3">
+                                                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300">
+                                                        <FiMessageSquare className="h-4 w-4" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                                            {result.direction}
+                                                        </p>
+                                                        <p className="mt-1 text-sm leading-relaxed text-gray-900 dark:text-gray-100">
+                                                            <HighlightedText text={result.snippet} term={query} />
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                    {result.timestamp}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
+};
+
 // Date Separator Component
 const DateSeparator = ({ displayDate }) => {
     return (
@@ -1152,8 +1605,14 @@ const TemplateMessageRenderer = ({ msg, darkMode, renderFilePreview, isOwnMessag
 };
 
 // Message Item Component with Info Button
-const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime }) => {
+const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime, messageKey, highlightedMessageId }) => {
     const [showInfoModal, setShowInfoModal] = useState(false);
+    const isHighlighted = highlightedMessageId === messageKey;
+    const bubbleHighlightClass = isHighlighted
+        ? (msg.type === 'out'
+            ? 'ring-2 ring-offset-2 ring-offset-blue-100 ring-white dark:ring-offset-blue-900/40'
+            : 'ring-2 ring-offset-2 ring-offset-gray-100 ring-blue-300 dark:ring-offset-gray-800 dark:ring-blue-500')
+        : '';
 
     return (
         <>
@@ -1166,10 +1625,11 @@ const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime 
                             </div>
                         )}
                         <div
+                            id={`message-${messageKey}`}
                             className={`p-3 sm:p-4 rounded-2xl ${msg.type === 'out'
                                 ? 'bg-blue-500 text-white rounded-br-md'
                                 : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-md border border-gray-200 dark:border-gray-700'
-                                } max-w-full relative`}
+                                } max-w-full relative ${bubbleHighlightClass}`}
                         >
                             {msg.is_template ? (
                                 <TemplateMessageRenderer
@@ -1245,12 +1705,260 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const [messages, setMessages] = useState([]);
     const [lastId, setLastId] = useState("0");
     const [hasMoreMessages, setHasMoreMessages] = useState(true);
+    const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+    const [showContactModal, setShowContactModal] = useState(false);
+    const [contactLoading, setContactLoading] = useState(false);
+    const [contactSubmitting, setContactSubmitting] = useState(false);
+    const [contactError, setContactError] = useState('');
+    const [existingContactId, setExistingContactId] = useState(null);
+    const [contactDbReady, setContactDbReady] = useState(false);
+    const [searchModalOpen, setSearchModalOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+    const [contactForm, setContactForm] = useState({
+        name: activeChat?.name || '',
+        number: activeChat?.number || '',
+        email: '',
+        firm_name: '',
+        website: '',
+        remark: '',
+        language_code: '',
+        country: ''
+    });
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
     const initialScrollDoneRef = useRef(false);
     const emojiButtonRef = useRef(null);
     const messageInputRef = useRef(null);
     const inputSelectionRef = useRef({ start: 0, end: 0 });
+    const headerMenuButtonRef = useRef(null);
+    const headerMenuRef = useRef(null);
+    const contactDbInitRef = useRef(false);
+
+    const projectId = tokens?.projects?.[0]?.project_id;
+
+    const ensureContactDb = useCallback(async () => {
+        if (contactDbInitRef.current && contactDbReady) {
+            return true;
+        }
+
+        if (!projectId) {
+            console.warn('Missing project id for contact database initialisation');
+            setContactDbReady(false);
+            return false;
+        }
+
+        try {
+            const result = await contactDbHelper.init(projectId);
+            contactDbInitRef.current = result;
+            setContactDbReady(result);
+            return result;
+        } catch (error) {
+            console.error('Failed to initialise contact database:', error);
+            contactDbInitRef.current = false;
+            setContactDbReady(false);
+            return false;
+        }
+    }, [projectId, contactDbReady]);
+
+    const handleContactFieldChange = useCallback((field, value) => {
+        setContactForm((prev) => ({
+            ...prev,
+            [field]: value
+        }));
+    }, []);
+
+    const handleCloseContactModal = useCallback(() => {
+        if (contactSubmitting) return;
+        setShowContactModal(false);
+    }, [contactSubmitting]);
+
+    const handleContactMenuClick = useCallback(async () => {
+        setShowHeaderMenu(false);
+        if (!activeChat?.number) {
+            setContactError('Active chat information is unavailable.');
+            setShowContactModal(true);
+            return;
+        }
+
+        setShowContactModal(true);
+        setContactError('');
+        setContactLoading(true);
+
+        setContactForm((prev) => ({
+            ...prev,
+            name: activeChat?.name || '',
+            number: activeChat?.number || ''
+        }));
+
+        try {
+            const ready = await ensureContactDb();
+            if (!ready) {
+                setContactError('Unable to access local contact storage.');
+                return;
+            }
+
+            const existing = await contactDbHelper.getContactByNumber(activeChat.number);
+            setExistingContactId(existing?.contact_id || null);
+            setContactForm({
+                name: existing?.name || activeChat.name || '',
+                number: activeChat.number || '',
+                email: existing?.email || '',
+                firm_name: existing?.firm_name || '',
+                website: existing?.website || '',
+                remark: existing?.remark || '',
+                language_code: existing?.language_code || '',
+                country: existing?.country || ''
+            });
+        } catch (error) {
+            console.error('Failed to load contact details:', error);
+            setContactError('Failed to load contact details.');
+        } finally {
+            setContactLoading(false);
+        }
+    }, [activeChat, ensureContactDb]);
+
+    const handleContactSave = useCallback(async () => {
+        if (contactSubmitting) return;
+
+        const trimmedNumber = contactForm.number?.trim();
+        const trimmedName = contactForm.name?.trim();
+
+        if (!trimmedNumber) {
+            setContactError('Mobile number is required.');
+            return;
+        }
+
+        if (!trimmedName) {
+            setContactError('Name is required.');
+            return;
+        }
+
+        const ready = await ensureContactDb();
+        if (!ready) {
+            setContactError('Unable to access local contact storage.');
+            return;
+        }
+
+        setContactSubmitting(true);
+        setContactError('');
+
+        try {
+            const payload = {
+                contact_id: existingContactId || trimmedNumber,
+                number: trimmedNumber,
+                name: trimmedName,
+                email: contactForm.email?.trim() || '',
+                firm_name: contactForm.firm_name?.trim() || '',
+                website: contactForm.website?.trim() || '',
+                remark: contactForm.remark?.trim() || '',
+                language_code: contactForm.language_code?.trim() || '',
+                country: contactForm.country?.trim() || ''
+            };
+
+            await contactDbHelper.saveContacts([payload]);
+            setExistingContactId(payload.contact_id);
+
+            if (dbAvailable && payload.name) {
+                try {
+                    await dbHelper.updateChat(payload.number, { name: payload.name });
+                } catch (updateError) {
+                    console.warn('Failed to sync chat name with contact name:', updateError);
+                }
+            }
+
+            setShowContactModal(false);
+        } catch (error) {
+            console.error('Failed to save contact:', error);
+            setContactError('Failed to save contact. Please try again.');
+        } finally {
+            setContactSubmitting(false);
+        }
+    }, [contactForm, existingContactId, ensureContactDb, contactSubmitting, dbAvailable]);
+
+    const handleSearchMenuClick = useCallback(() => {
+        setShowHeaderMenu(false);
+        setSearchQuery('');
+        setSearchModalOpen(true);
+    }, []);
+
+    const handleSearchQueryChange = useCallback((value) => {
+        setSearchQuery(value);
+    }, []);
+
+    const handleCloseSearchModal = useCallback(() => {
+        setSearchModalOpen(false);
+    }, []);
+
+    const handleSearchResultClick = useCallback((messageKey) => {
+        setSearchModalOpen(false);
+        if (!messageKey) return;
+        setHighlightedMessageId(messageKey);
+
+        setTimeout(() => {
+            const node = document.getElementById(`message-${messageKey}`);
+            if (node?.scrollIntoView) {
+                node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 80);
+    }, []);
+
+    const searchResults = useMemo(() => {
+        const term = searchQuery.trim();
+        if (!term) return [];
+
+        const lowerTerm = term.toLowerCase();
+        const results = [];
+        const seen = new Set();
+
+        messages.forEach((msg) => {
+            const text = getSearchableTextFromMessage(msg);
+            if (!text) return;
+            if (!text.toLowerCase().includes(lowerTerm)) return;
+
+            const key = getMessageKey(msg);
+            if (seen.has(key)) return;
+            seen.add(key);
+
+            results.push({
+                messageKey: key,
+                snippet: getSnippetAroundTerm(text, term),
+                timestamp: formatTime(msg.timestamp || msg.create_date),
+                direction: msg.type === 'out' ? 'You' : (activeChat?.name || msg.send_by_name || msg.send_by_username || 'Contact')
+            });
+        });
+
+        return results.slice(0, 50);
+    }, [searchQuery, messages, activeChat?.name]);
+
+    useEffect(() => {
+        if (!highlightedMessageId) return;
+        const timer = setTimeout(() => setHighlightedMessageId(null), 3500);
+        return () => clearTimeout(timer);
+    }, [highlightedMessageId]);
+
+    useEffect(() => {
+        if (!showHeaderMenu) return;
+
+        const handleClickOutside = (event) => {
+            if (!headerMenuRef.current && !headerMenuButtonRef.current) return;
+
+            const menuNode = headerMenuRef.current;
+            const buttonNode = headerMenuButtonRef.current;
+
+            if (menuNode && menuNode.contains(event.target)) return;
+            if (buttonNode && buttonNode.contains(event.target)) return;
+
+            setShowHeaderMenu(false);
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showHeaderMenu]);
+
+    useEffect(() => {
+        setShowHeaderMenu(false);
+    }, [activeChat?.number]);
 
     const updateSelectionFromInput = () => {
         const inputEl = messageInputRef.current;
@@ -1286,6 +1994,21 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     useEffect(() => {
         markAsRead(activeChat.number);
     }, [activeChat, messages]);
+
+    useEffect(() => {
+        setContactForm({
+            name: activeChat?.name || '',
+            number: activeChat?.number || '',
+            email: '',
+            firm_name: '',
+            website: '',
+            remark: '',
+            language_code: '',
+            country: ''
+        });
+        setExistingContactId(null);
+        setContactError('');
+    }, [activeChat?.name, activeChat?.number]);
 
     // Load message history when active chat changes
     useEffect(() => {
@@ -2440,9 +3163,56 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     </div>
                 </div>
                 <div className="flex items-center space-x-1 sm:space-x-2">
-                    <button className="p-1 sm:p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                        <FiMoreVertical className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
+                    <div className="relative">
+                        <button
+                            ref={headerMenuButtonRef}
+                            onClick={() => setShowHeaderMenu((prev) => !prev)}
+                            className="p-1 sm:p-2 text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 rounded-lg"
+                            aria-label="Conversation options"
+                        >
+                            <FiMoreVertical className="w-4 h-4 sm:w-5 sm:h-5" />
+                        </button>
+
+                        <AnimatePresence>
+                            {showHeaderMenu && (
+                                <motion.div
+                                    key="conversation-header-menu"
+                                    ref={headerMenuRef}
+                                    initial={{ opacity: 0, y: -8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -8 }}
+                                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                                    className="absolute right-0 mt-2 w-64 rounded-2xl border border-gray-200 bg-white py-2 shadow-xl ring-1 ring-black/5 dark:border-gray-700 dark:bg-gray-800 z-30"
+                                >
+                                    <button
+                                        onClick={handleContactMenuClick}
+                                        className="flex w-full items-center space-x-3 px-4 py-2.5 text-left text-sm text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                                    >
+                                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300">
+                                            <FiEdit2 className="h-4 w-4" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-semibold">Save / Edit Contact</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">Keep details in local storage</p>
+                                        </div>
+                                    </button>
+
+                                    <button
+                                        onClick={handleSearchMenuClick}
+                                        className="flex w-full items-center space-x-3 px-4 py-2.5 text-left text-sm text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                                    >
+                                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300">
+                                            <FiSearch className="h-4 w-4" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-semibold">Search Chat</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">Search loaded messages only</p>
+                                        </div>
+                                    </button>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </div>
             </div>
 
@@ -2469,16 +3239,21 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
                                 {/* Messages for this date */}
                                 <div className="space-y-3 sm:space-y-4">
-                                    {dateGroup.messages.map((msg) => (
-                                        <MessageItem
-                                            key={msg.id}
-                                            msg={msg}
-                                            activeChat={activeChat}
-                                            darkMode={darkMode}
-                                            renderFilePreview={renderFilePreview}
-                                            formatTime={formatTime}
-                                        />
-                                    ))}
+                                    {dateGroup.messages.map((msg) => {
+                                        const messageKey = getMessageKey(msg);
+                                        return (
+                                            <MessageItem
+                                                key={messageKey}
+                                                messageKey={messageKey}
+                                                highlightedMessageId={highlightedMessageId}
+                                                msg={msg}
+                                                activeChat={activeChat}
+                                                darkMode={darkMode}
+                                                renderFilePreview={renderFilePreview}
+                                                formatTime={formatTime}
+                                            />
+                                        );
+                                    })}
                                 </div>
                             </div>
                         ))}
@@ -2604,6 +3379,27 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     </button>
                 </div>
             </div>
+
+            <ContactFormModal
+                isOpen={showContactModal}
+                onClose={handleCloseContactModal}
+                formData={contactForm}
+                onChange={handleContactFieldChange}
+                onSubmit={handleContactSave}
+                loading={contactLoading}
+                submitting={contactSubmitting}
+                error={contactError}
+                isExistingContact={Boolean(existingContactId)}
+            />
+
+            <SearchChatModal
+                isOpen={searchModalOpen}
+                onClose={handleCloseSearchModal}
+                query={searchQuery}
+                onQueryChange={handleSearchQueryChange}
+                results={searchResults}
+                onResultClick={handleSearchResultClick}
+            />
 
             {/* Media Selection Modal */}
             <MediaSelectionModal />
