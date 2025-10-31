@@ -37,6 +37,7 @@ import { dbHelper } from './db';
 import ReactPlayer from 'react-player';
 import ChatTemplateModal from '../component/Modals/ChatTemplateModal';
 import TemplatePreview from '../component/Modals/TemplatePreview';
+import EmojiPickerPopover from '../component/Modals/Conversation/EmojiPicker';
 
 // Error Modal Component
 const ErrorModal = ({ isOpen, onClose, errorMessage }) => {
@@ -1231,6 +1232,7 @@ const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime 
 // Main Conversation Component
 function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socketMessage = null, onMessageStatusUpdate }) {
     const [messageInput, setMessageInput] = useState('');
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showMediaModal, setShowMediaModal] = useState(false);
     const [showTemplateModal, setShowTemplateModal] = useState(false);
     const [showTemplatePreview, setShowTemplatePreview] = useState(false);
@@ -1246,6 +1248,40 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
     const initialScrollDoneRef = useRef(false);
+    const emojiButtonRef = useRef(null);
+    const messageInputRef = useRef(null);
+    const inputSelectionRef = useRef({ start: 0, end: 0 });
+
+    const updateSelectionFromInput = () => {
+        const inputEl = messageInputRef.current;
+        if (!inputEl) return;
+        inputSelectionRef.current = {
+            start: inputEl.selectionStart || 0,
+            end: inputEl.selectionEnd || 0
+        };
+    };
+
+    const handleEmojiSelect = (emoji) => {
+        const inputEl = messageInputRef.current;
+        const { start, end } = inputSelectionRef.current || { start: messageInput.length, end: messageInput.length };
+        const insertAt = Number.isInteger(start) ? start : messageInput.length;
+        const replaceTo = Number.isInteger(end) ? end : insertAt;
+        const newValue = messageInput.slice(0, insertAt) + emoji + messageInput.slice(replaceTo);
+        setMessageInput(newValue);
+
+        // Restore focus and caret after updating value
+        requestAnimationFrame(() => {
+            if (inputEl) {
+                inputEl.focus();
+                const newCaret = insertAt + emoji.length;
+                try {
+                    inputEl.setSelectionRange(newCaret, newCaret);
+                } catch (_) {
+                    // ignore selection errors on some browsers
+                }
+            }
+        });
+    };
 
     useEffect(() => {
         markAsRead(activeChat.number);
@@ -2512,8 +2548,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         <FiPaperclip className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
 
-                    <div className="flex-1 flex items-center px-3 sm:px-4 py-2 sm:py-3 rounded-full bg-gray-100 dark:bg-gray-700 border border-transparent focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 dark:focus-within:ring-blue-800 transition-all">
-                        <button className="mr-2 sm:mr-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
+                    <div className="flex-1 flex items-center px-3 sm:px-4 py-2 sm:py-3 rounded-full bg-gray-100 dark:bg-gray-700 border border-transparent focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 dark:focus-within:ring-blue-800 transition-all relative">
+                        <button
+                            ref={emojiButtonRef}
+                            onClick={() => setShowEmojiPicker((v) => !v)}
+                            aria-label="Toggle emoji picker"
+                            className="mr-2 sm:mr-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                        >
                             <FiSmile className="w-4 h-4 sm:w-5 sm:h-5" />
                         </button>
                         <input
@@ -2521,9 +2562,24 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                             placeholder="Type a message..."
                             className="flex-1 bg-transparent focus:outline-none placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white text-sm sm:text-base"
                             value={messageInput}
-                            onChange={(e) => setMessageInput(e.target.value)}
+                            ref={messageInputRef}
+                            onChange={(e) => {
+                                setMessageInput(e.target.value);
+                                updateSelectionFromInput();
+                            }}
+                            onClick={updateSelectionFromInput}
+                            onKeyUp={updateSelectionFromInput}
+                            onSelect={updateSelectionFromInput}
                             onKeyPress={handleKeyPress}
                             disabled={isUploading || loadingHistory}
+                        />
+                        <EmojiPickerPopover
+                            open={showEmojiPicker}
+                            onEmojiClick={(emojiData) => handleEmojiSelect(emojiData.emoji)}
+                            onClose={() => setShowEmojiPicker(false)}
+                            anchorRef={emojiButtonRef}
+                            darkMode={darkMode}
+                            className="m-auto"
                         />
                         <button className="ml-2 sm:ml-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
                             <FiMic className="w-4 h-4 sm:w-5 sm:h-5" />
