@@ -346,15 +346,25 @@ export const dbHelper = {
         }
     },
 
-    async updateMessageStatus(messageId, status, failedReason = '') {
+    async updateMessageStatus(messageId, status, failedReason = '', lastId = null) {
         try {
             const db = this.db;
             
-            // Get current message to check existing status
-            const message = await db.messages.where('message_id').equals(messageId).first();
+            // Try to find message by message_id first, then wamid, then id (last_id)
+            let message = await db.messages.where('message_id').equals(messageId).first();
+            
+            if (!message && messageId) {
+                // Try matching by wamid as fallback
+                message = await db.messages.where('wamid').equals(messageId).first();
+            }
+            
+            if (!message && lastId) {
+                // Try matching by id (last_id) as final fallback
+                message = await db.messages.where('id').equals(String(lastId)).first();
+            }
             
             if (!message) {
-                console.warn(`Message with ID ${messageId} not found`);
+                console.warn(`Message with ID ${messageId} (or last_id: ${lastId}) not found`);
                 return;
             }
 
@@ -377,13 +387,14 @@ export const dbHelper = {
                     updateData.failed_reason = failedReason;
                 }
                 
-                await db.messages.where('message_id').equals(messageId).modify(updateData);
-                console.log(`✅ Message ${messageId} status updated from ${message.status} to ${status}`);
+                // Update using the found message's primary key
+                await db.messages.update(message.id, updateData);
+                console.log(`✅ Message ${message.message_id || message.wamid || message.id} status updated from ${message.status} to ${status}`);
 
                 // Update the chat's last message status if this is the latest message
-                await this.updateChatLastMessageStatus(message.chat_number, messageId, status);
+                await this.updateChatLastMessageStatus(message.chat_number, message.message_id || messageId, status);
             } else {
-                console.log(`⚠️ Message ${messageId} status not updated: ${message.status} → ${status} (downgrade not allowed)`);
+                console.log(`⚠️ Message ${message.message_id || message.wamid || message.id} status not updated: ${message.status} → ${status} (downgrade not allowed)`);
             }
         } catch (error) {
             console.error("❌ Error updating message status:", error);
@@ -504,6 +515,9 @@ export const dbHelper = {
                     status: serverMessage.status || candidate.status,
                     message_type: serverMessage.message_type || candidate.message_type,
                     message: serverMessage.message !== null && serverMessage.message !== undefined ? serverMessage.message : candidate.message,
+                    is_template: serverMessage.is_template !== undefined ? serverMessage.is_template : candidate.is_template,
+                    template: serverMessage.template || candidate.template,
+                    component: serverMessage.component || candidate.component,
                     timestamp: (
                         serverMessage.timestamp
                         || (serverMessage.create_date ? new Date(serverMessage.create_date).getTime() : undefined)

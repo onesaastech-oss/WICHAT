@@ -22,6 +22,7 @@ root.render(
       <Route path="/" element={<Dashboard />} />
       <Route path="/dasboard" element={<Dashboard />} />
       <Route path="/live-chat" element={<LiveChat />} />
+      <Route path="/live-chat/:phone" element={<LiveChat />} />
       <Route path="/template" element={<Template />} />
       <Route path="/template-add" element={<TemplateAdd />} />
       <Route path="/template-edit/:templateId" element={<TemplateEdit />} />

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import ChatList from './ChatList';
 import Conversation from './Conversation';
 import { dbHelper } from './db';
 import { socketManager } from './socket';
-
+import { FiArrowLeft, FiSun, FiMoon } from 'react-icons/fi';
 function LiveChat() {
     const navigate = useNavigate();
+    const { phone } = useParams();
     const [tokens, setTokens] = useState(null);
     const [activeChat, setActiveChat] = useState(null);
     const [darkMode, setDarkMode] = useState(false);
@@ -71,6 +72,34 @@ function LiveChat() {
         }
     }
 
+    // Sync activeChat with URL phone parameter
+    useEffect(() => {
+        if (!isInitialized) return;
+
+        if (phone) {
+            // Only try to set activeChat if db is available and chats are loaded
+            if (!dbAvailable || chats.length === 0) return;
+            
+            // Find the chat with matching phone number
+            const chat = chats.find(c => c.number === phone);
+            if (chat) {
+                // Only update if the activeChat is different or doesn't exist
+                setActiveChat(prev => {
+                    if (!prev || prev.number !== phone) {
+                        return chat;
+                    }
+                    return prev;
+                });
+            } else {
+                // Phone in URL but chat not found, clear activeChat
+                setActiveChat(null);
+            }
+        } else {
+            // Always clear activeChat when no phone in URL (no need to wait for db/chats)
+            setActiveChat(null);
+        }
+    }, [phone, chats, isInitialized, dbAvailable]);
+
     // Set up socket listeners
     useEffect(() => {
         if (!isInitialized) return;
@@ -81,7 +110,7 @@ function LiveChat() {
             // Check if this is a message status update
             if (messageData.changes && ['sent', 'delivered', 'read', 'failed'].includes(messageData.changes)) {
                 console.log('📊 Message status update received:', messageData);
-                
+
                 // Refresh messages for active chat if it's affected
                 if (activeChat?.number && dbAvailable) {
                     const updatedMessage = await dbHelper.getMessages(activeChat.number);
@@ -133,12 +162,38 @@ function LiveChat() {
         }
     }, [darkMode]);
 
+    // Handle ESC key to go back to live-chat page
+    useEffect(() => {
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                // Only navigate if we're on a chat page (has phone parameter)
+                if (phone) {
+                    setActiveChat(null);
+                    navigate('/live-chat', { replace: true });
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [phone, navigate]);
+
     const handleChatSelect = (chat) => {
         setActiveChat(chat);
+        // If already on /live-chat/:phone, replace the URL to avoid stacking history
+        // Otherwise, navigate to /live-chat/:phone from /live-chat
+        if (phone) {
+            navigate(`/live-chat/${chat.number}`, { replace: true });
+        } else {
+            navigate(`/live-chat/${chat.number}`);
+        }
     };
 
     const handleBackToChatList = () => {
         setActiveChat(null);
+        navigate('/live-chat', { replace: true });
     };
 
     const handleMessageStatusUpdate = async (chatNumber, messageId, status) => {
@@ -158,18 +213,18 @@ function LiveChat() {
 
     if (!isInitialized) {
         return (
-            <motion.div 
+            <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-gray-900"
             >
                 <div className="text-center">
-                    <motion.div 
+                    <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                         className="rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"
                     />
-                    <motion.p 
+                    <motion.p
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2 }}
@@ -183,30 +238,41 @@ function LiveChat() {
     }
 
     return (
-        <motion.div 
+        <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
             className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-gray-900"
         >
             {/* Header */}
-            <motion.div 
+
+
+            <motion.div
                 initial={{ y: -50, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.4 }}
-                className="flex items-center justify-between p-4 border-b dark:border-gray-700 bg-gradient-to-r from-green-500 to-green-600 text-white"
+                className="flex items-center justify-between p-2 pl-4 pr-4 border-b dark:border-gray-700 bg-gradient-to-r from-green-500 to-green-600 text-white"
             >
+
+                <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => navigate(-1)}
+                    className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20 hover:bg-white/30"
+                >
+                    <FiArrowLeft className="w-4 h-4" />
+                </motion.button>
                 <div className="flex items-center">
-                    <h1 className="text-xl font-semibold">WhatsApp Chat</h1>
+                    <h1 className="text-md font-semibold">WhatsApp Chat</h1>
                 </div>
                 <div className="flex items-center space-x-4">
                     <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => setDarkMode(!darkMode)}
-                        className="flex items-center justify-center w-10 h-10 rounded-full bg-white/20 hover:bg-white/30"
+                        className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20 hover:bg-white/30"
                     >
-                        {darkMode ? '☀️' : '🌙'}
+                        {darkMode ? <FiSun className="w-4 h-4" /> : <FiMoon className="w-4 h-4" />}
                     </motion.button>
                 </div>
             </motion.div>
@@ -214,7 +280,7 @@ function LiveChat() {
             {/* Main Container */}
             <div className="flex flex-1 overflow-hidden">
                 <AnimatePresence mode="wait">
-                    <motion.div 
+                    <motion.div
                         key={activeChat ? 'chat-list-hidden' : 'chat-list-visible'}
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -235,7 +301,7 @@ function LiveChat() {
 
                 <AnimatePresence mode="wait">
                     {activeChat ? (
-                        <motion.div 
+                        <motion.div
                             key="conversation-active"
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
@@ -255,7 +321,7 @@ function LiveChat() {
                             />
                         </motion.div>
                     ) : (
-                        <motion.div 
+                        <motion.div
                             key="conversation-placeholder"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}

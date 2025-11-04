@@ -80,7 +80,7 @@ class SocketManager {
                 const existingMessage = await dbHelper.getMessageByMessageId(messageData.message.message_id);
                 if (existingMessage) {
                     console.log('Outgoing message already exists, updating status only');
-                    await dbHelper.updateMessageStatus(messageData.message.message_id, messageData.message.status);
+                    await dbHelper.updateMessageStatus(messageData.message.message_id, messageData.message.status, '', messageData.message.id);
                     return;
                 }
 
@@ -118,7 +118,9 @@ class SocketManager {
                     name: messageData.message.name || '',
                     reply_wamid: messageData.message.reply_wamid || '',
                     timestamp: messageData.message.timestamp || '',
-                    retryCount: messageData.message.retryCount || ''
+                    retryCount: messageData.message.retryCount || '',
+                    template: messageData.message.template || null,
+                    component: messageData.message.component || null
                 });
                 return;
             }
@@ -217,10 +219,10 @@ class SocketManager {
         try {
             console.log('📊 Message status update received:', statusData);
             
-            const { message_id, changes, failed_reason } = statusData;
+            const { message_id, changes, failed_reason, last_id } = statusData;
             
-            if (!message_id) {
-                console.warn('No message_id in status update:', statusData);
+            if (!message_id && !last_id) {
+                console.warn('No message_id or last_id in status update:', statusData);
                 return;
             }
 
@@ -236,10 +238,10 @@ class SocketManager {
                 newStatus = 'read';
             }
 
-            // Update message status in database
-            await dbHelper.updateMessageStatus(message_id, newStatus, failed_reason);
+            // Update message status in database (try message_id, wamid, or last_id)
+            await dbHelper.updateMessageStatus(message_id || '', newStatus, failed_reason, last_id);
             
-            console.log(`✅ Message ${message_id} status updated to: ${newStatus}`);
+            console.log(`✅ Message ${message_id || last_id} status updated to: ${newStatus}`);
             
         } catch (error) {
             console.error('Error handling message status update:', error);
