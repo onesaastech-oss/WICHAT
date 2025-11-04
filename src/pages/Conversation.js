@@ -343,7 +343,7 @@ const ContactFormModal = ({
 
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-gray-200 bg-gray-50 px-3 py-3 sm:px-5 sm:py-4 dark:border-gray-700 dark:bg-gray-900/60 flex-shrink-0">
                             <div className="text-xs text-gray-500 dark:text-gray-400 text-center sm:text-left">
-                                Saved contacts sync with this browser only.
+                                
                             </div>
                             <button
                                 onClick={onSubmit}
