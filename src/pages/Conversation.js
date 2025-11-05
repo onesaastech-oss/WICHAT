@@ -26,7 +26,12 @@ import {
     FiLayers,
     FiEye,
     FiSearch,
-    FiEdit2
+    FiEdit2,
+    FiCalendar,
+    FiHome,
+    FiMail,
+    FiGlobe,
+    FiFileText
 } from 'react-icons/fi';
 import { FaRegEye } from "react-icons/fa6";
 import { MdOutlineCancel } from "react-icons/md";
@@ -34,6 +39,7 @@ import { LuSendHorizontal } from "react-icons/lu";
 import { FaDownload, FaFilePdf, FaFileWord, FaFileExcel, FaFile, FaFileImage, FaFileVideo, FaFileAudio } from 'react-icons/fa';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 import { Encrypt } from './encryption/payload-encryption';
 import { dbHelper, contactDbHelper } from './db';
 import ReactPlayer from 'react-player';
@@ -50,6 +56,7 @@ import VideoPreview from '../component/Conversation/VideoPreview';
 import AudioPreview from '../component/Conversation/AudioPreview';
 import LocationPreview from '../component/Conversation/LocationPreview';
 import ContactPreview from '../component/Conversation/ContactPreview';
+import { SearchChatModal } from '../component/Modals/Conversation/SearchChatModal';
 
 const escapeRegExp = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -271,88 +278,87 @@ const ContactFormModal = ({
                                 )}
 
                                 <div className="grid grid-cols-1 gap-4">
-                                <label className="flex flex-col space-y-1 text-sm">
-                                    <span className="font-medium text-gray-700 dark:text-gray-300">Name</span>
-                                    <input
-                                        value={formData.name}
-                                        onChange={(e) => onChange('name', e.target.value)}
-                                        placeholder="Contact name"
-                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                        disabled={loading || submitting}
-                                    />
-                                </label>
+                                    <label className="flex flex-col space-y-1 text-sm">
+                                        <span className="font-medium text-gray-700 dark:text-gray-300">Name</span>
+                                        <input
+                                            value={formData.name}
+                                            onChange={(e) => onChange('name', e.target.value)}
+                                            placeholder="Contact name"
+                                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                            disabled={loading || submitting}
+                                        />
+                                    </label>
 
-                                <label className="flex flex-col space-y-1 text-sm">
-                                    <span className="font-medium text-gray-700 dark:text-gray-300">Mobile Number</span>
-                                    <input
-                                        value={formData.number}
-                                        onChange={(e) => onChange('number', e.target.value)}
-                                        placeholder="WhatsApp number"
-                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                        disabled={loading || submitting}
-                                    />
-                                </label>
+                                    <label className="flex flex-col space-y-1 text-sm">
+                                        <span className="font-medium text-gray-700 dark:text-gray-300">Mobile Number</span>
+                                        <input
+                                            value={formData.number}
+                                            onChange={(e) => onChange('number', e.target.value)}
+                                            placeholder="WhatsApp number"
+                                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                            disabled={loading || submitting}
+                                        />
+                                    </label>
 
-                                <label className="flex flex-col space-y-1 text-sm">
-                                    <span className="font-medium text-gray-700 dark:text-gray-300">Email</span>
-                                    <input
-                                        value={formData.email}
-                                        onChange={(e) => onChange('email', e.target.value)}
-                                        placeholder="Email address"
-                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                        disabled={loading || submitting}
-                                    />
-                                </label>
+                                    <label className="flex flex-col space-y-1 text-sm">
+                                        <span className="font-medium text-gray-700 dark:text-gray-300">Email</span>
+                                        <input
+                                            value={formData.email}
+                                            onChange={(e) => onChange('email', e.target.value)}
+                                            placeholder="Email address"
+                                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                            disabled={loading || submitting}
+                                        />
+                                    </label>
 
-                                <label className="flex flex-col space-y-1 text-sm">
-                                    <span className="font-medium text-gray-700 dark:text-gray-300">Company / Firm</span>
-                                    <input
-                                        value={formData.firm_name}
-                                        onChange={(e) => onChange('firm_name', e.target.value)}
-                                        placeholder="Company name"
-                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                        disabled={loading || submitting}
-                                    />
-                                </label>
+                                    <label className="flex flex-col space-y-1 text-sm">
+                                        <span className="font-medium text-gray-700 dark:text-gray-300">Company / Firm</span>
+                                        <input
+                                            value={formData.firm_name}
+                                            onChange={(e) => onChange('firm_name', e.target.value)}
+                                            placeholder="Company name"
+                                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                            disabled={loading || submitting}
+                                        />
+                                    </label>
 
-                                <label className="flex flex-col space-y-1 text-sm">
-                                    <span className="font-medium text-gray-700 dark:text-gray-300">Website</span>
-                                    <input
-                                        value={formData.website}
-                                        onChange={(e) => onChange('website', e.target.value)}
-                                        placeholder="https://example.com"
-                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                        disabled={loading || submitting}
-                                    />
-                                </label>
+                                    <label className="flex flex-col space-y-1 text-sm">
+                                        <span className="font-medium text-gray-700 dark:text-gray-300">Website</span>
+                                        <input
+                                            value={formData.website}
+                                            onChange={(e) => onChange('website', e.target.value)}
+                                            placeholder="https://example.com"
+                                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                            disabled={loading || submitting}
+                                        />
+                                    </label>
 
-                                <label className="flex flex-col space-y-1 text-sm">
-                                    <span className="font-medium text-gray-700 dark:text-gray-300">Remark</span>
-                                    <textarea
-                                        value={formData.remark}
-                                        onChange={(e) => onChange('remark', e.target.value)}
-                                        placeholder="Internal notes"
-                                        rows={3}
-                                        className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                        disabled={loading || submitting}
-                                    />
-                                </label>
-                            </div>
+                                    <label className="flex flex-col space-y-1 text-sm">
+                                        <span className="font-medium text-gray-700 dark:text-gray-300">Remark</span>
+                                        <textarea
+                                            value={formData.remark}
+                                            onChange={(e) => onChange('remark', e.target.value)}
+                                            placeholder="Internal notes"
+                                            rows={3}
+                                            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                            disabled={loading || submitting}
+                                        />
+                                    </label>
+                                </div>
                             </div>
                         </div>
 
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-gray-200 bg-gray-50 px-3 py-3 sm:px-5 sm:py-4 dark:border-gray-700 dark:bg-gray-900/60 flex-shrink-0">
                             <div className="text-xs text-gray-500 dark:text-gray-400 text-center sm:text-left">
-                                
+
                             </div>
                             <button
                                 onClick={onSubmit}
                                 disabled={loading || submitting}
-                                className={`inline-flex items-center justify-center space-x-2 rounded-full px-4 py-2 text-sm font-semibold text-white transition w-full sm:w-auto ${
-                                    loading || submitting
-                                        ? 'cursor-not-allowed bg-blue-300 dark:bg-blue-700'
-                                        : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'
-                                }`}
+                                className={`inline-flex items-center justify-center space-x-2 rounded-full px-4 py-2 text-sm font-semibold text-white transition w-full sm:w-auto ${loading || submitting
+                                    ? 'cursor-not-allowed bg-blue-300 dark:bg-blue-700'
+                                    : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'
+                                    }`}
                             >
                                 {submitting ? (
                                     <span className="flex items-center space-x-2">
@@ -374,118 +380,11 @@ const ContactFormModal = ({
     );
 };
 
-const SearchChatModal = ({
-    isOpen,
-    onClose,
-    query,
-    onQueryChange,
-    results,
-    onResultClick
-}) => {
-    const inputRef = useRef(null);
-
-    useEffect(() => {
-        if (isOpen && inputRef.current) {
-            const id = requestAnimationFrame(() => {
-                inputRef.current?.focus();
-            });
-            return () => cancelAnimationFrame(id);
-        }
-    }, [isOpen]);
-
-    if (!isOpen) return null;
-
-    return (
-        <AnimatePresence>
-            {isOpen && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4"
-                    onClick={onClose}
-                >
-                    <motion.div
-                        initial={{ scale: 0.95, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.95, opacity: 0 }}
-                        transition={{ type: 'spring', duration: 0.25 }}
-                        className="w-full max-w-2xl rounded-2xl bg-white shadow-xl dark:bg-gray-800"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
-                            <h3 className="text-base font-semibold text-gray-900 dark:text-white">Search Chat</h3>
-                            <button
-                                onClick={onClose}
-                                className="rounded-full p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-                                aria-label="Close search modal"
-                            >
-                                <FiX className="h-5 w-5" />
-                            </button>
-                        </div>
-
-                        <div className="space-y-4 px-5 py-4">
-                            <div className="relative">
-                                <FiSearch className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                                <input
-                                    ref={inputRef}
-                                    value={query}
-                                    onChange={(e) => onQueryChange(e.target.value)}
-                                    placeholder="Search messages, media captions, locations..."
-                                    className="w-full rounded-xl border border-gray-300 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                />
-                            </div>
-
-                            <div className="max-h-80 space-y-2 overflow-y-auto">
-                                {!query.trim() ? (
-                                    <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
-                                        Start typing to search within the loaded messages for this chat.
-                                    </div>
-                                ) : results.length === 0 ? (
-                                    <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
-                                        No messages matched "{query}".
-                                    </div>
-                                ) : (
-                                    results.map((result) => (
-                                        <button
-                                            key={result.messageKey}
-                                            onClick={() => onResultClick(result.messageKey)}
-                                            className="w-full rounded-xl border border-transparent bg-gray-50 px-4 py-3 text-left transition hover:bg-gray-100 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300 dark:bg-gray-900 dark:hover:bg-gray-700"
-                                        >
-                                            <div className="flex items-start justify-between space-x-3">
-                                                <div className="flex items-start space-x-3">
-                                                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300">
-                                                        <FiMessageSquare className="h-4 w-4" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                                            {result.direction}
-                                                        </p>
-                                                        <p className="mt-1 text-sm leading-relaxed text-gray-900 dark:text-gray-100">
-                                                            <HighlightedText text={result.snippet} term={query} />
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                    {result.timestamp}
-                                                </span>
-                                            </div>
-                                        </button>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                    </motion.div>
-                </motion.div>
-            )}
-        </AnimatePresence>
-    );
-};
 
 // Date Separator Component
-const DateSeparator = ({ displayDate }) => {
+const DateSeparator = ({ displayDate, dateId }) => {
     return (
-        <div className="flex items-center justify-center my-4 sm:my-6">
+        <div id={dateId} className="flex items-center justify-center my-4 sm:my-6">
             <div className="flex items-center space-x-3 sm:space-x-4">
                 <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600"></div>
                 <div className="px-3 sm:px-4 py-1 sm:py-2 bg-gray-100 dark:bg-gray-700 rounded-full">
@@ -504,41 +403,41 @@ const TemplateMessageRenderer = ({ msg, darkMode, renderFilePreview, isOwnMessag
     const template = msg.template || {};
     const components = template.components || [];
     const componentList = Array.isArray(msg.component) ? msg.component : [];
-    
+
     // Extract components
     const headerComponent = components.find(c => c.type === 'HEADER');
     const componentHeader = componentList.find(c => c.type?.toLowerCase() === 'header');
     const bodyComponent = components.find(c => c.type === 'BODY');
     const footerComponent = components.find(c => c.type === 'FOOTER');
     const buttonsComponent = components.find(c => c.type === 'BUTTONS');
-    
+
     // Get header media info
     const headerParamType = componentHeader?.parameters?.[0]?.type?.toUpperCase();
     const headerFormat = headerComponent?.format || headerParamType || 'NONE';
     const hasHeaderMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
-    
+
     // Get body text (already resolved message with variables replaced)
     const bodyText = msg.message || bodyComponent?.text || '';
-    
+
     // Get footer text
     const footerText = footerComponent?.text || '';
-    
+
     // Get buttons
     const buttons = buttonsComponent?.buttons || [];
-    
+
     // Determine text colors based on message type (outgoing has white text on blue bg)
-    const textColorClass = isOwnMessage 
-        ? 'text-white' 
+    const textColorClass = isOwnMessage
+        ? 'text-white'
         : (darkMode ? 'text-white' : 'text-gray-900');
-    const footerColorClass = isOwnMessage 
-        ? 'text-white/80' 
+    const footerColorClass = isOwnMessage
+        ? 'text-white/80'
         : (darkMode ? 'text-gray-300' : 'text-gray-600');
     const buttonClass = isOwnMessage
         ? 'bg-white/20 text-white border border-white/30 hover:bg-white/30'
-        : (darkMode 
-            ? 'bg-white/20 text-white border border-white/30 hover:bg-white/30' 
+        : (darkMode
+            ? 'bg-white/20 text-white border border-white/30 hover:bg-white/30'
             : 'bg-white text-gray-800 border border-gray-200 hover:bg-gray-50');
-    
+
     return (
         <div className="space-y-2">
             {/* Header Media */}
@@ -546,28 +445,28 @@ const TemplateMessageRenderer = ({ msg, darkMode, renderFilePreview, isOwnMessag
                 <div className="mb-2">
                     {renderFilePreview({
                         ...msg,
-                        message_type: headerFormat.toLowerCase() === 'document' ? 'document' : 
-                                    headerFormat.toLowerCase() === 'video' ? 'video' : 
-                                    headerFormat.toLowerCase() === 'image' ? 'image' : 'document',
+                        message_type: headerFormat.toLowerCase() === 'document' ? 'document' :
+                            headerFormat.toLowerCase() === 'video' ? 'video' :
+                                headerFormat.toLowerCase() === 'image' ? 'image' : 'document',
                         send_by: isOwnMessage ? 'You' : (msg.send_by || msg.send_by_name || '')
                     })}
                 </div>
             )}
-            
+
             {/* Body Text */}
             {bodyText && (
                 <div className={`text-sm sm:text-base whitespace-pre-wrap break-words ${textColorClass}`}>
                     {bodyText}
                 </div>
             )}
-            
+
             {/* Footer */}
             {footerText && (
                 <div className={`text-xs mt-2 ${footerColorClass}`}>
                     {footerText}
                 </div>
             )}
-            
+
             {/* Buttons */}
             {buttons && buttons.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-3">
@@ -575,7 +474,7 @@ const TemplateMessageRenderer = ({ msg, darkMode, renderFilePreview, isOwnMessag
                         const isUrl = btn.type === 'URL';
                         const isPhone = btn.type === 'PHONE_NUMBER';
                         const buttonText = btn.text || 'Button';
-                        
+
                         if (isUrl) {
                             return (
                                 <a
@@ -746,6 +645,12 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         language_code: '',
         country: ''
     });
+    
+    // Contact details side panel state
+    const [showContactDetails, setShowContactDetails] = useState(false);
+    const [contactDetails, setContactDetails] = useState(null);
+    const [contactDetailsLoading, setContactDetailsLoading] = useState(false);
+    const [contactDetailsError, setContactDetailsError] = useState('');
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
     const initialScrollDoneRef = useRef(false);
@@ -889,7 +794,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
 
-            const apiUrl = isUpdate 
+            const apiUrl = isUpdate
                 ? 'https://api.w1chat.com/contact/update-contact'
                 : 'https://api.w1chat.com/contact/create-contact';
 
@@ -904,24 +809,24 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             if (!response?.data?.error) {
                 // Save to local database with response data
                 const contactData = {
-                    contact_id: isUpdate 
-                        ? existingContactId 
+                    contact_id: isUpdate
+                        ? existingContactId
                         : (response?.data?.data?.id || Date.now().toString()),
-                number: trimmedNumber,
-                name: trimmedName,
-                email: contactForm.email?.trim() || '',
-                firm_name: contactForm.firm_name?.trim() || '',
-                website: contactForm.website?.trim() || '',
-                remark: contactForm.remark?.trim() || '',
-                language_code: contactForm.language_code?.trim() || '',
+                    number: trimmedNumber,
+                    name: trimmedName,
+                    email: contactForm.email?.trim() || '',
+                    firm_name: contactForm.firm_name?.trim() || '',
+                    website: contactForm.website?.trim() || '',
+                    remark: contactForm.remark?.trim() || '',
+                    language_code: contactForm.language_code?.trim() || '',
                     country: contactForm.country?.trim() || '',
-                    create_date: isUpdate 
+                    create_date: isUpdate
                         ? undefined // Don't update create_date on edit
                         : new Date().toISOString()
                 };
 
                 await contactDbHelper.saveContacts([contactData]);
-                
+
                 if (isUpdate) {
                     setExistingContactId(existingContactId);
                 } else {
@@ -932,12 +837,12 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 if (dbAvailable && trimmedName) {
                     try {
                         await dbHelper.updateChat(trimmedNumber, { name: trimmedName });
-                } catch (updateError) {
-                    console.warn('Failed to sync chat name with contact name:', updateError);
+                    } catch (updateError) {
+                        console.warn('Failed to sync chat name with contact name:', updateError);
+                    }
                 }
-            }
 
-            setShowContactModal(false);
+                setShowContactModal(false);
             } else {
                 const errorMessage = response?.data?.message || 'Unknown error';
                 setContactError(`Failed to ${isUpdate ? 'update' : 'create'} contact: ${errorMessage}`);
@@ -977,6 +882,64 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }, 80);
     }, []);
 
+    const handleDateClick = useCallback((selectedDate) => {
+        setSearchModalOpen(false);
+        if (!selectedDate) return;
+
+        // Convert selected date to date string format used by getDateString
+        const date = new Date(selectedDate);
+        const dateString = date.toDateString(); // Format: "Mon Oct 26 2025"
+
+        // Format date for display
+        const formattedDate = formatDateForDisplay(date);
+
+        setTimeout(() => {
+            const node = document.getElementById(`date-separator-${dateString}`);
+            if (node?.scrollIntoView) {
+                node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+                // Date not found - show custom toast notification
+                toast.custom((t) => (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+                        className={`max-w-md w-full bg-white dark:bg-gray-800 shadow-lg rounded-xl pointer-events-auto flex border border-gray-200 dark:border-gray-700 overflow-hidden`}
+                    >
+                        <div className="flex-1 w-0 p-4">
+                            <div className="flex items-start">
+                                <div className="flex-shrink-0">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40">
+                                        <FiCalendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                    </div>
+                                </div>
+                                <div className="ml-3 flex-1">
+                                    <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                                        No conversations found
+                                    </p>
+                                    <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+                                        No messages on <span className="font-medium text-gray-700 dark:text-gray-300">{formattedDate}</span>
+                                    </p>
+                                </div>
+                                <div className="ml-4 flex-shrink-0 flex">
+                                    <button
+                                        onClick={() => toast.dismiss(t.id)}
+                                        className="inline-flex rounded-md p-1 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                    >
+                                        <FiX className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                ), {
+                    duration: 2000,
+                    position: 'top-center',
+                });
+            }
+        }, 80);
+    }, [darkMode]);
+
     const searchResults = useMemo(() => {
         const term = searchQuery.trim();
         if (!term) return [];
@@ -984,6 +947,41 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         const lowerTerm = term.toLowerCase();
         const results = [];
         const seen = new Set();
+
+        // Helper function to get date for search results (empty if today)
+        const getSearchResultDate = (timestamp) => {
+            if (!timestamp) return '';
+            try {
+                const date = typeof timestamp === 'number' ? new Date(timestamp) : new Date(timestamp);
+                const today = new Date();
+
+                // Reset time to compare only dates
+                const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+                // If it's today, return empty string
+                if (messageDate.getTime() === todayDate.getTime()) {
+                    return '';
+                }
+
+                // Otherwise, format the date
+                const yesterday = new Date(today);
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+
+                if (messageDate.getTime() === yesterdayDate.getTime()) {
+                    return 'Yesterday';
+                } else {
+                    // Format as DD/MM/YYYY
+                    const day = date.getDate().toString().padStart(2, '0');
+                    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                    const year = date.getFullYear();
+                    return `${day}/${month}/${year}`;
+                }
+            } catch {
+                return '';
+            }
+        };
 
         messages.forEach((msg) => {
             const text = getSearchableTextFromMessage(msg);
@@ -994,10 +992,12 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             if (seen.has(key)) return;
             seen.add(key);
 
+            const msgTimestamp = msg.timestamp || msg.create_date;
             results.push({
                 messageKey: key,
                 snippet: getSnippetAroundTerm(text, term),
-                timestamp: formatTime(msg.timestamp || msg.create_date),
+                timestamp: formatTime(msgTimestamp),
+                date: getSearchResultDate(msgTimestamp),
                 direction: msg.type === 'out' ? 'You' : (activeChat?.name || msg.send_by_name || msg.send_by_username || 'Contact')
             });
         });
@@ -1095,7 +1095,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             setLastId("0");
             setHasMoreMessages(true);
             setLoadingPrevious(false);
-            
+
             if (dbAvailable) {
                 const localMessage = await dbHelper.getMessages(activeChat.number);
                 if (localMessage.length > 0) {
@@ -1135,7 +1135,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
         const handleScroll = () => {
             const { scrollTop, scrollHeight, clientHeight } = container;
-            
+
             // Check if user has scrolled to the top (within 100px threshold)
             if (scrollTop <= 100 && hasMoreMessages && !loadingPrevious) {
                 loadPreviousMessages();
@@ -1224,7 +1224,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             try {
                 messagesEndRef.current.scrollIntoView({ behavior: "auto", block: "end", inline: "nearest" });
                 initialScrollDoneRef.current = true;
-            } catch (_) {}
+            } catch (_) { }
         }
     };
 
@@ -1238,13 +1238,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
     const syncWithAPI = async (isLoadingPrevious = false) => {
         if (!activeChat || (isLoadingPrevious ? loadingPrevious : loadingHistory)) return;
-        
+
         if (isLoadingPrevious) {
             setLoadingPrevious(true);
         } else {
             setLoadingHistory(true);
         }
-        
+
         try {
             const messagePayload = {
                 project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
@@ -1297,14 +1297,142 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         await syncWithAPI(true);
     };
 
+    // Fetch contact details function
+    const fetchContactDetails = useCallback(async (number) => {
+        if (!tokens?.token || !tokens?.username) return;
+
+        setContactDetailsLoading(true);
+        setContactDetailsError('');
+
+        try {
+            const payload = {
+                project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                number: number
+            };
+
+            console.log('📤 Fetching contact details for:', payload);
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            const response = await axios.post(
+                'https://api.w1chat.com/contact/contact-details',
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            console.log('📥 Contact details response:', response.data);
+
+            if (!response?.data?.error) {
+                setContactDetails(response.data);
+            } else {
+                setContactDetailsError(response?.data?.message || 'Failed to fetch contact details');
+            }
+        } catch (error) {
+            console.error('Failed to fetch contact details:', error);
+            setContactDetailsError('Failed to fetch contact details. Please try again.');
+        } finally {
+            setContactDetailsLoading(false);
+        }
+    }, [tokens?.token, tokens?.username, tokens.projects]);
+
+    // Handle saving new contact from contact form modal
+    const handleSaveNewContact = useCallback(async () => {
+        if (!tokens?.token || !tokens?.username || !contactForm.number) return;
+
+        setContactSubmitting(true);
+        setContactError('');
+
+        try {
+            const payload = {
+                project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                number: contactForm.number,
+                name: contactForm.name || contactForm.number,
+                email: contactForm.email || '',
+                firm_name: contactForm.firm_name || '',
+                website: contactForm.website || '',
+                remark: contactForm.remark || ''
+            };
+
+            console.log('📤 Saving new contact:', payload);
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            const response = await axios.post(
+                'https://api.w1chat.com/contact/create-contact',
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (!response?.data?.error) {
+                // Close modal and reset form
+                setShowContactModal(false);
+                setContactForm({
+                    name: '',
+                    number: '',
+                    email: '',
+                    firm_name: '',
+                    website: '',
+                    remark: '',
+                    language_code: '',
+                    country: ''
+                });
+
+                // Refresh contact details after saving
+                await fetchContactDetails(activeChat.number);
+                toast.success('Contact saved successfully!');
+                
+                // Optionally close the contact details panel after saving
+                // setShowContactDetails(false);
+            } else {
+                setContactError(response?.data?.message || 'Failed to save contact');
+            }
+        } catch (error) {
+            console.error('Failed to save contact:', error);
+            setContactError('Failed to save contact. Please try again.');
+        } finally {
+            setContactSubmitting(false);
+        }
+    }, [tokens?.token, tokens?.username, tokens.projects, contactForm, activeChat?.number, fetchContactDetails]);
+
+    // Auto-fetch contact details when activeChat changes and panel is open
+    useEffect(() => {
+        if (showContactDetails && activeChat?.number && tokens?.token) {
+            console.log('🔄 Active chat changed, fetching contact details for:', activeChat.number);
+            fetchContactDetails(activeChat.number);
+        }
+    }, [activeChat?.number, showContactDetails, tokens?.token, fetchContactDetails]);
+
+    // Reset contact details when switching chats
+    useEffect(() => {
+        if (activeChat?.number) {
+            // Reset contact details state when switching to a new chat
+            setContactDetails(null);
+            setContactDetailsError('');
+        }
+    }, [activeChat?.number]);
+
     const processApiResponse = async (apiMessages, isLoadingPrevious = false, apiLastId = null) => {
         try {
             console.log(apiMessages);
             const messageList = apiMessages.map(apiMessage => {
                 // Build readable text for template if server message is missing/empty
 
-                
-                
+
+
                 let resolvedMessage = apiMessage.message || '';
                 if ((apiMessage.message_type === 'template' || apiMessage.is_template) && (!resolvedMessage || resolvedMessage.length === 0)) {
                     // Prefer template.body if present
@@ -1327,7 +1455,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 let headerMediaUrl = apiMessage.media_url || '';
                 let headerMediaName = apiMessage.media_name || '';
                 let derivedMessageType = apiMessage.message_type || '';
-                
+
                 if (apiMessage.is_template && apiMessage.component) {
                     const headerComp = apiMessage.component.find(c => c.type?.toLowerCase() === 'header');
                     if (headerComp && headerComp.parameters && headerComp.parameters.length > 0) {
@@ -1358,43 +1486,43 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 }
 
                 return ({
-                message_id: apiMessage.message_id || '',
-                wamid: apiMessage.wamid || '',
-                create_date: apiMessage.create_date || '',
+                    message_id: apiMessage.message_id || '',
+                    wamid: apiMessage.wamid || '',
+                    create_date: apiMessage.create_date || '',
                     type: apiMessage.type || '',
                     message_type: derivedMessageType || apiMessage.message_type || '',
                     message: resolvedMessage,
-                is_template: apiMessage.is_template || false,
-                is_forwarded: apiMessage.is_forwarded || false,
-                is_reply: apiMessage.is_reply || false,
-                status: apiMessage.status || '',
-                id: apiMessage.id || '',
-                send_by_username: apiMessage.send_by?.username || '',
-                send_by_name: apiMessage.send_by?.name || '',
-                send_by_mobile: apiMessage.send_by?.mobile || '',
-                send_by_email: apiMessage.send_by?.email || '',
-                send_by_status: apiMessage.send_by?.status || false,
-                is_read: apiMessage.is_read || false,
-                read_by_username: apiMessage.read_by?.username || '',
-                read_by_name: apiMessage.read_by?.name || '',
-                read_by_mobile: apiMessage.read_by?.mobile || '',
-                read_by_email: apiMessage.read_by?.email || '',
-                read_by_status: apiMessage.read_by?.status || false,
-                failed_reason: apiMessage.failed_reason || '',
-                media_url: headerMediaUrl || apiMessage.media_url || '',
-                media_name: headerMediaName || apiMessage.media_name || '',
-                is_voice: apiMessage.is_voice || false,
-                address: apiMessage.address || '',
-                latitude: apiMessage.latitude || '',
-                longitude: apiMessage.longitude || '',
-                name: apiMessage.name || '',
-                reply_wamid: apiMessage.reply_wamid || '',
-                timestamp: apiMessage.timestamp || (apiMessage.create_date ? new Date(apiMessage.create_date).getTime() : ''),
-                retryCount: apiMessage.retryCount || '',
-                chat_number: activeChat.number,
-                // Store template and component data for rendering
-                template: apiMessage.template || null,
-                component: apiMessage.component || null
+                    is_template: apiMessage.is_template || false,
+                    is_forwarded: apiMessage.is_forwarded || false,
+                    is_reply: apiMessage.is_reply || false,
+                    status: apiMessage.status || '',
+                    id: apiMessage.id || '',
+                    send_by_username: apiMessage.send_by?.username || '',
+                    send_by_name: apiMessage.send_by?.name || '',
+                    send_by_mobile: apiMessage.send_by?.mobile || '',
+                    send_by_email: apiMessage.send_by?.email || '',
+                    send_by_status: apiMessage.send_by?.status || false,
+                    is_read: apiMessage.is_read || false,
+                    read_by_username: apiMessage.read_by?.username || '',
+                    read_by_name: apiMessage.read_by?.name || '',
+                    read_by_mobile: apiMessage.read_by?.mobile || '',
+                    read_by_email: apiMessage.read_by?.email || '',
+                    read_by_status: apiMessage.read_by?.status || false,
+                    failed_reason: apiMessage.failed_reason || '',
+                    media_url: headerMediaUrl || apiMessage.media_url || '',
+                    media_name: headerMediaName || apiMessage.media_name || '',
+                    is_voice: apiMessage.is_voice || false,
+                    address: apiMessage.address || '',
+                    latitude: apiMessage.latitude || '',
+                    longitude: apiMessage.longitude || '',
+                    name: apiMessage.name || '',
+                    reply_wamid: apiMessage.reply_wamid || '',
+                    timestamp: apiMessage.timestamp || (apiMessage.create_date ? new Date(apiMessage.create_date).getTime() : ''),
+                    retryCount: apiMessage.retryCount || '',
+                    chat_number: activeChat.number,
+                    // Store template and component data for rendering
+                    template: apiMessage.template || null,
+                    component: apiMessage.component || null
                 });
             });
 
@@ -1403,40 +1531,40 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 const container = messagesContainerRef.current;
                 const scrollHeightBefore = container ? container.scrollHeight : 0;
                 const scrollTopBefore = container ? container.scrollTop : 0;
-                
+
                 // Filter out duplicates by checking message_id and id
                 setMessages(prev => {
                     const existingIds = new Set([
                         ...prev.map(m => m.message_id),
                         ...prev.map(m => m.id)
                     ]);
-                    
-                    const newMessages = messageList.filter(msg => 
+
+                    const newMessages = messageList.filter(msg =>
                         !existingIds.has(msg.message_id) && !existingIds.has(msg.id)
                     );
-                    
+
                     console.log('Duplicate filtering:', {
                         totalReceived: messageList.length,
                         duplicatesFiltered: messageList.length - newMessages.length,
                         newMessagesAdded: newMessages.length,
                         existingCount: prev.length
                     });
-                    
+
                     return [...newMessages, ...prev];
                 });
-                
+
                 // Update lastId from API response (last_id + 20)
                 if (apiLastId !== null && apiLastId !== undefined) {
                     const nextLastId = parseInt(apiLastId);
                     console.log('Updating lastId:', { currentLastId: apiLastId, nextLastId });
                     setLastId(nextLastId.toString());
                 }
-                
+
                 // If we got no messages or fewer than expected, we might be at the end
                 if (messageList.length === 0) {
                     setHasMoreMessages(false);
                 }
-                
+
                 // Restore scroll position after DOM updates
                 setTimeout(() => {
                     if (container) {
@@ -1448,14 +1576,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             } else {
                 // Initial load - replace all messages
                 setMessages(messageList);
-                
+
                 // Set lastId from API response for pagination
                 if (apiLastId !== null && apiLastId !== undefined) {
                     const nextLastId = parseInt(apiLastId);
                     setLastId(nextLastId.toString());
                 }
             }
-            
+
             // Save to local DB (without duplicates)
             if (dbAvailable) {
                 await dbHelper.saveMessage(messageList);
@@ -2138,11 +2266,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         });
                     } else {
                         // Fallback: just update wamid and status if no message_id
-                    await dbHelper.updateMessageStatus(tempMessageId, 'sent');
-                    await dbHelper.updateMessageIdentifiersByMessageId(tempMessageId, {
+                        await dbHelper.updateMessageStatus(tempMessageId, 'sent');
+                        await dbHelper.updateMessageIdentifiersByMessageId(tempMessageId, {
                             wamid: serverWamid,
                             id: serverId
-                    });
+                        });
                     }
                     // Update chats row with latest identifiers
                     await dbHelper.saveChats([
@@ -2167,9 +2295,9 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 // Update UI: mark sent and update with server's message_id, wamid, and id (like text messages)
                 setMessages((prev) => prev.map((m) => (
                     m.message_id === tempMessageId
-                        ? { 
-                            ...m, 
-                            status: 'sent', 
+                        ? {
+                            ...m,
+                            status: 'sent',
                             message_id: serverMessageId || tempMessageId, // Use server's message_id if available
                             wamid: serverWamid,
                             id: serverId || m.id
@@ -2254,13 +2382,25 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     );
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-gray-900 w-full">
+        <div className="flex h-full bg-white dark:bg-gray-900 w-full">
+            {/* Main conversation area */}
+            <div className={`flex flex-col transition-all duration-300 ${showContactDetails ? 'w-2/3' : 'w-full'}`}>
             {/* Chat header */}
             <div className="flex items-center justify-between p-3 sm:p-4 border-b dark:border-gray-700 bg-white dark:bg-gray-800 w-full">
-                <div className="flex items-center space-x-2 sm:space-x-3">
+        {/* user profile name or number */}
+                <div 
+                    className="flex items-center space-x-2 sm:space-x-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg p-2 transition-colors"
+                    onClick={() => {
+                        setShowContactDetails(true);
+                        fetchContactDetails(activeChat.number);
+                    }}
+                >
                     <button
                         className="md:hidden mr-1 text-gray-700 dark:text-gray-300 p-1 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                        onClick={onBack}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onBack();
+                        }}
                     >
                         <FiArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
@@ -2281,8 +2421,18 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         </h3>
                     </div>
                 </div>
+
                 <div className="flex items-center space-x-1 sm:space-x-2">
-                    <div className="relative">
+                    <div className="relative flex">
+                        <button
+                            onClick={handleSearchMenuClick}
+                            className="flex w-full items-center space-x-3 px-4 py-2.5 text-left text-sm text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                        >
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300">
+                                <FiSearch className="h-4 w-4" />
+                            </div>
+                        </button>
+
                         <button
                             ref={headerMenuButtonRef}
                             onClick={() => setShowHeaderMenu((prev) => !prev)}
@@ -2291,6 +2441,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         >
                             <FiMoreVertical className="w-4 h-4 sm:w-5 sm:h-5" />
                         </button>
+
+
 
                         <AnimatePresence>
                             {showHeaderMenu && (
@@ -2316,18 +2468,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                         </div>
                                     </button>
 
-                                    <button
-                                        onClick={handleSearchMenuClick}
-                                        className="flex w-full items-center space-x-3 px-4 py-2.5 text-left text-sm text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-                                    >
-                                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300">
-                                            <FiSearch className="h-4 w-4" />
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="font-semibold">Search Chat</p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">Search loaded messages only</p>
-                                        </div>
-                                    </button>
+
                                 </motion.div>
                             )}
                         </AnimatePresence>
@@ -2350,11 +2491,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                 <span className="ml-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">Loading previous messages...</span>
                             </div>
                         )}
-                        
+
                         {groupMessagesByDate(messages).map((dateGroup, groupIndex) => (
                             <div key={dateGroup.date}>
                                 {/* Date Separator */}
-                                <DateSeparator displayDate={dateGroup.displayDate} />
+                                <DateSeparator displayDate={dateGroup.displayDate} dateId={`date-separator-${dateGroup.date}`} />
 
                                 {/* Messages for this date */}
                                 <div className="space-y-3 sm:space-y-4">
@@ -2518,6 +2659,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 onQueryChange={handleSearchQueryChange}
                 results={searchResults}
                 onResultClick={handleSearchResultClick}
+                onDateClick={handleDateClick}
             />
 
             {/* Media Selection Modal */}
@@ -2554,6 +2696,205 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     setSelectedTemplate(null);
                     setShowTemplateModal(false);
                 }}
+            />
+            </div>
+
+            {/* Contact Details Side Panel */}
+            <AnimatePresence>
+                {showContactDetails && (
+                    <motion.div
+                        initial={{ x: '100%', opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{ x: '100%', opacity: 0 }}
+                        transition={{ duration: 0.3, ease: 'easeInOut' }}
+                        className="w-1/3 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col"
+                    >
+                        {/* Contact Details Header */}
+                        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    Contact Details
+                                </h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center space-x-2">
+                                    <span>{activeChat?.name} • {activeChat?.number}</span>
+                                    {contactDetailsLoading && (
+                                        <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-400"></div>
+                                    )}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowContactDetails(false)}
+                                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                            >
+                                <FiX className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Contact Details Content */}
+                        <div className="flex-1 overflow-y-auto p-4">
+                            {contactDetailsLoading ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                </div>
+                            ) : contactDetailsError ? (
+                                <div className="text-center py-8">
+                                    <div className="text-red-500 dark:text-red-400 mb-4">
+                                        <FiAlertCircle className="w-12 h-12 mx-auto mb-2" />
+                                        <p>{contactDetailsError}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => fetchContactDetails(activeChat.number)}
+                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                    >
+                                        Retry
+                                    </button>
+                                </div>
+                            ) : contactDetails ? (
+                                contactDetails.has_contact ? (
+                                    <div className="space-y-6">
+                                        {/* Profile Section */}
+                                        <div className="text-center">
+                                            <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 text-white font-bold text-2xl mb-4">
+                                                {contactDetails.contact.name.charAt(0).toUpperCase()}
+                                            </div>
+                                            <h4 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
+                                                {contactDetails.contact.name}
+                                            </h4>
+                                            <p className="text-gray-600 dark:text-gray-400">
+                                                {contactDetails.contact.number}
+                                            </p>
+                                        </div>
+
+                                        {/* Contact Information */}
+                                        <div className="space-y-4">
+                                            <h5 className="text-sm font-medium text-gray-900 dark:text-white uppercase tracking-wider">
+                                                Contact Information
+                                            </h5>
+                                            
+                                            {contactDetails.contact.email && (
+                                                <div className="flex items-center space-x-3">
+                                                    <FiMail className="w-5 h-5 text-gray-400" />
+                                                    <div>
+                                                        <p className="text-sm text-gray-500 dark:text-gray-400">Email</p>
+                                                        <p className="text-gray-900 dark:text-white">{contactDetails.contact.email}</p>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {contactDetails.contact.firm_name && (
+                                                <div className="flex items-center space-x-3">
+                                                    <FiHome className="w-5 h-5 text-gray-400" />
+                                                    <div>
+                                                        <p className="text-sm text-gray-500 dark:text-gray-400">Company</p>
+                                                        <p className="text-gray-900 dark:text-white">{contactDetails.contact.firm_name}</p>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {contactDetails.contact.website && (
+                                                <div className="flex items-center space-x-3">
+                                                    <FiGlobe className="w-5 h-5 text-gray-400" />
+                                                    <div>
+                                                        <p className="text-sm text-gray-500 dark:text-gray-400">Website</p>
+                                                        <a 
+                                                            href={contactDetails.contact.website}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-blue-600 dark:text-blue-400 hover:underline"
+                                                        >
+                                                            {contactDetails.contact.website}
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {contactDetails.contact.remark && (
+                                                <div className="flex items-start space-x-3">
+                                                    <FiFileText className="w-5 h-5 text-gray-400 mt-0.5" />
+                                                    <div>
+                                                        <p className="text-sm text-gray-500 dark:text-gray-400">Notes</p>
+                                                        <p className="text-gray-900 dark:text-white">{contactDetails.contact.remark}</p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Timestamps */}
+                                        <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                            <h5 className="text-sm font-medium text-gray-900 dark:text-white uppercase tracking-wider">
+                                                History
+                                            </h5>
+                                            
+                                            <div className="space-y-3 text-sm">
+                                                <div>
+                                                    <p className="text-gray-500 dark:text-gray-400">Created</p>
+                                                    <p className="text-gray-900 dark:text-white">
+                                                        {new Date(contactDetails.contact.create_date).toLocaleDateString()} by {contactDetails.contact.create_by?.name}
+                                                    </p>
+                                                </div>
+                                                
+                                                {contactDetails.contact.modify_date && (
+                                                    <div>
+                                                        <p className="text-gray-500 dark:text-gray-400">Last Modified</p>
+                                                        <p className="text-gray-900 dark:text-white">
+                                                            {new Date(contactDetails.contact.modify_date).toLocaleDateString()} by {contactDetails.contact.modify_by?.name}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-8">
+                                        <div className="mb-6">
+                                            <FiUser className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
+                                            <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                                                Contact Not Found
+                                            </h4>
+                                            <p className="text-gray-600 dark:text-gray-400 mb-6">
+                                                This contact is not saved in your contacts list.
+                                            </p>
+                                        </div>
+                                        
+                                        <button
+                                            onClick={() => {
+                                                setShowContactModal(true);
+                                                setContactForm({
+                                                    name: activeChat?.name || '',
+                                                    number: activeChat?.number || '',
+                                                    email: '',
+                                                    firm_name: '',
+                                                    website: '',
+                                                    remark: '',
+                                                    language_code: '',
+                                                    country: ''
+                                                });
+                                            }}
+                                            disabled={contactDetailsLoading}
+                                            className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
+                                        >
+                                            <FiUser className="w-4 h-4" />
+                                            <span>Save Contact</span>
+                                        </button>
+                                    </div>
+                                )
+                            ) : null}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Contact Form Modal */}
+            <ContactFormModal
+                isOpen={showContactModal}
+                onClose={handleCloseContactModal}
+                formData={contactForm}
+                onChange={handleContactFieldChange}
+                onSubmit={handleSaveNewContact}
+                loading={contactLoading}
+                submitting={contactSubmitting}
+                error={contactError}
+                isExistingContact={false}
             />
         </div>
     );

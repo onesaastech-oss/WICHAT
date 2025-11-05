@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Toaster } from 'react-hot-toast';
 import ChatList from './ChatList';
 import Conversation from './Conversation';
 import { dbHelper } from './db';
@@ -238,7 +239,9 @@ function LiveChat() {
     }
 
     return (
-        <motion.div
+        <>
+            <Toaster />
+            <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
@@ -335,6 +338,7 @@ function LiveChat() {
                 </AnimatePresence>
             </div>
         </motion.div>
+        </>
     );
 }
 
