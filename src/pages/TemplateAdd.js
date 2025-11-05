@@ -548,9 +548,9 @@ function TemplateAdd() {
         }
       );
 
-      console.log('Full API response:', response);
-      console.log('Response data:', response?.data);
-      console.log('Response status:', response?.status);
+      // console.log('Full API response:', response);
+      // console.log('Response data:', response?.data);
+      // console.log('Response status:', response?.status);
 
       if (!response?.data?.error) {
         const result = response.data;
