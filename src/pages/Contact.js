@@ -11,6 +11,8 @@ import {
   FiTrash2,
   FiChevronLeft,
   FiChevronRight,
+  FiChevronUp,
+  FiChevronDown,
   FiX,
   FiUser,
   FiMail,
@@ -19,7 +21,8 @@ import {
   FiHome,
   FiFileText,
   FiStar,
-  FiFilter
+  FiFilter,
+  FiCheckCircle
 } from 'react-icons/fi';
 
 function Contact() {
@@ -39,6 +42,10 @@ function Contact() {
   const [editingContact, setEditingContact] = useState(null);
   const [favoriteContacts, setFavoriteContacts] = useState(new Set());
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [sortColumn, setSortColumn] = useState(null); // 'name', 'email', 'firm_name'
+  const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
 
   // Form state for creating new contact
   const [newContact, setNewContact] = useState({
@@ -57,6 +64,24 @@ function Contact() {
     name: '',
     email: '',
     firm_name: '',
+    website: '',
+    remark: ''
+  });
+
+  // Validation errors for create modal
+  const [createErrors, setCreateErrors] = useState({
+    number: '',
+    name: '',
+    email: '',
+    website: '',
+    remark: ''
+  });
+
+  // Validation errors for edit modal
+  const [editErrors, setEditErrors] = useState({
+    number: '',
+    name: '',
+    email: '',
     website: '',
     remark: ''
   });
@@ -242,9 +267,118 @@ function Contact() {
     loadAndSyncContacts();
   }, [tokens?.token, tokens?.username, tokens?.projects, currentPage, dbInitialized]);
 
+  // Validation functions
+  const validatePhoneNumber = (phone) => {
+    // Remove spaces, dashes, and parentheses for validation
+    const cleaned = phone.replace(/[\s\-\(\)]/g, '');
+    // Allow digits, +, and should be between 10-15 digits (international format)
+    const phoneRegex = /^\+?[1-9]\d{9,14}$/;
+    if (!phone || phone.trim() === '') {
+      return 'Mobile number is required';
+    }
+    if (!phoneRegex.test(cleaned)) {
+      return 'Please enter a valid mobile number (10-15 digits)';
+    }
+    return '';
+  };
+
+  const validateName = (name) => {
+    if (!name || name.trim() === '') {
+      return 'Name is required';
+    }
+    if (name.trim().length < 2) {
+      return 'Name must be at least 2 characters long';
+    }
+    if (name.trim().length > 100) {
+      return 'Name must be less than 100 characters';
+    }
+    // Allow letters, spaces, hyphens, apostrophes, periods, and numbers (for international names)
+    // More permissive regex that allows unicode letters and common name characters
+    const nameRegex = /^[\p{L}\s\-'\.0-9]+$/u;
+    if (!nameRegex.test(name.trim())) {
+      return 'Name contains invalid characters';
+    }
+    return '';
+  };
+
+  const validateEmail = (email) => {
+    if (!email || email.trim() === '') {
+      return ''; // Email is optional
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return 'Please enter a valid email address';
+    }
+    if (email.trim().length > 255) {
+      return 'Email must be less than 255 characters';
+    }
+    return '';
+  };
+
+  const validateWebsite = (website) => {
+    if (!website || website.trim() === '') {
+      return ''; // Website is optional
+    }
+    try {
+      const url = website.trim();
+      // Add protocol if missing
+      const urlWithProtocol = url.startsWith('http://') || url.startsWith('https://') 
+        ? url 
+        : `https://${url}`;
+      new URL(urlWithProtocol);
+      if (url.length > 500) {
+        return 'Website URL must be less than 500 characters';
+      }
+      return '';
+    } catch (e) {
+      return 'Please enter a valid website URL';
+    }
+  };
+
+  const validateRemark = (remark) => {
+    if (!remark || remark.trim() === '') {
+      return ''; // Remark is optional
+    }
+    if (remark.trim().length > 1000) {
+      return 'Remark must be less than 1000 characters';
+    }
+    return '';
+  };
+
+  // Validate create contact form
+  const validateCreateForm = () => {
+    const errors = {
+      number: validatePhoneNumber(newContact.number),
+      name: validateName(newContact.name),
+      email: validateEmail(newContact.email),
+      website: validateWebsite(newContact.website),
+      remark: validateRemark(newContact.remark)
+    };
+    setCreateErrors(errors);
+    return !Object.values(errors).some(error => error !== '');
+  };
+
+  // Validate edit contact form
+  const validateEditForm = () => {
+    const errors = {
+      number: validatePhoneNumber(editContact.number),
+      name: validateName(editContact.name),
+      email: validateEmail(editContact.email),
+      website: validateWebsite(editContact.website),
+      remark: validateRemark(editContact.remark)
+    };
+    setEditErrors(errors);
+    return !Object.values(errors).some(error => error !== '');
+  };
+
   // Handle create contact
   const handleCreateContact = async () => {
     if (!tokens?.token || !tokens?.username) return;
+
+    // Validate form before submitting
+    if (!validateCreateForm()) {
+      return;
+    }
 
     try {
       const payload = {
@@ -270,7 +404,7 @@ function Contact() {
       if (!response?.data?.error) {
         // Save to local database immediately
         const newContactData = {
-          contact_id: response?.data?.data?.id || Date.now().toString(),
+          contact_id: response?.data?.data?.contact_id || response?.data?.data?.id || Date.now().toString(),
           number: newContact.number,
           name: newContact.name,
           email: newContact.email,
@@ -282,8 +416,7 @@ function Contact() {
 
         await contactDbHelper.saveContacts([newContactData]);
 
-        // Refresh contacts list
-        setCurrentPage(1);
+        // Close modal and reset form
         setShowCreateModal(false);
         setNewContact({
           number: '',
@@ -293,11 +426,46 @@ function Contact() {
           website: '',
           remark: ''
         });
+        setCreateErrors({
+          number: '',
+          name: '',
+          email: '',
+          website: '',
+          remark: ''
+        });
 
-        // Trigger refetch by updating tokens state
-        setTokens({ ...tokens });
+        // Refresh contacts list immediately - go to page 1 to show new contact
+        setCurrentPage(1);
+        
+        // Directly refresh the contacts list from local database
+        const refreshedResult = await contactDbHelper.getContacts(1, 10);
+        const mappedRefreshed = refreshedResult.contacts.map(c => ({
+          id: c.contact_id,
+          name: c.name,
+          mobile: c.number,
+          email: c.email,
+          firm_name: c.firm_name,
+          website: c.website,
+          remark: c.remark,
+          languageCode: c.language_code,
+          country: c.country,
+          createdOn: c.create_date,
+          is_favorite: c.is_favorite || false
+        }));
+
+        // Update favorites from refreshed data
+        const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
+        setFavoriteContacts(refreshedFavorites);
+
+        setContacts(mappedRefreshed);
+        setTotalPages(refreshedResult.totalPages);
+
+        // Show success message
+        const successMsg = response?.data?.msg || 'Contact created successfully';
+        setSuccessMessage(successMsg);
+        setShowSuccessModal(true);
       } else {
-        alert('Failed to create contact: ' + (response?.data?.message || 'Unknown error'));
+        alert('Failed to create contact: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
       }
     } catch (error) {
       console.error('Failed to create contact:', error);
@@ -318,12 +486,24 @@ function Contact() {
       website: contact.website || '',
       remark: contact.remark || ''
     });
+    setEditErrors({
+      number: '',
+      name: '',
+      email: '',
+      website: '',
+      remark: ''
+    });
     setShowEditModal(true);
   };
 
   // Handle update contact
   const handleUpdateContact = async () => {
     if (!tokens?.token || !tokens?.username || !editContact.contact_id) return;
+
+    // Validate form before submitting
+    if (!validateEditForm()) {
+      return;
+    }
 
     try {
       const payload = {
@@ -381,6 +561,13 @@ function Contact() {
           website: '',
           remark: ''
         });
+        setEditErrors({
+          number: '',
+          name: '',
+          email: '',
+          website: '',
+          remark: ''
+        });
 
         // Refresh the contacts list to show updated data
         const refreshedResult = await contactDbHelper.getContacts(currentPage, 10);
@@ -404,8 +591,13 @@ function Contact() {
 
         setContacts(mappedRefreshed);
         setTotalPages(refreshedResult.totalPages);
+
+        // Show success message
+        const successMsg = response?.data?.msg || 'Contact updated successfully';
+        setSuccessMessage(successMsg);
+        setShowSuccessModal(true);
       } else {
-        alert('Failed to update contact: ' + (response?.data?.message || 'Unknown error'));
+        alert('Failed to update contact: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
       }
     } catch (error) {
       console.error('Failed to update contact:', error);
@@ -533,10 +725,48 @@ function Contact() {
     }
   };
 
+  // Handle column sorting
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      // Toggle direction if clicking the same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Set new column and default to ascending
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
   // Filter contacts based on favorites filter
-  const filteredContacts = showFavoritesOnly
+  let filteredContacts = showFavoritesOnly
     ? contacts.filter(contact => favoriteContacts.has(contact.id))
     : contacts;
+
+  // Apply sorting if a sort column is selected
+  if (sortColumn) {
+    filteredContacts = [...filteredContacts].sort((a, b) => {
+      let aValue = a[sortColumn] || '';
+      let bValue = b[sortColumn] || '';
+
+      // Convert to string and handle empty values
+      aValue = String(aValue).toLowerCase().trim();
+      bValue = String(bValue).toLowerCase().trim();
+
+      // Handle empty values - put them at the end
+      if (aValue === '' && bValue === '') return 0;
+      if (aValue === '') return 1;
+      if (bValue === '') return -1;
+
+      // Compare values
+      if (aValue < bValue) {
+        return sortDirection === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortDirection === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -634,17 +864,68 @@ function Contact() {
                               className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                             />
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Name
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort('name')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Name</span>
+                              {sortColumn === 'name' ? (
+                                sortDirection === 'asc' ? (
+                                  <FiChevronUp className="h-4 w-4 text-gray-700" />
+                                ) : (
+                                  <FiChevronDown className="h-4 w-4 text-gray-700" />
+                                )
+                              ) : (
+                                <div className="flex flex-col -space-y-1">
+                                  <FiChevronUp className="h-3 w-3 text-gray-400" />
+                                  <FiChevronDown className="h-3 w-3 text-gray-400" />
+                                </div>
+                              )}
+                            </div>
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Mobile
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Email
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort('email')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Email</span>
+                              {sortColumn === 'email' ? (
+                                sortDirection === 'asc' ? (
+                                  <FiChevronUp className="h-4 w-4 text-gray-700" />
+                                ) : (
+                                  <FiChevronDown className="h-4 w-4 text-gray-700" />
+                                )
+                              ) : (
+                                <div className="flex flex-col -space-y-1">
+                                  <FiChevronUp className="h-3 w-3 text-gray-400" />
+                                  <FiChevronDown className="h-3 w-3 text-gray-400" />
+                                </div>
+                              )}
+                            </div>
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Company
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort('firm_name')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Company</span>
+                              {sortColumn === 'firm_name' ? (
+                                sortDirection === 'asc' ? (
+                                  <FiChevronUp className="h-4 w-4 text-gray-700" />
+                                ) : (
+                                  <FiChevronDown className="h-4 w-4 text-gray-700" />
+                                )
+                              ) : (
+                                <div className="flex flex-col -space-y-1">
+                                  <FiChevronUp className="h-3 w-3 text-gray-400" />
+                                  <FiChevronDown className="h-3 w-3 text-gray-400" />
+                                </div>
+                              )}
+                            </div>
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Actions
@@ -794,7 +1075,16 @@ function Contact() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-gray-900">Create New Contact</h3>
                 <button
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setCreateErrors({
+                      number: '',
+                      name: '',
+                      email: '',
+                      website: '',
+                      remark: ''
+                    });
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <FiX className="h-6 w-6" />
@@ -810,11 +1100,24 @@ function Contact() {
                   <input
                     type="tel"
                     value={newContact.number}
-                    onChange={(e) => setNewContact({ ...newContact, number: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={(e) => {
+                      setNewContact({ ...newContact, number: e.target.value });
+                      if (createErrors.number) {
+                        setCreateErrors({ ...createErrors, number: validatePhoneNumber(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => setCreateErrors({ ...createErrors, number: validatePhoneNumber(newContact.number) })}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      createErrors.number 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
                     placeholder="Enter mobile number"
                     required
                   />
+                  {createErrors.number && (
+                    <p className="mt-1 text-sm text-red-600">{createErrors.number}</p>
+                  )}
                 </div>
 
                 <div>
@@ -825,11 +1128,24 @@ function Contact() {
                   <input
                     type="text"
                     value={newContact.name}
-                    onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={(e) => {
+                      setNewContact({ ...newContact, name: e.target.value });
+                      if (createErrors.name) {
+                        setCreateErrors({ ...createErrors, name: validateName(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => setCreateErrors({ ...createErrors, name: validateName(newContact.name) })}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      createErrors.name 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
                     placeholder="Enter full name"
                     required
                   />
+                  {createErrors.name && (
+                    <p className="mt-1 text-sm text-red-600">{createErrors.name}</p>
+                  )}
                 </div>
 
                 <div>
@@ -840,10 +1156,23 @@ function Contact() {
                   <input
                     type="email"
                     value={newContact.email}
-                    onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={(e) => {
+                      setNewContact({ ...newContact, email: e.target.value });
+                      if (createErrors.email) {
+                        setCreateErrors({ ...createErrors, email: validateEmail(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => setCreateErrors({ ...createErrors, email: validateEmail(newContact.email) })}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      createErrors.email 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
                     placeholder="Enter email address"
                   />
+                  {createErrors.email && (
+                    <p className="mt-1 text-sm text-red-600">{createErrors.email}</p>
+                  )}
                 </div>
 
                 <div>
@@ -868,10 +1197,23 @@ function Contact() {
                   <input
                     type="url"
                     value={newContact.website}
-                    onChange={(e) => setNewContact({ ...newContact, website: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="Enter website URL"
+                    onChange={(e) => {
+                      setNewContact({ ...newContact, website: e.target.value });
+                      if (createErrors.website) {
+                        setCreateErrors({ ...createErrors, website: validateWebsite(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => setCreateErrors({ ...createErrors, website: validateWebsite(newContact.website) })}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      createErrors.website 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
+                    placeholder="Enter website URL (e.g., example.com)"
                   />
+                  {createErrors.website && (
+                    <p className="mt-1 text-sm text-red-600">{createErrors.website}</p>
+                  )}
                 </div>
 
                 <div>
@@ -881,17 +1223,42 @@ function Contact() {
                   </label>
                   <textarea
                     value={newContact.remark}
-                    onChange={(e) => setNewContact({ ...newContact, remark: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={(e) => {
+                      setNewContact({ ...newContact, remark: e.target.value });
+                      if (createErrors.remark) {
+                        setCreateErrors({ ...createErrors, remark: validateRemark(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => setCreateErrors({ ...createErrors, remark: validateRemark(newContact.remark) })}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      createErrors.remark 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
                     placeholder="Enter any remarks"
                     rows="3"
                   />
+                  {createErrors.remark && (
+                    <p className="mt-1 text-sm text-red-600">{createErrors.remark}</p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    {newContact.remark.length}/1000 characters
+                  </p>
                 </div>
               </div>
 
               <div className="flex justify-end space-x-3 mt-6">
                 <button
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setCreateErrors({
+                      number: '',
+                      name: '',
+                      email: '',
+                      website: '',
+                      remark: ''
+                    });
+                  }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   Cancel
@@ -920,6 +1287,13 @@ function Contact() {
                   onClick={() => {
                     setShowEditModal(false);
                     setEditingContact(null);
+                    setEditErrors({
+                      number: '',
+                      name: '',
+                      email: '',
+                      website: '',
+                      remark: ''
+                    });
                   }}
                   className="text-gray-400 hover:text-gray-600"
                 >
@@ -936,11 +1310,24 @@ function Contact() {
                   <input
                     type="tel"
                     value={editContact.number}
-                    onChange={(e) => setEditContact({ ...editContact, number: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={(e) => {
+                      setEditContact({ ...editContact, number: e.target.value });
+                      if (editErrors.number) {
+                        setEditErrors({ ...editErrors, number: validatePhoneNumber(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => setEditErrors({ ...editErrors, number: validatePhoneNumber(editContact.number) })}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      editErrors.number 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
                     placeholder="Enter mobile number"
                     required
                   />
+                  {editErrors.number && (
+                    <p className="mt-1 text-sm text-red-600">{editErrors.number}</p>
+                  )}
                 </div>
 
                 <div>
@@ -951,11 +1338,24 @@ function Contact() {
                   <input
                     type="text"
                     value={editContact.name}
-                    onChange={(e) => setEditContact({ ...editContact, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={(e) => {
+                      setEditContact({ ...editContact, name: e.target.value });
+                      if (editErrors.name) {
+                        setEditErrors({ ...editErrors, name: validateName(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => setEditErrors({ ...editErrors, name: validateName(editContact.name) })}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      editErrors.name 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
                     placeholder="Enter full name"
                     required
                   />
+                  {editErrors.name && (
+                    <p className="mt-1 text-sm text-red-600">{editErrors.name}</p>
+                  )}
                 </div>
 
                 <div>
@@ -966,10 +1366,23 @@ function Contact() {
                   <input
                     type="email"
                     value={editContact.email}
-                    onChange={(e) => setEditContact({ ...editContact, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={(e) => {
+                      setEditContact({ ...editContact, email: e.target.value });
+                      if (editErrors.email) {
+                        setEditErrors({ ...editErrors, email: validateEmail(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => setEditErrors({ ...editErrors, email: validateEmail(editContact.email) })}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      editErrors.email 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
                     placeholder="Enter email address"
                   />
+                  {editErrors.email && (
+                    <p className="mt-1 text-sm text-red-600">{editErrors.email}</p>
+                  )}
                 </div>
 
                 <div>
@@ -994,10 +1407,23 @@ function Contact() {
                   <input
                     type="url"
                     value={editContact.website}
-                    onChange={(e) => setEditContact({ ...editContact, website: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="Enter website URL"
+                    onChange={(e) => {
+                      setEditContact({ ...editContact, website: e.target.value });
+                      if (editErrors.website) {
+                        setEditErrors({ ...editErrors, website: validateWebsite(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => setEditErrors({ ...editErrors, website: validateWebsite(editContact.website) })}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      editErrors.website 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
+                    placeholder="Enter website URL (e.g., example.com)"
                   />
+                  {editErrors.website && (
+                    <p className="mt-1 text-sm text-red-600">{editErrors.website}</p>
+                  )}
                 </div>
 
                 <div>
@@ -1007,11 +1433,27 @@ function Contact() {
                   </label>
                   <textarea
                     value={editContact.remark}
-                    onChange={(e) => setEditContact({ ...editContact, remark: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={(e) => {
+                      setEditContact({ ...editContact, remark: e.target.value });
+                      if (editErrors.remark) {
+                        setEditErrors({ ...editErrors, remark: validateRemark(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => setEditErrors({ ...editErrors, remark: validateRemark(editContact.remark) })}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      editErrors.remark 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
                     placeholder="Enter any remarks"
                     rows="3"
                   />
+                  {editErrors.remark && (
+                    <p className="mt-1 text-sm text-red-600">{editErrors.remark}</p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    {editContact.remark.length}/1000 characters
+                  </p>
                 </div>
               </div>
 
@@ -1020,6 +1462,13 @@ function Contact() {
                   onClick={() => {
                     setShowEditModal(false);
                     setEditingContact(null);
+                    setEditErrors({
+                      number: '',
+                      name: '',
+                      email: '',
+                      website: '',
+                      remark: ''
+                    });
                   }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
@@ -1090,6 +1539,31 @@ function Contact() {
                   className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   Import Contacts
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-5/6 sm:w-3/6 md:w-2/6 lg:w-2/6 xl:w-1/4 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-center mb-4">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                  <FiCheckCircle className="h-6 w-6 text-green-600" />
+                </div>
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Success</h3>
+                <p className="text-sm text-gray-600 mb-4">{successMessage}</p>
+                <button
+                  onClick={() => setShowSuccessModal(false)}
+                  className="w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  OK
                 </button>
               </div>
             </div>

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import ChatList from './ChatList';
 import Conversation from './Conversation';
@@ -9,6 +9,7 @@ import { FiArrowLeft, FiSun, FiMoon } from 'react-icons/fi';
 import { Header, Sidebar } from '../component/Menu';
 function LiveChat() {
     const navigate = useNavigate();
+    const location = useLocation();
     const { phone } = useParams();
     const [tokens, setTokens] = useState(null);
     const [activeChat, setActiveChat] = useState(null);
@@ -17,6 +18,8 @@ function LiveChat() {
     const [dbAvailable, setDbAvailable] = useState(false);
     const [chats, setChats] = useState([]);
     const [messages, setMessages] = useState([]);
+    const previousLocationRef = useRef(null);
+    const isBackNavigationRef = useRef(false);
 
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isMinimized, setIsMinimized] = useState(() => {
@@ -48,8 +51,9 @@ function LiveChat() {
                 return;
             }
 
+            let dbInitSuccess = false;
             if (parsedData.projects?.[0]?.project_id) {
-                const dbInitSuccess = await dbHelper.init(parsedData.projects?.[0]?.project_id || 'default_project');
+                dbInitSuccess = await dbHelper.init(parsedData.projects?.[0]?.project_id || 'default_project');
                 setDbAvailable(dbInitSuccess);
             }
 
@@ -59,8 +63,8 @@ function LiveChat() {
             // Initialize socket connection
             socketManager.connect(parsedData.token, parsedData.username);
 
-            // Load initial data
-            await loadInitialData();
+            // Load initial data with the actual db status
+            await loadInitialData(dbInitSuccess);
 
         } catch (error) {
             console.error('Initialization error:', error);
@@ -69,11 +73,13 @@ function LiveChat() {
         }
     };
 
-    const loadInitialData = async () => {
+    const loadInitialData = async (dbAvailableParam = null) => {
         try {
             // Load chats from database first
+            // Use the parameter if provided, otherwise fall back to state
+            const shouldLoad = dbAvailableParam !== null ? dbAvailableParam : dbAvailable;
             let localChats = [];
-            if (dbAvailable) {
+            if (shouldLoad) {
                 localChats = await dbHelper.getChats();
                 setChats(localChats);
             }
@@ -88,8 +94,17 @@ function LiveChat() {
         if (!isInitialized) return;
 
         if (phone) {
-            // Only try to set activeChat if db is available and chats are loaded
-            if (!dbAvailable || chats.length === 0) return;
+            // Wait for chats to load if db is available
+            if (dbAvailable && chats.length === 0) {
+                // Chats are still loading, wait for them
+                return;
+            }
+
+            // If db is not available, we can't load chats, so don't set activeChat
+            if (!dbAvailable) {
+                setActiveChat(null);
+                return;
+            }
 
             // Find the chat with matching phone number
             const chat = chats.find(c => c.number === phone);
@@ -191,15 +206,47 @@ function LiveChat() {
         };
     }, [phone, navigate]);
 
+    // Handle browser back button navigation
+    useEffect(() => {
+        const handlePopState = () => {
+            // Mark that this is a back navigation (not manual)
+            isBackNavigationRef.current = true;
+        };
+
+        // Listen to popstate events (browser back/forward)
+        window.addEventListener('popstate', handlePopState);
+        
+        return () => {
+            window.removeEventListener('popstate', handlePopState);
+        };
+    }, []);
+
+    // Handle location changes and redirect if needed
+    useEffect(() => {
+        const currentPath = location.pathname;
+        
+        // If this is a back navigation (popstate) and we're on a phone route
+        if (isBackNavigationRef.current) {
+            // If we're on /live-chat/:phone, redirect to /live-chat
+            if (currentPath.startsWith('/live-chat/') && currentPath !== '/live-chat') {
+                // Redirect to /live-chat instead
+                navigate('/live-chat', { replace: true });
+                isBackNavigationRef.current = false;
+                previousLocationRef.current = '/live-chat';
+                return;
+            }
+            isBackNavigationRef.current = false;
+        }
+        
+        // Update previous location
+        previousLocationRef.current = currentPath;
+    }, [location.pathname, navigate]);
+
     const handleChatSelect = (chat) => {
         setActiveChat(chat);
-        // If already on /live-chat/:phone, replace the URL to avoid stacking history
-        // Otherwise, navigate to /live-chat/:phone from /live-chat
-        if (phone) {
-            navigate(`/live-chat/${chat.number}`, { replace: true });
-        } else {
-            navigate(`/live-chat/${chat.number}`);
-        }
+        // Mark as manual navigation (not back button)
+        isBackNavigationRef.current = false;
+        navigate(`/live-chat/${chat.number}`);
     };
 
     const handleBackToChatList = () => {

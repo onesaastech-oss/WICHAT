@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiX, FiSend, FiClock, FiCheck, FiCheckCircle, FiFileText } from 'react-icons/fi';
+import { FiX, FiSend, FiClock, FiCheck, FiCheckCircle, FiFileText, FiChevronDown } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { Encrypt } from '../../pages/encryption/payload-encryption';
@@ -12,6 +12,7 @@ const TemplatePreview = ({
     onUseTemplate,
     tokens,
     activeChat,
+    contactDetails,
     onSendTemplate,
     onCloseAll
 }) => {
@@ -19,6 +20,7 @@ const TemplatePreview = ({
     const [sendingTemplate, setSendingTemplate] = useState(false);
     const [headerMediaUrl, setHeaderMediaUrl] = useState('');
     const [isUploading, setIsUploading] = useState(false);
+    const [openDropdowns, setOpenDropdowns] = useState({});
 
     // Helpers for document preview metadata
     const getFileNameFromUrl = (url) => {
@@ -38,6 +40,52 @@ const TemplatePreview = ({
         if (!name) return '';
         const match = name.match(/\.([a-zA-Z0-9]+)$/);
         return match ? match[1].toLowerCase() : '';
+    };
+
+    // Generate dropdown options from user details
+    const generateVariableOptions = () => {
+        const options = [];
+        
+        // Basic chat information (always available)
+        if (activeChat?.name) {
+            options.push({ label: 'Contact Name', value: activeChat.name });
+        }
+        if (activeChat?.number) {
+            options.push({ label: 'Phone Number', value: activeChat.number });
+        }
+
+        // Extended contact details (if available)
+        if (contactDetails?.has_contact && contactDetails?.contact) {
+            const contact = contactDetails.contact;
+            
+            if (contact.name && contact.name !== activeChat?.name) {
+                options.push({ label: 'Full Name', value: contact.name });
+            }
+            if (contact.email) {
+                options.push({ label: 'Email', value: contact.email });
+            }
+            if (contact.firm_name) {
+                options.push({ label: 'Company Name', value: contact.firm_name });
+            }
+            if (contact.website) {
+                options.push({ label: 'Website', value: contact.website });
+            }
+            if (contact.country) {
+                options.push({ label: 'Country', value: contact.country });
+            }
+            if (contact.remark) {
+                options.push({ label: 'Notes/Remarks', value: contact.remark });
+            }
+        }
+
+        // Add some common placeholders
+        options.push(
+            { label: 'Current Date', value: new Date().toLocaleDateString() },
+            { label: 'Current Time', value: new Date().toLocaleTimeString() },
+            { label: 'Current Day', value: new Date().toLocaleDateString('en-US', { weekday: 'long' }) }
+        );
+
+        return options;
     };
 
     // Normalize template structures and parse for preview
@@ -97,12 +145,41 @@ const TemplatePreview = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedTemplate?.id]);
 
+    // Close dropdowns when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (!event.target.closest('.variable-dropdown')) {
+                setOpenDropdowns({});
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
+
     if (!selectedTemplate) return null;
 
     const handleVariableChange = (variableNumber, value) => {
         setVariableValues(prev => ({
             ...prev,
             [variableNumber]: value
+        }));
+    };
+
+    const toggleDropdown = (variableNumber) => {
+        setOpenDropdowns(prev => ({
+            ...prev,
+            [variableNumber]: !prev[variableNumber]
+        }));
+    };
+
+    const selectVariableOption = (variableNumber, option) => {
+        handleVariableChange(variableNumber, option.value);
+        setOpenDropdowns(prev => ({
+            ...prev,
+            [variableNumber]: false
         }));
     };
 
@@ -377,24 +454,76 @@ const TemplatePreview = ({
                                         Fill Template Variables
                                     </h3>
                                     <div className="space-y-3">
-                                        {variables.map((variable) => (
-                                            <div key={variable.number}>
-                                                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                                                    Variable {variable.number}
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    placeholder={`Enter value for variable ${variable.number}`}
-                                                    value={variableValues[variable.number] || ''}
-                                                    onChange={(e) => handleVariableChange(variable.number, e.target.value)}
-                                                    className={`w-full px-3 py-2 rounded-lg border transition-colors ${
-                                                        darkMode 
-                                                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500' 
-                                                            : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500'
-                                                    } focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
-                                                />
-                                            </div>
-                                        ))}
+                                        {variables.map((variable) => {
+                                            const variableOptions = generateVariableOptions();
+                                            const isDropdownOpen = openDropdowns[variable.number];
+                                            const currentValue = variableValues[variable.number] || '';
+                                            
+                                            return (
+                                                <div key={variable.number} className="variable-dropdown relative">
+                                                    <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                                        Variable {variable.number}
+                                                    </label>
+                                                    
+                                                    {/* Input with dropdown button */}
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            placeholder={`Enter value for variable ${variable.number}`}
+                                                            value={currentValue}
+                                                            onChange={(e) => handleVariableChange(variable.number, e.target.value)}
+                                                            className={`w-full px-3 py-2 pr-10 rounded-lg border transition-colors ${
+                                                                darkMode 
+                                                                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500' 
+                                                                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500'
+                                                            } focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleDropdown(variable.number)}
+                                                            className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded transition-colors ${
+                                                                darkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                                                            }`}
+                                                        >
+                                                            <FiChevronDown className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Dropdown options */}
+                                                    {isDropdownOpen && (
+                                                        <div className={`absolute top-full left-0 right-0 mt-1 rounded-lg border shadow-lg z-10 max-h-48 overflow-y-auto ${
+                                                            darkMode 
+                                                                ? 'bg-gray-700 border-gray-600' 
+                                                                : 'bg-white border-gray-200'
+                                                        }`}>
+                                                            <div className="py-1">
+                                                                {variableOptions.map((option, index) => (
+                                                                    <button
+                                                                        key={index}
+                                                                        type="button"
+                                                                        onClick={() => selectVariableOption(variable.number, option)}
+                                                                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                                                                            darkMode 
+                                                                                ? 'text-gray-300 hover:bg-gray-600' 
+                                                                                : 'text-gray-700 hover:bg-gray-50'
+                                                                        }`}
+                                                                    >
+                                                                        <div className="flex flex-col">
+                                                                            <span className="font-medium">{option.label}</span>
+                                                                            <span className={`text-xs truncate ${
+                                                                                darkMode ? 'text-gray-400' : 'text-gray-500'
+                                                                            }`}>
+                                                                                {option.value}
+                                                                            </span>
+                                                                        </div>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}

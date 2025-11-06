@@ -1498,12 +1498,12 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         !existingIds.has(msg.message_id) && !existingIds.has(msg.id)
                     );
 
-                    console.log('Duplicate filtering:', {
-                        totalReceived: messageList.length,
-                        duplicatesFiltered: messageList.length - newMessages.length,
-                        newMessagesAdded: newMessages.length,
-                        existingCount: prev.length
-                    });
+                    // console.log('Duplicate filtering:', {
+                    //     totalReceived: messageList.length,
+                    //     duplicatesFiltered: messageList.length - newMessages.length,
+                    //     newMessagesAdded: newMessages.length,
+                    //     existingCount: prev.length
+                    // });
 
                     return [...newMessages, ...prev];
                 });
@@ -1511,7 +1511,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 // Update lastId from API response (last_id + 20)
                 if (apiLastId !== null && apiLastId !== undefined) {
                     const nextLastId = parseInt(apiLastId);
-                    console.log('Updating lastId:', { currentLastId: apiLastId, nextLastId });
+                    // console.log('Updating lastId:', { currentLastId: apiLastId, nextLastId });
                     setLastId(nextLastId.toString());
                 }
 
@@ -2575,7 +2575,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                 <FiMic className="w-4 h-4 sm:w-5 sm:h-5" />
                             </button>
                             <button
-                                onClick={() => setShowTemplateModal(true)}
+                                onClick={() => {
+                                    setShowTemplateModal(true);
+                                    // Auto-fetch contact details if not already available
+                                    if (!contactDetails && activeChat?.number && tokens?.token) {
+                                        fetchContactDetails(activeChat.number);
+                                    }
+                                }}
                                 className="Templates ml-2 sm:ml-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                             >
                                 <FiLayers className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -2629,6 +2635,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     onTemplatePreview={handleTemplatePreview}
                     darkMode={darkMode}
                     activeChat={activeChat}
+                    contactDetails={contactDetails}
                     onSendTemplate={sendTemplateMessage}
                 />
 
@@ -2644,6 +2651,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     onUseTemplate={handleTemplateUse}
                     tokens={tokens}
                     activeChat={activeChat}
+                    contactDetails={contactDetails}
                     onSendTemplate={sendTemplateMessage}
                     onCloseAll={() => {
                         // Close both Preview and Template selection modal after successful send

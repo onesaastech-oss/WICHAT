@@ -9,6 +9,12 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
     const [activeTab, setActiveTab] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [chats, setChats] = useState([]);
+    const activeChatRef = React.useRef(activeChat);
+
+    // Update ref when activeChat changes
+    useEffect(() => {
+        activeChatRef.current = activeChat;
+    }, [activeChat]);
 
     // Load conversations from IndexedDB first, then sync with API
     useEffect(() => {
@@ -40,10 +46,54 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
     // 🔹 When socket_chats prop changes (including status updates)
     useEffect(() => {
         if (socket_chats && socket_chats.length > 0) {
-            console.log('📊 ChatList: Updating chats from socket_chats prop', socket_chats.length);
-            setChats(socket_chats);
+            setChats(prevChats => {
+                const updatedChats = socket_chats.map(socketChat => {
+                    // Find existing chat to get current unread_count
+                    const existingChat = prevChats.find(c => c.number === socketChat.number);
+                    
+                    // If it's an incoming message and chat is not currently open, increment unread count
+                    // Use ref to check active chat without triggering effect re-run
+                    const isCurrentlyOpen = activeChatRef.current?.number === socketChat.number;
+                    
+                    if (socketChat.type === 'in' && !isCurrentlyOpen) {
+                        const currentUnread = existingChat?.unread_count || 0;
+                        return {
+                            ...socketChat,
+                            unread_count: currentUnread + 1,
+                            unread: true
+                        };
+                    }
+                    
+                    // If chat is currently open, keep count at 0
+                    if (isCurrentlyOpen) {
+                        return {
+                            ...socketChat,
+                            unread_count: 0,
+                            unread: false
+                        };
+                    }
+                    
+                    // Otherwise, keep existing unread count or default to 0
+                    const unreadCount = socketChat.unread_count !== undefined 
+                        ? socketChat.unread_count 
+                        : (existingChat?.unread_count || 0);
+                    
+                    return {
+                        ...socketChat,
+                        unread_count: unreadCount,
+                        unread: unreadCount > 0
+                    };
+                });
+
+                // Save updated counts to IndexedDB
+                if (dbAvailable) {
+                    dbHelper.saveChats(updatedChats);
+                }
+
+                return updatedChats;
+            });
         }
-    }, [socket_chats]);
+    }, [socket_chats, dbAvailable]);
 
 
 
@@ -83,26 +133,34 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
 
     const processApiResponse = async (apiChats) => {
         try {
-            const chatList = apiChats.map(apiChat => ({
-                number: apiChat.contact.number,
-                name: apiChat.contact.name || apiChat.contact.number,
-                is_favorite: apiChat.contact.is_favorite || false,
-                wamid: apiChat.last_message.wamid,
-                create_date: apiChat.last_message.create_date,
-                timestamp: apiChat.last_message.create_date ? new Date(apiChat.last_message.create_date).getTime() : Date.now(),
-                type: apiChat.last_message.type,
-                message_type: apiChat.last_message.message_type,
-                message: apiChat.last_message.message,
-                status: apiChat.last_message.status,
-                unique_id: apiChat.last_message.unique_id,
-                last_id: apiChat.last_message.id,
-                send_by_username: apiChat.last_message.send_by?.username || '',
-                send_by_mobile: apiChat.last_message.send_by?.mobile || ''
-            }));
+            const chatList = apiChats.map(apiChat => {
+                const unreadCount = typeof apiChat.unread_count === 'number'
+                    ? apiChat.unread_count
+                    : Number(apiChat.unread_count) || 0;
+
+                return {
+                    number: apiChat.contact.number,
+                    name: apiChat.contact.name || apiChat.contact.number,
+                    is_favorite: apiChat.contact.is_favorite || false,
+                    wamid: apiChat.last_message.wamid,
+                    create_date: apiChat.last_message.create_date,
+                    timestamp: apiChat.last_message.create_date ? new Date(apiChat.last_message.create_date).getTime() : Date.now(),
+                    type: apiChat.last_message.type,
+                    message_type: apiChat.last_message.message_type,
+                    message: apiChat.last_message.message,
+                    status: apiChat.last_message.status,
+                    unique_id: apiChat.last_message.unique_id,
+                    last_id: apiChat.last_message.id,
+                    unread_count: unreadCount,
+                    unread: unreadCount > 0,
+                    send_by_username: apiChat.last_message.send_by?.username || '',
+                    send_by_mobile: apiChat.last_message.send_by?.mobile || ''
+                };
+            });
 
             // Save to IndexedDB if available
             if (dbAvailable) {
-                console.log("DB Available");
+                // console.log("DB Available");
                 await dbHelper.saveChats(chatList);
             } else {
                 throw new Error("Database not available");
@@ -227,7 +285,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         }
     };
 
-    // Group chats by favorite status
+    // Filter and sort chats by most recent
     const groupedChats = () => {
         const filtered = chats.filter((chat) => {
             const lastMessageText = formatLastMessage(chat);
@@ -235,35 +293,39 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                 chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 lastMessageText.toLowerCase().includes(searchQuery.toLowerCase());
             let matchesTab = true;
-            if (activeTab === 'Unread') matchesTab = chat.unread;
+            if (activeTab === 'Unread') matchesTab = (chat.unread_count || 0) > 0;
             if (activeTab === 'Favourites') matchesTab = chat.is_favorite;
             if (activeTab === 'Groups') matchesTab = chat.isGroup;
             return matchesSearch && matchesTab;
         });
 
-        if (activeTab === 'All') {
-            const favorites = filtered.filter(chat => chat.is_favorite);
-            const others = filtered.filter(chat => !chat.is_favorite);
+        // Sort by most recent (by timestamp/create_date)
+        const sorted = filtered.sort((a, b) => {
+            const timeA = a.timestamp || (a.create_date ? new Date(a.create_date).getTime() : 0);
+            const timeB = b.timestamp || (b.create_date ? new Date(b.create_date).getTime() : 0);
+            return timeB - timeA; // Most recent first
+        });
 
-            return [
-                ...(favorites.length > 0 ? [{ isGroup: true, groupName: 'Favorites', chats: favorites }] : []),
-                ...(others.length > 0 ? [{ isGroup: false, groupName: 'All Chats', chats: others }] : [])
-            ];
-        }
-
-        return [{ isGroup: false, groupName: activeTab, chats: filtered }];
+        return [{ isGroup: false, groupName: activeTab, chats: sorted }];
     };
 
-    const handleChatClick = async (chat) => {
-        // Mark as read in IndexedDB if unread
-        if (chat.unread) {
-            await dbHelper.updateChat(chat.number, { unread: false });
-            setChats(prevChats =>
-                prevChats.map(c =>
-                    c.number === chat.number ? { ...c, unread: false } : c
-                )
-            );
+    const handleChatClick = (chat) => {
+        // Immediately update the active chat ref
+        activeChatRef.current = chat;
+        
+        // Reset unread count immediately in UI state
+        setChats(prevChats =>
+            prevChats.map(c =>
+                c.number === chat.number ? { ...c, unread_count: 0 } : c
+            )
+        );
+        
+        // Update IndexedDB in background (non-blocking)
+        if (dbAvailable && chat.unread_count > 0) {
+            dbHelper.updateChat(chat.number, { unread_count: 0 });
         }
+        
+        // Notify parent component
         onChatSelect(chat);
     };
 
@@ -285,7 +347,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
 
             {/* Tabs */}
             <div className="flex border-b" style={{ borderColor: darkMode ? '#374151' : '#e5e7eb' }}>
-                {['All', 'Unread', 'Favourites', 'Groups'].map((tab) => (
+                {['All', 'Unread', 'Favourites', 'Assigned'].map((tab) => (
                     <button
                         key={tab}
                         className={`flex-1 py-3 text-sm font-medium relative ${activeTab === tab
@@ -327,68 +389,62 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                     <div>
                         {groupedChats().map((group, groupIndex) => (
                             <div key={groupIndex}>
-                                {/* Group Header for Favorites */}
-                                {group.isGroup && (
-                                    <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800 border-b dark:border-gray-700">
-                                        <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                                            {group.groupName}
-                                        </h3>
-                                    </div>
-                                )}
-
                                 {/* Chat Items */}
                                 <div className="divide-y" style={{ divideColor: darkMode ? '#374151' : '#e5e7eb' }}>
-                                    {group.chats.map((chat) => (
-                                        <div
-                                            key={chat.id}
-                                            onClick={() => handleChatClick(chat)}
-                                            className={`p-4 cursor-pointer transition-colors ${chat.unread && !darkMode ? 'bg-blue-50' : ''
-                                                } ${chat.unread && darkMode ? 'bg-blue-900/30' : ''
-                                                } ${darkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}
-                                        >
-                                            <div className="flex items-center space-x-3">
-                                                <div className="relative">
-                                                    <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-br from-green-400 to-blue-500 text-white font-semibold">
-                                                        {chat.name.charAt(0).toUpperCase()}
-                                                    </div>
-                                                    {chat.isFavorite && (
-                                                        <div className="absolute -top-1 -right-1">
-                                                            <FiStar className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                                    {group.chats.map((chat) => {
+                                        const unreadCount = chat.unread_count || 0;
+                                        const hasUnread = unreadCount > 0;
+                                        return (
+                                            <div
+                                                key={chat.number || chat.id}
+                                                onClick={() => handleChatClick(chat)}
+                                                className={`p-4 cursor-pointer transition-colors ${hasUnread && !darkMode ? 'bg-blue-50' : ''
+                                                    } ${hasUnread && darkMode ? 'bg-blue-900/30' : ''
+                                                    } ${darkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}
+                                            >
+                                                <div className="flex items-center space-x-3">
+                                                    <div className="relative">
+                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-br from-green-400 to-blue-500 text-white font-semibold">
+                                                            {chat.name.charAt(0).toUpperCase()}
                                                         </div>
-                                                    )}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex justify-between items-center mb-1">
-                                                        <h3 className="font-medium truncate text-gray-900 dark:text-white">
-                                                            {chat.name.startsWith("91") ? `+${chat.name}` : chat.name}
-                                                        </h3>
-                                                        <div className="flex items-center space-x-1">
-                                                            {chat.unread && (
-                                                                <span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400"></span>
-                                                            )}
-                                                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                                {formatTime(chat.timestamp || chat.create_date)}
+                                                        {chat.is_favorite && (
+                                                            <div className="absolute -top-1 -right-1">
+                                                                <FiStar className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <h3 className="font-medium truncate text-gray-900 dark:text-white">
+                                                                {chat.name.startsWith("91") ? `+${chat.name}` : chat.name}
+                                                            </h3>
+                                                            <div className="flex items-center space-x-2">
+                                                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                                    {formatTime(chat.timestamp || chat.create_date)}
+                                                                </div>
+                                                                {hasUnread && (
+                                                                    <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-green-500 text-white text-xs font-semibold flex items-center justify-center">
+                                                                        {unreadCount > 99 ? '99+' : unreadCount}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <div className="flex items-center space-x-1 min-w-0 flex-1">
-                                                            {getMessageTypeIcon(chat.message_type)}
-                                                            <p className="text-sm truncate text-gray-500 dark:text-gray-400">
-                                                                {formatLastMessage(chat)}
-                                                            </p>
-                                                        </div>
-                                                        <div className="flex items-center space-x-1 flex-shrink-0">
-                                                            {getMessageStatusIcon(chat.status, isLastMessageFromUser(chat))}
-                                                            {chat.unread && (
-                                                                <span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400 ml-1"></span>
-                                                            )}
+                                                        <div className="flex justify-between items-center">
+                                                            <div className="flex items-center space-x-1 min-w-0 flex-1">
+                                                                {getMessageTypeIcon(chat.message_type)}
+                                                                <p className="text-sm truncate text-gray-500 dark:text-gray-400">
+                                                                    {formatLastMessage(chat)}
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex items-center space-x-1 flex-shrink-0">
+                                                                {getMessageStatusIcon(chat.status, isLastMessageFromUser(chat))}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         ))}

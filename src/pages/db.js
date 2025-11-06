@@ -145,7 +145,7 @@ export const dbHelper = {
             dbInstance = new ChatDatabase(dbName);
             await dbInstance.open();
 
-            console.log('✅ Database opened successfully:', dbName);
+           // console.log('✅ Database opened successfully:', dbName);
             return true;
         } catch (error) {
             console.error('❌ Failed to open database:', error);
@@ -212,6 +212,7 @@ export const dbHelper = {
                         status: chat.status,
                         unique_id: chat.unique_id,
                         last_id: chat.last_id,
+                        unread_count: typeof chat.unread_count === 'number' ? chat.unread_count : (existing?.unread_count || 0),
                         send_by_username: chat.send_by_username || '',
                         send_by_mobile: chat.send_by_mobile || '',
                         lastUpdated: Date.now()
@@ -225,7 +226,7 @@ export const dbHelper = {
                 }
             });
 
-            console.log(`💾 Chats saved/updated successfully (${chatList.length} items).`);
+            //console.log(`💾 Chats saved/updated successfully (${chatList.length} items).`);
         } catch (error) {
             console.error("❌ Error saving chats:", error);
         }

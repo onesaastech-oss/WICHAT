@@ -3,7 +3,7 @@ import { FiX, FiSearch, FiChevronDown, FiChevronUp, FiCheck, FiClock, FiAlertCir
 import axios from 'axios';
 import { Encrypt } from '../../pages/encryption/payload-encryption';
 
-const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTemplatePreview, darkMode = false, activeChat, onSendTemplate }) => {
+const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTemplatePreview, darkMode = false, activeChat, contactDetails, onSendTemplate }) => {
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -133,7 +133,7 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
 
-            console.log('Sending template with payload:', payload);
+            // console.log('Sending template with payload:', payload);
 
             const response = await axios.post(
                 'https://api.w1chat.com/message/send-template',
