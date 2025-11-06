@@ -5,6 +5,8 @@ import { Encrypt } from './encryption/payload-encryption';
 import axios from 'axios';
 import toast, { Toaster } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from 'jwt-decode';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -27,6 +29,7 @@ const Register = () => {
     global: ''
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordInfo, setShowPasswordInfo] = useState(false);
   const [showGlobalError, setShowGlobalError] = useState(false);
@@ -118,14 +121,81 @@ const Register = () => {
     setStep(step - 1);
   };
 
+  // Handle Google Registration Success
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setIsGoogleLoading(true);
+
+    try {
+      // Decode the JWT token to get user info
+      const decoded = jwtDecode(credentialResponse.credential);
+
+      // Prepare payload for your backend
+      const payload = {
+        google_token: credentialResponse.credential,
+        email: decoded.email,
+        name: decoded.name,
+        picture: decoded.picture,
+        auth_method: 'google'
+      };
+
+      // Encrypt and send to your backend
+      const { data, key } = Encrypt(payload);
+
+      let data_pass = JSON.stringify({
+        "data": data,
+        "key": key
+      });
+
+      let config = {
+        method: 'post',
+        maxBodyLength: Infinity,
+        url: 'https://api.w1chat.com/account/google-register', // You'll need to create this endpoint
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        data: data_pass
+      };
+
+      const response = await axios.request(config);
+      const responseData = response.data;
+
+      if (responseData.error === false) {
+        localStorage.setItem("userData", JSON.stringify(responseData));
+        toast.success('Registration successful with Google!');
+        setTimeout(() => {
+          navigate("/");
+        }, 1500);
+      } else {
+        throw new Error(responseData.error || "Google registration failed");
+      }
+    } catch (error) {
+      console.error('Google registration error:', error);
+      setErrors((prev) => ({
+        ...prev,
+        global: error.message || "Google registration failed"
+      }));
+      setShowGlobalError(true);
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
+  // Handle Google Registration Failure
+  const handleGoogleError = () => {
+    setErrors((prev) => ({
+      ...prev,
+      global: "Google registration failed. Please try again."
+    }));
+    setShowGlobalError(true);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    /*
-    if (validateForm()) {
+    if (validateStep(2)) {
       setIsLoading(true);
 
       const payload = {
-        email: formData.username,
+        email: formData.email,
         password: formData.password,
         confirm_password: formData.confirmPassword,
         name: formData.name,
@@ -144,7 +214,7 @@ const Register = () => {
       let config = {
         method: 'post',
         maxBodyLength: Infinity,
-        url: 'https://api.w1chat.com/account/login',
+        url: 'https://api.w1chat.com/account/register', // Updated endpoint for regular registration
         headers: {
           'Content-Type': 'application/json'
         },
@@ -158,7 +228,7 @@ const Register = () => {
           if (data.error === false) {
             // store safely in localStorage
             localStorage.setItem("userData", JSON.stringify(data));
-            toast.loading('Redirecting...');
+            toast.success('Registration successful!');
             setTimeout(() => {
               navigate("/"); // Navigate to Home
             }, 1500);
@@ -169,7 +239,7 @@ const Register = () => {
         .catch((error) => {
           setErrors((prev) => ({
             ...prev,
-            global: error.message || "An error occurred during login"
+            global: error.message || "An error occurred during registration"
           }));
           setShowGlobalError(true);
         })
@@ -177,7 +247,13 @@ const Register = () => {
           setIsLoading(false);
         });
     }
-        */
+  };
+
+  const dismissGlobalError = () => {
+    setShowGlobalError(false);
+    setTimeout(() => {
+      setErrors(prev => ({ ...prev, global: '' }));
+    }, 300);
   };
 
   return (
@@ -250,31 +326,65 @@ const Register = () => {
           </div>
 
           <AnimatePresence>
-                      {showGlobalError && errors.global && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          transition={{ duration: 0.25 }}
-                          className="mb-4 flex items-center justify-between rounded-lg border border-red-400 bg-red-100 px-4 py-2 text-red-700 shadow"
-                          role="alert"
-                        >
-                          <span>{errors.global}</span>
-                          <button
-                            
-                            className="ml-3 text-red-800 hover:text-red-600"
-                          >
-                            <svg
-                              className="h-5 w-5 fill-current"
-                              xmlns="http://www.w3.org/2000/svg"
-                              viewBox="0 0 20 20"
-                            >
-                              <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z" />
-                            </svg>
-                          </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+            {showGlobalError && errors.global && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.25 }}
+                className="mb-4 flex items-center justify-between rounded-lg border border-red-400 bg-red-100 px-4 py-2 text-red-700 shadow"
+                role="alert"
+              >
+                <span>{errors.global}</span>
+                <button
+                  onClick={dismissGlobalError}
+                  className="ml-3 text-red-800 hover:text-red-600"
+                >
+                  <svg
+                    className="h-5 w-5 fill-current"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                  >
+                    <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z" />
+                  </svg>
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Google Register Button - Always visible */}
+          <div className="mb-6">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={handleGoogleError}
+              shape="rectangular"
+              size="large"
+              width="100%"
+              text="signup_with"
+              locale="en"
+            />
+            {isGoogleLoading && (
+              <div className="text-center mt-2">
+                <div className="inline-flex items-center">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Registering with Google...
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">Or register with email</span>
+            </div>
+          </div>
 
           <form onSubmit={step === 2 ? handleSubmit : (e) => e.preventDefault()}>
             <AnimatePresence mode="wait">
@@ -642,6 +752,7 @@ const Register = () => {
           </div>
         </div>
       </motion.div>
+      <Toaster />
     </div>
   );
 };

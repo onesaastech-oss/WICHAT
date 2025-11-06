@@ -50,6 +50,15 @@ function ContactInputField() {
 
     const [formErrors, setFormErrors] = useState({});
 
+    const [isMinimized, setIsMinimized] = useState(() => {
+        const saved = localStorage.getItem('sidebarMinimized');
+        return saved ? JSON.parse(saved) : false;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
+    }, [isMinimized]);
+
     // Prevent background scrolling when mobile menu is open
     useEffect(() => {
         if (mobileMenuOpen) {
@@ -244,8 +253,19 @@ function ContactInputField() {
 
     return (
         <div className="min-h-screen bg-gray-50">
-            <Header mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
-            <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+            <Header
+                mobileMenuOpen={mobileMenuOpen}
+                setMobileMenuOpen={setMobileMenuOpen}
+                isMinimized={isMinimized}
+                setIsMinimized={setIsMinimized}
+            />
+            <Sidebar
+                mobileMenuOpen={mobileMenuOpen}
+                setMobileMenuOpen={setMobileMenuOpen}
+                isMinimized={isMinimized}
+                setIsMinimized={setIsMinimized}
+            />
+
 
             {/* Delete Confirmation Modal */}
             <Modal
@@ -458,7 +478,8 @@ function ContactInputField() {
             </Modal>
 
             {/* Main content */}
-            <div className="pt-16 md:pl-64">
+            <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
+                }`}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
                     {/* Page header */}
                     <div className="md:flex md:items-center md:justify-between mb-6">
@@ -535,8 +556,8 @@ function ContactInputField() {
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className={`px-2 py-1 text-xs font-medium rounded-full 
-                                                        ${field.required 
-                                                            ? 'bg-green-100 text-green-800' 
+                                                        ${field.required
+                                                            ? 'bg-green-100 text-green-800'
                                                             : 'bg-gray-100 text-gray-800'
                                                         }`}>
                                                         {field.required ? 'Yes' : 'No'}
@@ -630,7 +651,7 @@ function ContactInputField() {
 
             {/* CSS for animations */}
             <style jsx>
-            {`
+                {`
                 @keyframes modalIn {
                 0% {
                     transform: scale(0.95);

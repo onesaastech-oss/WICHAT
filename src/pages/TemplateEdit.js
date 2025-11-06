@@ -64,6 +64,15 @@ function TemplateEdit() {
   const [errorMessage, setErrorMessage] = useState('');
   const textareaRef = useRef(null);
 
+  const [isMinimized, setIsMinimized] = useState(() => {
+    const saved = localStorage.getItem('sidebarMinimized');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
+  }, [isMinimized]);
+
   // Get user tokens from localStorage
   useEffect(() => {
     const userData = localStorage.getItem('userData');
@@ -122,26 +131,26 @@ function TemplateEdit() {
         // First try to get template data from localStorage (from Template.js)
         const templatesData = localStorage.getItem('templatesData');
         let templateFound = false;
-        
+
         if (templatesData) {
           const templates = JSON.parse(templatesData);
           const template = templates.find(t => t.id === templateId);
-          
+
           if (template && template.template_data) {
             console.log('Found template in localStorage:', template);
             populateFormFromTemplate(template);
             templateFound = true;
           }
         }
-        
+
         // If not found in localStorage, try to fetch from API
         if (!templateFound) {
           console.log('Template not found in localStorage, fetching from API...');
-          
+
           try {
             // Use the same API structure as Template.js for consistency
             const { Encrypt } = await import('./encryption/payload-encryption');
-            
+
             const payload = {
               project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
               template_id: templateId
@@ -172,7 +181,7 @@ function TemplateEdit() {
                 status: templateData.status,
                 template_data: templateData.template
               };
-              
+
               console.log('Fetched template from API:', template);
               populateFormFromTemplate(template);
               templateFound = true;
@@ -182,7 +191,7 @@ function TemplateEdit() {
             // Fall back to sample data if API fails
           }
         }
-        
+
         // If still not found, show error and redirect
         if (!templateFound) {
           console.error('Template not found:', templateId);
@@ -190,7 +199,7 @@ function TemplateEdit() {
           navigate('/template');
           return;
         }
-        
+
       } catch (error) {
         console.error('Failed to fetch template:', error);
         alert('Failed to load template data');
@@ -209,7 +218,7 @@ function TemplateEdit() {
   const populateFormFromTemplate = (template) => {
     console.log('Populating form with template:', template);
     const components = template.template_data?.components || [];
-    
+
     // Initialize form data
     const newFormData = {
       name: template.name || '',
@@ -251,7 +260,7 @@ function TemplateEdit() {
             text: component.text || '',
             example: component.example || { header_handle: [] }
           };
-          
+
           // Extract header variable if exists
           if (component.text && component.text.includes('{{1}}')) {
             newHeaderVariable = {
@@ -422,13 +431,13 @@ function TemplateEdit() {
       alert('Header can only have one variable');
       return;
     }
-    
+
     const newVariable = {
       id: Date.now(),
       name: 'var1',
       sample: ''
     };
-    
+
     setHeaderVariable(newVariable);
     handleHeaderTextChange(formData.components.header.text + ' {{1}}');
   };
@@ -470,20 +479,20 @@ function TemplateEdit() {
     const startPos = textarea.selectionStart;
     const endPos = textarea.selectionEnd;
     const currentText = formData.components.body.text;
-    
+
     const newVariable = {
       id: Date.now(),
       name: `var${bodyVariables.length + 1}`,
       sample: ''
     };
-    
+
     // Insert variable at cursor position
     const variableText = `{{${bodyVariables.length + 1}}}`;
     const newBodyText = currentText.slice(0, startPos) + variableText + currentText.slice(endPos);
-    
+
     setBodyVariables(prev => [...prev, newVariable]);
     handleBodyTextChange(newBodyText);
-    
+
     // Set cursor position after the inserted variable
     setTimeout(() => {
       textarea.focus();
@@ -493,7 +502,7 @@ function TemplateEdit() {
 
   // Update body variable sample
   const updateBodyVariable = (id, sample) => {
-    setBodyVariables(prev => prev.map(v => 
+    setBodyVariables(prev => prev.map(v =>
       v.id === id ? { ...v, sample } : v
     ));
   };
@@ -504,7 +513,7 @@ function TemplateEdit() {
     if (variable) {
       const varIndex = bodyVariables.findIndex(v => v.id === id);
       const varNumber = varIndex + 1;
-      
+
       // Remove variable from body text
       const newBodyText = formData.components.body.text.replace(new RegExp(`\\{\\{${varNumber}\\}\\}`, 'g'), '');
       handleBodyTextChange(newBodyText);
@@ -531,13 +540,13 @@ function TemplateEdit() {
     const textarea = textareaRef.current;
     const startPos = textarea.selectionStart;
     const endPos = textarea.selectionEnd;
-    
+
     if (startPos === endPos) return;
-    
+
     let formattedText = '';
     const selected = formData.components.body.text.slice(startPos, endPos);
-    
-    switch(format) {
+
+    switch (format) {
       case 'bold':
         formattedText = `*${selected}*`;
         break;
@@ -553,13 +562,13 @@ function TemplateEdit() {
       default:
         formattedText = selected;
     }
-    
-    const newBodyText = formData.components.body.text.slice(0, startPos) + 
-                        formattedText + 
-                        formData.components.body.text.slice(endPos);
-    
+
+    const newBodyText = formData.components.body.text.slice(0, startPos) +
+      formattedText +
+      formData.components.body.text.slice(endPos);
+
     handleBodyTextChange(newBodyText);
-    
+
     // Set cursor position after the formatted text
     setTimeout(() => {
       textarea.focus();
@@ -616,7 +625,7 @@ function TemplateEdit() {
         ...prev.components,
         buttons: {
           ...prev.components.buttons,
-          buttons: prev.components.buttons.buttons.map((btn, i) => 
+          buttons: prev.components.buttons.buttons.map((btn, i) =>
             i === index ? { ...btn, [field]: value } : btn
           )
         }
@@ -633,10 +642,10 @@ function TemplateEdit() {
         ...prev.components,
         buttons: {
           ...prev.components.buttons,
-          buttons: prev.components.buttons.buttons.map((btn, i) => 
-            i === index ? { 
-              ...btn, 
-              example: [...currentExamples, ''] 
+          buttons: prev.components.buttons.buttons.map((btn, i) =>
+            i === index ? {
+              ...btn,
+              example: [...currentExamples, '']
             } : btn
           )
         }
@@ -652,9 +661,9 @@ function TemplateEdit() {
         ...prev.components,
         buttons: {
           ...prev.components.buttons,
-          buttons: prev.components.buttons.buttons.map((btn, i) => 
-            i === buttonIndex ? { 
-              ...btn, 
+          buttons: prev.components.buttons.buttons.map((btn, i) =>
+            i === buttonIndex ? {
+              ...btn,
               example: btn.example.map((ex, j) => j === exampleIndex ? value : ex)
             } : btn
           )
@@ -671,9 +680,9 @@ function TemplateEdit() {
         ...prev.components,
         buttons: {
           ...prev.components.buttons,
-          buttons: prev.components.buttons.buttons.map((btn, i) => 
-            i === buttonIndex ? { 
-              ...btn, 
+          buttons: prev.components.buttons.buttons.map((btn, i) =>
+            i === buttonIndex ? {
+              ...btn,
               example: btn.example.filter((_, j) => j !== exampleIndex)
             } : btn
           )
@@ -810,7 +819,7 @@ function TemplateEdit() {
           message: 'Template updated successfully!'
         });
         setShowSuccessPopup(true);
-        
+
         // Clear localStorage to force refresh of template list
         localStorage.removeItem('templatesData');
       } else {
@@ -854,7 +863,7 @@ function TemplateEdit() {
   // Format text for WhatsApp preview
   const formatTextForPreview = (text) => {
     if (!text) return '';
-    
+
     return text
       .replace(/\*(.*?)\*/g, '<strong>$1</strong>')
       .replace(/_(.*?)_/g, '<em>$1</em>')
@@ -865,9 +874,20 @@ function TemplateEdit() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
-        <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
-        <div className="pt-16 md:pl-64">
+        <Header
+          mobileMenuOpen={mobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
+          isMinimized={isMinimized}
+          setIsMinimized={setIsMinimized}
+        />
+        <Sidebar
+          mobileMenuOpen={mobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
+          isMinimized={isMinimized}
+          setIsMinimized={setIsMinimized}
+        />
+        <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
+          }`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
@@ -881,11 +901,22 @@ function TemplateEdit() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
-      <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+      <Header
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+        isMinimized={isMinimized}
+        setIsMinimized={setIsMinimized}
+      />
+      <Sidebar
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+        isMinimized={isMinimized}
+        setIsMinimized={setIsMinimized}
+      />
 
       {/* Main content */}
-      <div className="pt-16 md:pl-64">
+      <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
+        }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
           {/* Page header */}
           <div className="mb-6">
@@ -976,11 +1007,10 @@ function TemplateEdit() {
                         key={format.code}
                         type="button"
                         onClick={() => handleHeaderFormatChange(format.code)}
-                        className={`p-2 border rounded-md text-sm text-center ${
-                          formData.components.header.format === format.code
-                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                            : 'border-gray-300 hover:bg-gray-50'
-                        }`}
+                        className={`p-2 border rounded-md text-sm text-center ${formData.components.header.format === format.code
+                          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                          : 'border-gray-300 hover:bg-gray-50'
+                          }`}
                       >
                         {format.name}
                       </button>
@@ -994,7 +1024,7 @@ function TemplateEdit() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Header Content ({formData.components.header.format})
                     </label>
-                    
+
                     {formData.components.header.format === 'TEXT' && (
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
@@ -1020,7 +1050,7 @@ function TemplateEdit() {
                         <p className="text-xs text-gray-500">
                           {formData.components.header.text.length}/60 characters
                         </p>
-                        
+
                         {/* Header Variable - Only One Allowed */}
                         {headerVariable && (
                           <div className="p-3 bg-white border rounded-md">
@@ -1050,7 +1080,7 @@ function TemplateEdit() {
                         )}
                       </div>
                     )}
-                    
+
                     {(formData.components.header.format === 'IMAGE' || formData.components.header.format === 'VIDEO' || formData.components.header.format === 'DOCUMENT') && (
                       <div>
                         {formData.components.header.example.header_handle && formData.components.header.example.header_handle.length > 0 ? (
@@ -1091,9 +1121,9 @@ function TemplateEdit() {
                               onChange={handleHeaderMediaUpload}
                               disabled={isUploading}
                               accept={
-                                formData.components.header.format === 'IMAGE' ? 'image/*' : 
-                                formData.components.header.format === 'VIDEO' ? 'video/*' : 
-                                '*'
+                                formData.components.header.format === 'IMAGE' ? 'image/*' :
+                                  formData.components.header.format === 'VIDEO' ? 'video/*' :
+                                    '*'
                               }
                             />
                           </label>
@@ -1126,7 +1156,7 @@ function TemplateEdit() {
                     onChange={(e) => handleBodyTextChange(e.target.value)}
                     required
                   ></textarea>
-                  
+
                   {/* Text formatting toolbar */}
                   <div className="mt-2 flex space-x-2">
                     <button
@@ -1162,11 +1192,11 @@ function TemplateEdit() {
                       <FiCode size={16} />
                     </button>
                   </div>
-                  
+
                   <p className="mt-1 text-xs text-gray-500">
                     Use variables like {`{{1}}`} to personalize your message. Select text and use formatting buttons.
                   </p>
-                  
+
                   {/* Body Variables */}
                   {bodyVariables.length > 0 && (
                     <div className="mt-3 space-y-2">
@@ -1228,7 +1258,7 @@ function TemplateEdit() {
                       {formData.components.buttons.buttons.length}/3 added
                     </span>
                   </div>
-                  
+
                   {/* Button selection */}
                   <div className="grid grid-cols-2 gap-2 mb-4">
                     {buttonTypes.map(btn => (
@@ -1244,7 +1274,7 @@ function TemplateEdit() {
                       </button>
                     ))}
                   </div>
-                  
+
                   {/* Added buttons */}
                   <div className="space-y-3">
                     {formData.components.buttons.buttons.map((btn, index) => (
@@ -1261,7 +1291,7 @@ function TemplateEdit() {
                             <FiX size={16} />
                           </button>
                         </div>
-                        
+
                         {/* Button Text */}
                         <input
                           type="text"
@@ -1270,7 +1300,7 @@ function TemplateEdit() {
                           value={btn.text}
                           onChange={e => updateButton(index, 'text', e.target.value)}
                         />
-                        
+
                         {/* Phone Number Button */}
                         {btn.type === 'PHONE_NUMBER' && (
                           <input
@@ -1281,7 +1311,7 @@ function TemplateEdit() {
                             onChange={e => updateButton(index, 'phone_number', e.target.value)}
                           />
                         )}
-                        
+
                         {/* URL Button */}
                         {btn.type === 'URL' && (
                           <div className="space-y-2">
@@ -1322,7 +1352,7 @@ function TemplateEdit() {
                             ))}
                           </div>
                         )}
-                        
+
                         {/* Copy Code Button */}
                         {btn.type === 'COPY_CODE' && (
                           <div className="space-y-2">
@@ -1376,7 +1406,7 @@ function TemplateEdit() {
             {/* Preview section */}
             <div className="bg-white shadow rounded-lg p-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">WhatsApp Preview</h3>
-              
+
               <div className="bg-gray-100 p-4 rounded-lg">
                 <div className="bg-white rounded-lg shadow-md max-w-xs mx-auto overflow-hidden">
                   {/* Header */}
@@ -1385,40 +1415,40 @@ function TemplateEdit() {
                       {formData.components.header.format === 'TEXT' && formData.components.header.text && (
                         <div className="p-3 bg-indigo-50">
                           <p className="text-sm font-medium text-indigo-800">
-                            {headerVariable 
+                            {headerVariable
                               ? generatePreviewText(formData.components.header.text, [headerVariable])
                               : formData.components.header.text
                             }
                           </p>
                         </div>
                       )}
-                      
-                      {formData.components.header.example.header_handle && 
-                       formData.components.header.example.header_handle.length > 0 && 
-                       formData.components.header.format !== 'TEXT' && (
-                        <div className="h-48 bg-gray-200 overflow-hidden relative">
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <FiPaperclip className="text-3xl text-gray-600" />
+
+                      {formData.components.header.example.header_handle &&
+                        formData.components.header.example.header_handle.length > 0 &&
+                        formData.components.header.format !== 'TEXT' && (
+                          <div className="h-48 bg-gray-200 overflow-hidden relative">
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <FiPaperclip className="text-3xl text-gray-600" />
+                            </div>
+                            <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
+                              {formData.components.header.format}
+                            </div>
                           </div>
-                          <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
-                            {formData.components.header.format}
-                          </div>
-                        </div>
-                      )}
+                        )}
                     </div>
                   )}
-                  
+
                   {/* Body */}
                   <div className="p-4">
-                    <div 
+                    <div
                       className="text-sm text-gray-800 whitespace-pre-wrap break-words"
-                      dangerouslySetInnerHTML={{ 
-                        __html: bodyVariables.length > 0 
-                          ? formatTextForPreview(generatePreviewText(formData.components.body.text, bodyVariables)) 
+                      dangerouslySetInnerHTML={{
+                        __html: bodyVariables.length > 0
+                          ? formatTextForPreview(generatePreviewText(formData.components.body.text, bodyVariables))
                           : formatTextForPreview(formData.components.body.text) || "This is a preview of your template message. The actual content will appear here."
                       }}
                     ></div>
-                    
+
                     {/* Buttons preview */}
                     {formData.components.buttons.buttons.length > 0 && (
                       <div className="mt-4 space-y-2">
@@ -1432,7 +1462,7 @@ function TemplateEdit() {
                       </div>
                     )}
                   </div>
-                  
+
                   {/* Footer */}
                   {formData.components.footer.text && (
                     <div className="p-3 bg-gray-50 border-t border-gray-200">
@@ -1441,7 +1471,7 @@ function TemplateEdit() {
                   )}
                 </div>
               </div>
-              
+
               <div className="mt-4 text-sm text-gray-600">
                 <p className="font-medium">Edit Guidelines:</p>
                 <ul className="list-disc pl-5 mt-1 space-y-1">
@@ -1460,14 +1490,14 @@ function TemplateEdit() {
                     category: formData.category || 'CATEGORY',
                     components: (() => {
                       const comps = [];
-                      
+
                       // Header component
                       if (formData.components.header.format !== 'NONE') {
                         const headerComp = {
                           type: 'HEADER',
                           format: formData.components.header.format
                         };
-                        
+
                         if (formData.components.header.format === 'TEXT') {
                           headerComp.text = formData.components.header.text;
                           if (headerVariable && headerVariable.sample) {
@@ -1480,14 +1510,14 @@ function TemplateEdit() {
                         }
                         comps.push(headerComp);
                       }
-                      
+
                       // Body component
                       if (formData.components.body.text) {
                         const bodyComp = {
                           type: 'BODY',
                           text: formData.components.body.text
                         };
-                        
+
                         if (bodyVariables.length > 0) {
                           const bodySamples = bodyVariables.map(v => v.sample || '');
                           bodyComp.example = {
@@ -1496,7 +1526,7 @@ function TemplateEdit() {
                         }
                         comps.push(bodyComp);
                       }
-                      
+
                       // Buttons component
                       if (formData.components.buttons.buttons.length > 0) {
                         comps.push({
@@ -1533,7 +1563,7 @@ function TemplateEdit() {
                           })
                         });
                       }
-                      
+
                       // Footer component
                       if (formData.components.footer.text) {
                         comps.push({
@@ -1541,7 +1571,7 @@ function TemplateEdit() {
                           text: formData.components.footer.text
                         });
                       }
-                      
+
                       return comps;
                     })()
                   }, null, 2)}

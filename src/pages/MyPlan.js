@@ -10,9 +10,18 @@ function MyPlan() {
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [billingCycle, setBillingCycle] = useState('monthly'); // 'monthly' or 'yearly'
     const [loading, setLoading] = useState(true);
-    
+
     // Ref for the payment section to scroll to
     const paymentSectionRef = useRef(null);
+
+    const [isMinimized, setIsMinimized] = useState(() => {
+        const saved = localStorage.getItem('sidebarMinimized');
+        return saved ? JSON.parse(saved) : false;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
+    }, [isMinimized]);
 
     // Prevent background scrolling when mobile menu is open
     useEffect(() => {
@@ -107,7 +116,7 @@ function MyPlan() {
                 ];
 
                 setPlans(mockPlans);
-                
+
                 // Set active plan (simulate that Premium is the current active plan)
                 setActivePlan(mockPlans[1]);
                 setSelectedPlan(mockPlans[1]);
@@ -124,13 +133,13 @@ function MyPlan() {
     const handlePlanSelect = (plan) => {
         const previousSelection = selectedPlan;
         setSelectedPlan(plan);
-        
+
         // Only scroll if the selection changed and it's not the active plan
         if (previousSelection?.id !== plan.id && activePlan?.id !== plan.id) {
             // Use setTimeout to ensure state update is processed before scrolling
             setTimeout(() => {
                 if (paymentSectionRef.current) {
-                    paymentSectionRef.current.scrollIntoView({ 
+                    paymentSectionRef.current.scrollIntoView({
                         behavior: 'smooth',
                         block: 'center'
                     });
@@ -152,14 +161,13 @@ function MyPlan() {
         const price = billingCycle === 'monthly' ? plan.priceMonthly : plan.priceYearly;
         const billingText = billingCycle === 'monthly' ? 'monthly' : 'yearly';
         const isSelected = selectedPlan && selectedPlan.id === plan.id;
-        
+
         return (
-            <div 
-                className={`relative border rounded-lg p-6 cursor-pointer transition-all duration-200 ${
-                    isActive ? 'border-indigo-500 ring-2 ring-indigo-500' : 
-                    isSelected ? 'border-indigo-400 ring-1 ring-indigo-400' : 
-                    'border-gray-200 hover:border-indigo-300'
-                } ${plan.popular ? 'bg-indigo-50' : 'bg-white'}`}
+            <div
+                className={`relative border rounded-lg p-6 cursor-pointer transition-all duration-200 ${isActive ? 'border-indigo-500 ring-2 ring-indigo-500' :
+                    isSelected ? 'border-indigo-400 ring-1 ring-indigo-400' :
+                        'border-gray-200 hover:border-indigo-300'
+                    } ${plan.popular ? 'bg-indigo-50' : 'bg-white'}`}
                 onClick={() => onSelect(plan)}
             >
                 {plan.popular && (
@@ -167,15 +175,15 @@ function MyPlan() {
                         MOST POPULAR
                     </div>
                 )}
-                
+
                 {isActive && (
                     <div className="absolute top-2 left-2 bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded">
                         CURRENT PLAN
                     </div>
                 )}
-                
+
                 <h3 className="text-xl font-bold text-gray-900 mb-2">{plan.name}</h3>
-                
+
                 {plan.custom ? (
                     <div className="my-4">
                         <p className="text-gray-700">Custom Pricing</p>
@@ -189,7 +197,7 @@ function MyPlan() {
                         )}
                     </div>
                 )}
-                
+
                 <ul className="space-y-3 mb-6">
                     {plan.features.map((feature, index) => (
                         <li key={index} className="flex items-start">
@@ -198,12 +206,11 @@ function MyPlan() {
                         </li>
                     ))}
                 </ul>
-                
-                <div className={`px-4 py-2 text-center rounded-md font-medium ${
-                    isActive ? 'bg-gray-200 text-gray-700' : 
-                    isSelected ? 'bg-indigo-600 text-white' : 
-                    'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
-                }`}>
+
+                <div className={`px-4 py-2 text-center rounded-md font-medium ${isActive ? 'bg-gray-200 text-gray-700' :
+                    isSelected ? 'bg-indigo-600 text-white' :
+                        'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                    }`}>
                     {isActive ? 'Current Plan' : isSelected ? 'Selected' : 'Select Plan'}
                 </div>
             </div>
@@ -212,11 +219,22 @@ function MyPlan() {
 
     return (
         <div className="min-h-screen bg-gray-50">
-            <Header mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
-            <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+            <Header
+                mobileMenuOpen={mobileMenuOpen}
+                setMobileMenuOpen={setMobileMenuOpen}
+                isMinimized={isMinimized}
+                setIsMinimized={setIsMinimized}
+            />
+            <Sidebar
+                mobileMenuOpen={mobileMenuOpen}
+                setMobileMenuOpen={setMobileMenuOpen}
+                isMinimized={isMinimized}
+                setIsMinimized={setIsMinimized}
+            />
 
             {/* Main content */}
-            <div className="pt-16 md:pl-64">
+            <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
+                }`}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
                     {/* Page header */}
                     <div className="md:flex md:items-center md:justify-between mb-6">
@@ -236,22 +254,20 @@ function MyPlan() {
                             <button
                                 type="button"
                                 onClick={() => handleBillingCycleChange('monthly')}
-                                className={`px-4 py-2 text-sm font-medium rounded-l-lg border ${
-                                    billingCycle === 'monthly'
-                                        ? 'bg-indigo-100 text-indigo-700 border-indigo-500'
-                                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
-                                }`}
+                                className={`px-4 py-2 text-sm font-medium rounded-l-lg border ${billingCycle === 'monthly'
+                                    ? 'bg-indigo-100 text-indigo-700 border-indigo-500'
+                                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
+                                    }`}
                             >
                                 Monthly Billing
                             </button>
                             <button
                                 type="button"
                                 onClick={() => handleBillingCycleChange('yearly')}
-                                className={`px-4 py-2 text-sm font-medium rounded-r-lg border ${
-                                    billingCycle === 'yearly'
-                                        ? 'bg-indigo-100 text-indigo-700 border-indigo-500'
-                                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
-                                }`}
+                                className={`px-4 py-2 text-sm font-medium rounded-r-lg border ${billingCycle === 'yearly'
+                                    ? 'bg-indigo-100 text-indigo-700 border-indigo-500'
+                                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
+                                    }`}
                             >
                                 Yearly Billing (Save 16%)
                             </button>
@@ -308,7 +324,7 @@ function MyPlan() {
                                             )}
                                         </p>
                                     </div>
-                                    
+
                                     {activePlan && activePlan.id !== selectedPlan.id && (
                                         <div className="mt-4 md:mt-0">
                                             <button
@@ -320,7 +336,7 @@ function MyPlan() {
                                             </button>
                                         </div>
                                     )}
-                                    
+
                                     {activePlan && activePlan.id === selectedPlan.id && (
                                         <div className="mt-4 md:mt-0">
                                             <div className="inline-flex items-center px-4 py-2 border border-transparent rounded-md text-sm font-medium text-gray-700 bg-gray-100">
@@ -330,12 +346,12 @@ function MyPlan() {
                                         </div>
                                     )}
                                 </div>
-                                
+
                                 {activePlan && activePlan.id !== selectedPlan.id && (
                                     <div className="mt-4 p-4 bg-yellow-50 rounded-md">
                                         <p className="text-sm text-yellow-800">
                                             You are about to change your subscription from {activePlan.name} to {selectedPlan.name} plan.
-                                            {!selectedPlan.custom && ` This will cost ${billingCycle === 'monthly' 
+                                            {!selectedPlan.custom && ` This will cost ${billingCycle === 'monthly'
                                                 ? `${selectedPlan.priceMonthly.toLocaleString()} ${selectedPlan.currency} per month`
                                                 : `${selectedPlan.priceYearly.toLocaleString()} ${selectedPlan.currency} per year`}.`}
                                         </p>

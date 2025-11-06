@@ -33,6 +33,15 @@ function Template() {
   const [statusFilter, setStatusFilter] = useState('');
   const [tokens, setTokens] = useState(null);
 
+  const [isMinimized, setIsMinimized] = useState(() => {
+    const saved = localStorage.getItem('sidebarMinimized');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
+  }, [isMinimized]);
+
   // Get user tokens from localStorage
   useEffect(() => {
     const userData = localStorage.getItem('userData');
@@ -149,11 +158,22 @@ function Template() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
-      <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+      <Header
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+        isMinimized={isMinimized}
+        setIsMinimized={setIsMinimized}
+      />
+      <Sidebar
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+        isMinimized={isMinimized}
+        setIsMinimized={setIsMinimized}
+      />
 
       {/* Main content */}
-      <div className="pt-16 md:pl-64">
+      <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
+        }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
           {/* Page header */}
           <div className="md:flex md:items-center md:justify-between mb-6">
@@ -186,7 +206,7 @@ function Template() {
                 Refresh
               </button>
               <Link
-               to={'../template-add'}
+                to={'../template-add'}
                 type="button"
                 className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
@@ -284,9 +304,9 @@ function Template() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                            ${template.status === 'APPROVED' ? 'bg-green-100 text-green-800' : 
-                              template.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : 
-                              'bg-red-100 text-red-800'}`}>
+                            ${template.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
+                              template.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-red-100 text-red-800'}`}>
                             {template.status}
                           </span>
                         </td>
@@ -298,7 +318,7 @@ function Template() {
                             {/* <button className="text-indigo-600 hover:text-indigo-900">
                               <FiDownload size={18} />
                             </button> */}
-                            <Link 
+                            <Link
                               to={`/template-edit/${template.id}`}
                               className="text-gray-600 hover:text-gray-900"
                               title="Edit Template"
@@ -344,21 +364,21 @@ function Template() {
                           <span className="sr-only">Previous</span>
                           <FiChevronLeft className="h-5 w-5" aria-hidden="true" />
                         </button>
-                        
+
                         {/* Page numbers */}
                         {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                           <button
                             key={page}
                             onClick={() => paginate(page)}
                             className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium
-                              ${currentPage === page 
-                                ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600' 
+                              ${currentPage === page
+                                ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
                                 : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'}`}
                           >
                             {page}
                           </button>
                         ))}
-                        
+
                         <button
                           onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
                           disabled={currentPage === totalPages}
@@ -370,7 +390,7 @@ function Template() {
                         </button>
                       </nav>
                     )}
-                    
+
                     {/* Load More button */}
                     {hasMore && (
                       <button

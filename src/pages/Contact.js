@@ -61,6 +61,15 @@ function Contact() {
     remark: ''
   });
 
+  const [isMinimized, setIsMinimized] = useState(() => {
+    const saved = localStorage.getItem('sidebarMinimized');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
+  }, [isMinimized]);
+
   // Initialize database and load auth tokens
   useEffect(() => {
     const initializeApp = async () => {
@@ -531,10 +540,21 @@ function Contact() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
-      <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+      <Header
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+        isMinimized={isMinimized}
+        setIsMinimized={setIsMinimized}
+      />
+      <Sidebar
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+        isMinimized={isMinimized}
+        setIsMinimized={setIsMinimized}
+      />
 
-      <div className="md:ml-64 pt-16">
+      <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
+        }`}>
         <div className="p-4 sm:p-6 md:p-8">
           {/* Header Section */}
           <div className="mb-8">
@@ -556,8 +576,8 @@ function Contact() {
                 <button
                   onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
                   className={`inline-flex items-center px-4 py-2 border rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${showFavoritesOnly
-                      ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
-                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                    ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   <FiFilter className="mr-2 h-4 w-4 text-sm" />
@@ -684,15 +704,15 @@ function Contact() {
                                   >
                                     <FiEdit className="h-4 w-4" />
                                   </button>
-                                      <button
+                                  <button
                                     onClick={() => handleToggleFavorite(contact)}
                                     className="ml-2 p-1 rounded-full hover:bg-gray-100 transition-colors"
                                     title={favoriteContacts.has(contact.id) ? 'Remove from favorites' : 'Add to favorites'}
                                   >
                                     <FiStar
                                       className={`h-4 w-4 ${favoriteContacts.has(contact.id)
-                                          ? 'text-yellow-400 fill-current'
-                                          : 'text-gray-300 hover:text-yellow-400'
+                                        ? 'text-yellow-400 fill-current'
+                                        : 'text-gray-300 hover:text-yellow-400'
                                         }`}
                                     />
                                   </button>

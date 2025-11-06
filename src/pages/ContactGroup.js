@@ -56,6 +56,15 @@ function ContactGroup() {
     const showBulkActions = selectedGroups.length > 0;
     const [showBulkDropdown, setShowBulkDropdown] = useState(false);
 
+    const [isMinimized, setIsMinimized] = useState(() => {
+        const saved = localStorage.getItem('sidebarMinimized');
+        return saved ? JSON.parse(saved) : false;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
+    }, [isMinimized]);
+
     // Prevent background scrolling when mobile menu is open
     useEffect(() => {
         if (mobileMenuOpen) {
@@ -279,8 +288,18 @@ function ContactGroup() {
 
     return (
         <div className="min-h-screen bg-gray-50">
-            <Header mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
-            <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+            <Header
+                mobileMenuOpen={mobileMenuOpen}
+                setMobileMenuOpen={setMobileMenuOpen}
+                isMinimized={isMinimized}
+                setIsMinimized={setIsMinimized}
+            />
+            <Sidebar
+                mobileMenuOpen={mobileMenuOpen}
+                setMobileMenuOpen={setMobileMenuOpen}
+                isMinimized={isMinimized}
+                setIsMinimized={setIsMinimized}
+            />
 
             {/* Delete Confirmation Modal */}
             <Modal
@@ -474,7 +493,8 @@ function ContactGroup() {
             </Modal>
 
             {/* Main content */}
-            <div className="pt-16 md:pl-64">
+            <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
+                }`}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
                     {/* Page header */}
                     <div className="md:flex md:items-center md:justify-between mb-6">
@@ -609,8 +629,8 @@ function ContactGroup() {
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className={`px-2 py-1 text-xs font-medium rounded-full 
-                                                        ${group.status === 'Active' 
-                                                            ? 'bg-green-100 text-green-800' 
+                                                        ${group.status === 'Active'
+                                                            ? 'bg-green-100 text-green-800'
                                                             : 'bg-red-100 text-red-800'
                                                         }`}>
                                                         {group.status}
@@ -707,7 +727,7 @@ function ContactGroup() {
 
             {/* CSS for animations */}
             <style jsx>
-            {`
+                {`
                 @keyframes modalIn {
                 0% {
                     transform: scale(0.95);

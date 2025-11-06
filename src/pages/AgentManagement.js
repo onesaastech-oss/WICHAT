@@ -28,63 +28,188 @@ import {
     FiKey,
     FiLock
 } from 'react-icons/fi';
+import { Encrypt } from './encryption/payload-encryption';
+import axios from 'axios';
+import { LuRefreshCcwDot } from 'react-icons/lu';
+import { MdEdit } from 'react-icons/md';
+
+// Modal component outside to prevent rerenders
+const Modal = ({ isOpen, onClose, title, children, actions, size = 'md' }) => {
+    if (!isOpen) return null;
+
+    const sizeClasses = {
+        sm: 'max-w-md',
+        md: 'max-w-2xl',
+        lg: 'max-w-4xl',
+        xl: 'max-w-6xl'
+    };
+
+    return (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+            <div className={`relative mx-auto p-5 border w-full ${sizeClasses[size]} shadow-lg rounded-md bg-white transform transition-all duration-300 scale-95 opacity-0 animate-modal-in`}>
+                <div className="mt-3">
+                    <div className="flex items-center justify-between pb-3 border-b">
+                        <h3 className="text-lg leading-6 font-medium text-gray-900">
+                            {title}
+                        </h3>
+                        <button
+                            onClick={onClose}
+                            className="text-gray-400 hover:text-gray-500 focus:outline-none"
+                        >
+                            <FiX className="h-5 w-5" />
+                        </button>
+                    </div>
+                    <div className="mt-4 max-h-96 overflow-y-auto">
+                        {children}
+                    </div>
+                    <div className="items-center px-4 py-3 mt-4 flex justify-end space-x-4 border-t">
+                        {actions}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Add Agent Form Component - Updated with fetch button and agent details preview
+const AddAgentForm = React.memo(({
+    newAgent,
+    formErrors,
+    addingAgent,
+    fetchingAgent,
+    fetchedAgent,
+    onInputChange,
+    permissionOptions,
+    onFetchAgent
+}) => (
+    <div className="px-4 py-3 space-y-4">
+        <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+            <div className="flex space-x-2">
+                <input
+                    type="email"
+                    name="email"
+                    value={newAgent.email}
+                    onChange={onInputChange}
+                    className={`flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.email ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                    placeholder="Enter agent's email"
+                    disabled={addingAgent || fetchingAgent}
+                />
+                <button
+                    onClick={onFetchAgent}
+                    disabled={!newAgent.email || fetchingAgent || addingAgent}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {fetchingAgent ? (
+                        <div className="flex items-center">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Fetching...
+                        </div>
+                    ) : (
+                        'Fetch'
+                    )}
+                </button>
+            </div>
+            {formErrors.email && <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>}
+            <p className="mt-1 text-xs text-gray-500">
+                Enter the email address of the agent and click "Fetch" to get their details
+            </p>
+        </div>
+
+        {/* Agent Details Preview */}
+        {fetchedAgent && (
+            <div className="border rounded-lg p-4 bg-gray-50">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Agent Details</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    <div>
+                        <span className="font-medium">Name:</span> {fetchedAgent.name}
+                    </div>
+                    <div>
+                        <span className="font-medium">Mobile:</span> {fetchedAgent.mobile}
+                    </div>
+                    <div>
+                        <span className="font-medium">Status:</span>
+                        <span className={`ml-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${fetchedAgent.status ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            {fetchedAgent.status ? 'Active' : 'Inactive'}
+                        </span>
+                    </div>
+                    <div>
+                        <span className="font-medium">Email ID:</span> {fetchedAgent.email}
+                    </div>
+                </div>
+            </div>
+        )}
+
+        <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Permission Level *</label>
+            <select
+                name="permission_id"
+                value={newAgent.permission}
+                onChange={onInputChange}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.permission ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                disabled={addingAgent || !fetchedAgent}
+                required
+            >
+                {permissionOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                        {option.label}
+                    </option>
+                ))}
+            </select>
+            {formErrors.permission && <p className="mt-1 text-sm text-red-600">{formErrors.permission}</p>}
+            {!fetchedAgent && (
+                <p className="mt-1 text-xs text-yellow-600">
+                    Please fetch agent details first to select permission level
+                </p>
+            )}
+        </div>
+    </div>
+));
 
 function AgentManagement() {
+    const [tokens, setTokens] = useState(null);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
+    const [permissionOptions, setPermissionOptions] = useState([]);
 
     // Modal states
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showAddModal, setShowAddModal] = useState(false);
-    const [showEditModal, setShowEditModal] = useState(false);
     const [showViewModal, setShowViewModal] = useState(false);
+    const [showPermissionModal, setShowPermissionModal] = useState(false);
     const [currentAgent, setCurrentAgent] = useState(null);
 
     // Form states
     const [newAgent, setNewAgent] = useState({
-        firstName: '',
-        lastName: '',
-        mobileNumber: '',
-        username: '',
         email: '',
-        password: '',
-        permissions: {
-            administrative: {
-                configuration: false,
-                subscription: false,
-                teamMembers: false
-            },
-            manageContacts: {
-                manageContacts: false,
-                groups: false,
-                customContactFields: false
-            },
-            manageCampaigns: {
-                createCampaigns: false,
-                executeCampaigns: false,
-                scheduleCampaigns: false
-            },
-            messaging: {
-                chat: false,
-                syncTemplates: false
-            },
-            manageTemplates: {
-                createTemplates: false,
-                editTemplates: false,
-                deleteTemplates: false
-            },
-            assignedChatOnly: false,
-            manageBotReplies: {
-                botReplies: false,
-                flows: false
-            }
-        }
+        permission_id: ''
     });
 
+    // Delete confirmation state
+    const [deleteEmail, setDeleteEmail] = useState('');
+    const [deleteError, setDeleteError] = useState('');
+
+    // Loading state for add agent
+    const [addingAgent, setAddingAgent] = useState(false);
+    const [fetchingAgent, setFetchingAgent] = useState(false);
+    const [fetchedAgent, setFetchedAgent] = useState(null);
+
+    const [selectedPermission, setSelectedPermission] = useState('');
     const [formErrors, setFormErrors] = useState({});
+
+    const [isMinimized, setIsMinimized] = useState(() => {
+        const saved = localStorage.getItem('sidebarMinimized');
+        return saved ? JSON.parse(saved) : false;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
+    }, [isMinimized]);
 
     // Prevent background scrolling when mobile menu is open
     useEffect(() => {
@@ -98,65 +223,184 @@ function AgentManagement() {
         };
     }, [mobileMenuOpen]);
 
-    // Fetch agents data (simulated)
-    useEffect(() => {
-        const fetchAgents = async () => {
-            setLoading(true);
-            try {
-                await new Promise(resolve => setTimeout(resolve, 1500));
+    const fetchPermissions = async () => {
+        try {
+            const payload = {
+                project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+            };
 
-                // Mock data for agents
-                const mockAgents = [
-                    { 
-                        id: 1, 
-                        firstName: 'John', 
-                        lastName: 'Doe', 
-                        mobileNumber: '+1234567890', 
-                        username: 'johndoe',
-                        email: 'john@example.com',
-                        password: 'hashedpassword',
-                        permissions: {
-                            administrative: { configuration: true, subscription: false, teamMembers: true },
-                            manageContacts: { manageContacts: true, groups: true, customContactFields: false },
-                            manageCampaigns: { createCampaigns: true, executeCampaigns: true, scheduleCampaigns: false },
-                            messaging: { chat: true, syncTemplates: true },
-                            manageTemplates: { createTemplates: false, editTemplates: true, deleteTemplates: false },
-                            assignedChatOnly: true,
-                            manageBotReplies: { botReplies: false, flows: true }
-                        },
-                        createdOn: '2023-06-15' 
-                    },
-                    { 
-                        id: 2, 
-                        firstName: 'Jane', 
-                        lastName: 'Smith', 
-                        mobileNumber: '+441234567890', 
-                        username: 'janesmith',
-                        email: 'jane@example.com',
-                        password: 'hashedpassword',
-                        permissions: {
-                            administrative: { configuration: false, subscription: false, teamMembers: false },
-                            manageContacts: { manageContacts: true, groups: false, customContactFields: false },
-                            manageCampaigns: { createCampaigns: false, executeCampaigns: true, scheduleCampaigns: false },
-                            messaging: { chat: true, syncTemplates: false },
-                            manageTemplates: { createTemplates: false, editTemplates: false, deleteTemplates: false },
-                            assignedChatOnly: false,
-                            manageBotReplies: { botReplies: false, flows: false }
-                        },
-                        createdOn: '2023-06-10' 
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            const response = await axios.post(
+                'https://api.w1chat.com/permission/list',
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
                     }
-                ];
+                }
+            );
 
-                setAgents(mockAgents);
-            } catch (error) {
-                console.error('Failed to fetch agents:', error);
-            } finally {
-                setLoading(false);
+            const res_data = response.data;
+
+            var arr = [
+                {
+                    value: '',
+                    label: '-Select-'
+                }
+            ];
+            if (res_data?.data && res_data?.data.length > 0) {
+                res_data?.data.forEach(element => {
+                    arr.push({
+                        value: element.permission_id,
+                        label: element.name,
+                    })
+                });
             }
-        };
 
-        fetchAgents();
+            setPermissionOptions(arr)
+
+        } catch (error) {
+            alert('Failed to load permission list');
+        }
+    };
+
+    const fetchAgents = async () => {
+        setLoading(true);
+        try {
+            const payload = {
+                project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+            };
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            const response = await axios.post(
+                'https://api.w1chat.com/agent/list',
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            const res_data = response.data;
+            console.log(res_data);
+
+            if (res_data.error) {
+                alert(res_data.error);
+            }
+
+            if (res_data.data && res_data.count > 0) {
+                setAgents(res_data.data);
+            }
+
+            setLoading(false);
+
+        } catch (error) {
+            alert('Failed to load agent list');
+        }
+    };
+
+    // Fetch agent by email - UPDATED to use your API
+    const fetchAgentByEmail = async (email) => {
+        try {
+            const payload = {
+                project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+                email: email
+            };
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            const response = await axios.post(
+                'https://api.w1chat.com/agent/fetch-agent', // Updated endpoint
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            const res_data = response.data;
+
+            if (res_data.error) {
+                throw new Error(res_data.error);
+            }
+
+            if (res_data.data) {
+                return res_data.data; // Return the first agent found
+            }
+            return null;
+        } catch (error) {
+            console.error('Failed to fetch agent by email:', error);
+            throw error;
+        }
+    };
+
+    // Fetch agent by mapping_id for view modal
+    const fetchAgentByMappingId = async (mappingId) => {
+        try {
+            const payload = {
+                project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+                mapping_id: mappingId
+            };
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            const response = await axios.post(
+                'https://api.w1chat.com/agent/mapping', // Assuming this endpoint exists
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            const res_data = response.data;
+
+            if (res_data.error) {
+                throw new Error(res_data.error);
+            }
+
+            if (res_data.data && res_data.data.length > 0) {
+                return res_data.data[0];
+            }
+            return null;
+        } catch (error) {
+            console.error('Failed to fetch agent by mapping ID:', error);
+            // Fallback to local data if API fails
+            return agents.find(agent => agent.mapping_id === mappingId) || null;
+        }
+    };
+
+    useEffect(() => {
+        const userData = localStorage.getItem('userData');
+        if (userData) {
+            const parsedData = JSON.parse(userData);
+            setTokens(parsedData);
+        }
     }, []);
+
+    useEffect(() => {
+        if (tokens) {
+            fetchAgents();
+            fetchPermissions();
+        }
+    }, [tokens]);
 
     // Get current agents for pagination
     const indexOfLastItem = currentPage * itemsPerPage;
@@ -170,693 +414,485 @@ function AgentManagement() {
     };
 
     // Handle delete agent
-    const handleDeleteAgent = (agentId) => {
-        setCurrentAgent(agents.find(agent => agent.id === agentId));
+    const handleDeleteAgent = (agentEmail) => {
+        setCurrentAgent(agents.find(agent => agent.email === agentEmail));
+        setDeleteEmail('');
+        setDeleteError('');
         setShowDeleteModal(true);
     };
 
+    // Handle delete email input change
+    const handleDeleteEmailChange = (e) => {
+        const value = e.target.value;
+        setDeleteEmail(value);
+
+        if (currentAgent && value !== currentAgent.email) {
+            setDeleteError('Email does not match');
+        } else {
+            setDeleteError('');
+        }
+    };
+
     // Confirm delete
-    const confirmDelete = () => {
-        setAgents(agents.filter(agent => agent.id !== currentAgent.id));
-        setShowDeleteModal(false);
-        setCurrentAgent(null);
+    const confirmDelete = async () => {
+        if (!currentAgent || deleteEmail !== currentAgent.email) {
+            setDeleteError('Please enter the correct email to confirm deletion');
+            return;
+        }
+
+
+        try {
+            const payload = {
+                project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+                mapping_id: currentAgent?.mapping_id,
+            };
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            const response = await axios.post(
+                'https://api.w1chat.com/agent/delete', // Assuming this endpoint exists
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            const res_data = response.data;
+            console.log(res_data);
+
+            if (res_data?.error) {
+                throw new Error(res_data?.error);
+            }
+
+            if (res_data?.msg) {
+                alert(res_data?.msg);
+                return null;
+            }
+        } catch (error) {
+            console.log('Failed to delete agent:', error);
+        } finally {
+            fetchAgents();
+            setShowDeleteModal(false);
+            setCurrentAgent(null);
+            setDeleteEmail('');
+            setDeleteError('');
+        }
     };
 
     // Handle add agent
     const handleAddAgent = () => {
         setNewAgent({
-            firstName: '',
-            lastName: '',
-            mobileNumber: '',
-            username: '',
             email: '',
-            password: '',
-            permissions: {
-                administrative: {
-                    configuration: false,
-                    subscription: false,
-                    teamMembers: false
-                },
-                manageContacts: {
-                    manageContacts: false,
-                    groups: false,
-                    customContactFields: false
-                },
-                manageCampaigns: {
-                    createCampaigns: false,
-                    executeCampaigns: false,
-                    scheduleCampaigns: false
-                },
-                messaging: {
-                    chat: false,
-                    syncTemplates: false
-                },
-                manageTemplates: {
-                    createTemplates: false,
-                    editTemplates: false,
-                    deleteTemplates: false
-                },
-                assignedChatOnly: false,
-                manageBotReplies: {
-                    botReplies: false,
-                    flows: false
-                }
-            }
+            permission_id: ''
         });
         setFormErrors({});
+        setFetchedAgent(null);
         setShowAddModal(true);
     };
 
-    // Handle edit agent
-    const handleEditAgent = (agent) => {
-        setCurrentAgent(agent);
-        setNewAgent({
-            firstName: agent.firstName,
-            lastName: agent.lastName,
-            mobileNumber: agent.mobileNumber,
-            username: agent.username,
-            email: agent.email,
-            password: agent.password,
-            permissions: {...agent.permissions}
-        });
+    // Handle fetch agent details
+    const handleFetchAgent = async () => {
+        if (!newAgent.email.trim()) {
+            setFormErrors({ email: 'Email is required' });
+            return;
+        }
+
+        setFetchingAgent(true);
         setFormErrors({});
-        setShowEditModal(true);
+
+        try {
+            const agentDetails = await fetchAgentByEmail(newAgent.email);
+
+            if (!agentDetails) {
+                setFormErrors({ email: 'No agent found with this email address' });
+                return;
+            }
+
+            // Check if agent already exists in the list
+            if (agents.some(agent => agent.email === newAgent.email)) {
+                setFormErrors({ email: 'Agent with this email already exists' });
+                return;
+            }
+
+            setFetchedAgent(agentDetails);
+        } catch (error) {
+            setFormErrors({ email: error.message || 'Failed to fetch agent details. Please try again.' });
+        } finally {
+            setFetchingAgent(false);
+        }
     };
 
-    // Handle view agent
-    const handleViewAgent = (agent) => {
+    // Handle view agent - UPDATED to filter by mapping_id
+    const handleViewAgent = async (agent) => {
+        try {
+            // Fetch the latest agent data by mapping_id
+            const agentDetails = await fetchAgentByMappingId(agent.mapping_id);
+            setCurrentAgent(agentDetails || agent); // Use fetched data or fallback to current agent data
+            setShowViewModal(true);
+        } catch (error) {
+            console.error('Failed to fetch agent details:', error);
+            // Fallback to the current agent data if API call fails
+            setCurrentAgent(agent);
+            setShowViewModal(true);
+        }
+    };
+
+    // Handle permission change
+    const handlePermissionChange = (agent) => {
         setCurrentAgent(agent);
-        setShowViewModal(true);
+        setSelectedPermission(agent?.permission?.permission_id);
+        setShowPermissionModal(true);
+    };
+
+    // Save permission change
+    const savePermissionChange = async () => {
+
+        if (selectedPermission == '') {
+            return;
+        }
+
+        try {
+            const payload = {
+                project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+                mapping_id: currentAgent?.mapping_id,
+                permission_id: selectedPermission
+            };
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            const response = await axios.post(
+                'https://api.w1chat.com/agent/change-permission', // Updated endpoint
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            const res_data = response.data;
+
+            if (res_data.error) {
+                throw new Error(res_data.error);
+            }
+
+            if (res_data.msg) {
+                fetchAgents();
+            }
+            return null;
+        } catch (error) {
+            console.error('Failed to fetch agent by email:', error);
+            throw error;
+        } finally {
+            setShowPermissionModal(false);
+            setCurrentAgent(null);
+        }
+
+
+
+
     };
 
     // Handle input change for forms
     const handleInputChange = useCallback((e) => {
-        const { name, value, type, checked } = e.target;
-        
-        // Handle nested permission fields
-        if (name.includes('.')) {
-            const [category, field] = name.split('.');
-            setNewAgent(prev => ({
-                ...prev,
-                permissions: {
-                    ...prev.permissions,
-                    [category]: {
-                        ...prev.permissions[category],
-                        [field]: type === 'checkbox' ? checked : value
-                    }
-                }
-            }));
-        } else {
-            setNewAgent(prev => ({
-                ...prev,
-                [name]: type === 'checkbox' ? checked : value
-            }));
-        }
+        const { name, value } = e.target;
+
+        setNewAgent(prev => ({
+            ...prev,
+            [name]: value
+        }));
 
         // Clear error when user starts typing
-        if (formErrors[name]) {
-            setFormErrors(prev => ({
-                ...prev,
-                [name]: ''
-            }));
+        setFormErrors(prev => ({
+            ...prev,
+            [name]: ''
+        }));
+
+        // Clear fetched agent when email changes
+        if (name === 'email') {
+            setFetchedAgent(null);
         }
-    }, [formErrors]);
+    }, []);
+
+    // Handle permission selection change
+    const handlePermissionSelectChange = useCallback((e) => {
+        setSelectedPermission(e.target.value);
+    }, []);
 
     // Validate form
     const validateForm = () => {
         const errors = {};
 
-        if (!newAgent.firstName.trim()) {
-            errors.firstName = 'First name is required';
-        }
-        if (!newAgent.lastName.trim()) {
-            errors.lastName = 'Last name is required';
-        }
-        if (!newAgent.mobileNumber.trim()) {
-            errors.mobileNumber = 'Mobile number is required';
-        } else if (!/^\+\d{1,15}$/.test(newAgent.mobileNumber)) {
-            errors.mobileNumber = 'Please enter a valid mobile number with country code (e.g., +1234567890)';
-        }
-        if (!newAgent.username.trim()) {
-            errors.username = 'Username is required';
-        }
         if (!newAgent.email.trim()) {
             errors.email = 'Email is required';
         } else if (!/\S+@\S+\.\S+/.test(newAgent.email)) {
             errors.email = 'Email address is invalid';
         }
-        if (!newAgent.password.trim()) {
-            errors.password = 'Password is required';
-        } else if (newAgent.password.length < 6) {
-            errors.password = 'Password must be at least 6 characters';
+
+        if (!fetchedAgent) {
+            errors.email = 'Please fetch agent details first';
+        }
+
+        if (!newAgent.permission_id) {
+            errors.permission = 'Permission level is required';
         }
 
         setFormErrors(errors);
         return Object.keys(errors).length === 0;
     };
 
-    // Save new agent
-    const saveNewAgent = () => {
-        if (validateForm()) {
-            const newAgentObj = {
-                id: agents.length + 1,
-                ...newAgent,
-                createdOn: new Date().toISOString().split('T')[0]
+    // Save new agent - updated to use fetched agent details
+    const saveNewAgent = async () => {
+        if (!validateForm()) return;
+
+        setAddingAgent(true);
+        try {
+
+            const payload = {
+                project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+                email: newAgent?.email,
+                permission_id: newAgent?.permission_id,
             };
-            setAgents([...agents, newAgentObj]);
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            const response = await axios.post(
+                'https://api.w1chat.com/agent/add', // Updated endpoint
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            const res_data = response.data;
+            if (res_data?.error) {
+                alert(res_data?.error);
+            }
+
+            if (res_data.msg) {
+                alert(res_data.msg);
+                fetchAgents();
+            }
+
+
             setShowAddModal(false);
             setNewAgent({
-                firstName: '',
-                lastName: '',
-                mobileNumber: '',
-                username: '',
                 email: '',
-                password: '',
-                permissions: {
-                    administrative: {
-                        configuration: false,
-                        subscription: false,
-                        teamMembers: false
-                    },
-                    manageContacts: {
-                        manageContacts: false,
-                        groups: false,
-                        customContactFields: false
-                    },
-                    manageCampaigns: {
-                        createCampaigns: false,
-                        executeCampaigns: false,
-                        scheduleCampaigns: false
-                    },
-                    messaging: {
-                        chat: false,
-                        syncTemplates: false
-                    },
-                    manageTemplates: {
-                        createTemplates: false,
-                        editTemplates: false,
-                        deleteTemplates: false
-                    },
-                    assignedChatOnly: false,
-                    manageBotReplies: {
-                        botReplies: false,
-                        flows: false
-                    }
-                }
+                permission: ''
             });
+            setFetchedAgent(null);
+        } catch (error) {
+            console.error('Failed to add agent:', error);
+            setFormErrors({ general: 'Failed to add agent. Please try again.' });
+        } finally {
+            setAddingAgent(false);
         }
     };
 
-    // Save edited agent
-    const saveEditedAgent = () => {
-        if (validateForm()) {
-            const updatedAgents = agents.map(agent =>
-                agent.id === currentAgent.id
-                    ? { ...agent, ...newAgent }
-                    : agent
-            );
-            setAgents(updatedAgents);
-            setShowEditModal(false);
-            setCurrentAgent(null);
-            setNewAgent({
-                firstName: '',
-                lastName: '',
-                mobileNumber: '',
-                username: '',
-                email: '',
-                password: '',
-                permissions: {
-                    administrative: {
-                        configuration: false,
-                        subscription: false,
-                        teamMembers: false
-                    },
-                    manageContacts: {
-                        manageContacts: false,
-                        groups: false,
-                        customContactFields: false
-                    },
-                    manageCampaigns: {
-                        createCampaigns: false,
-                        executeCampaigns: false,
-                        scheduleCampaigns: false
-                    },
-                    messaging: {
-                        chat: false,
-                        syncTemplates: false
-                    },
-                    manageTemplates: {
-                        createTemplates: false,
-                        editTemplates: false,
-                        deleteTemplates: false
-                    },
-                    assignedChatOnly: false,
-                    manageBotReplies: {
-                        botReplies: false,
-                        flows: false
-                    }
-                }
-            });
-        }
+    // Format date for display
+    const formatDate = (dateString) => {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
     };
 
-    // Handle permission category toggle
-    const togglePermissionCategory = (category) => {
-        const allPermissions = Object.keys(newAgent.permissions[category]).reduce((acc, key) => {
-            acc[key] = !Object.values(newAgent.permissions[category]).some(val => val);
-            return acc;
-        }, {});
+    // Get permission label from value
+    const getPermissionLabel = (permission) => {
+        if (!permission) return 'Unknown';
 
-        setNewAgent(prev => ({
-            ...prev,
-            permissions: {
-                ...prev.permissions,
-                [category]: allPermissions
-            }
-        }));
-    };
-
-    // Modal component for reusability
-    const Modal = React.memo(({ isOpen, onClose, title, children, actions }) => {
-        if (!isOpen) return null;
-
-        return (
-            <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
-                <div className="relative mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white transform transition-all duration-300 scale-95 opacity-0 animate-modal-in">
-                    <div className="mt-3">
-                        <div className="flex items-center justify-between pb-3 border-b">
-                            <h3 className="text-lg leading-6 font-medium text-gray-900">
-                                {title}
-                            </h3>
-                            <button
-                                onClick={onClose}
-                                className="text-gray-400 hover:text-gray-500 focus:outline-none"
-                            >
-                                <FiX className="h-5 w-5" />
-                            </button>
-                        </div>
-                        <div className="mt-4 max-h-96 overflow-y-auto">
-                            {children}
-                        </div>
-                        <div className="items-center px-4 py-3 mt-4 flex justify-end space-x-4 border-t">
-                            {actions}
-                        </div>
-                    </div>
-                </div>
-            </div>
+        const permissionValue = permission.permission_id || permission.name || permission;
+        const permissionOption = permissionOptions.find(opt =>
+            opt.value === permissionValue.toLowerCase() ||
+            opt.label.toLowerCase().includes(permissionValue.toLowerCase())
         );
-    });
+        return permissionOption ? permissionOption.label : permissionValue;
+    };
 
-    // Permission section component
-    const PermissionSection = ({ title, category, permissions }) => (
-        <div className="border rounded-md p-4 mb-4">
-            <div className="flex items-center justify-between mb-3">
-                <h4 className="font-medium text-gray-900">{title}</h4>
-                <button
-                    type="button"
-                    onClick={() => togglePermissionCategory(category)}
-                    className="text-sm text-indigo-600 hover:text-indigo-800"
-                >
-                    {Object.values(permissions).some(val => val) ? 'Deselect All' : 'Select All'}
-                </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Object.entries(permissions).map(([key, value]) => (
-                    <div key={key} className="flex items-center">
-                        <input
-                            type="checkbox"
-                            id={`${category}.${key}`}
-                            name={`${category}.${key}`}
-                            checked={value}
-                            onChange={handleInputChange}
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                        />
-                        <label htmlFor={`${category}.${key}`} className="ml-2 block text-sm text-gray-900 capitalize">
-                            {key.replace(/([A-Z])/g, ' $1').trim()}
-                        </label>
+    // Modal actions
+    const addModalActions = (
+        <>
+            <button
+                className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setShowAddModal(false)}
+                disabled={addingAgent}
+            >
+                Cancel
+            </button>
+            <button
+                className="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={saveNewAgent}
+                disabled={addingAgent || !fetchedAgent}
+            >
+                {addingAgent ? (
+                    <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Adding...
                     </div>
-                ))}
-            </div>
-        </div>
+                ) : (
+                    'Add Agent'
+                )}
+            </button>
+        </>
+    );
+
+    const permissionModalActions = (
+        <>
+            <button
+                className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                onClick={() => setShowPermissionModal(false)}
+            >
+                Cancel
+            </button>
+            <button
+                className="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={savePermissionChange}
+                disabled={selectedPermission == '' ? true : false}
+            >
+                Save Changes
+            </button>
+        </>
+    );
+
+    const deleteModalActions = (
+        <>
+            <button
+                className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                onClick={() => setShowDeleteModal(false)}
+            >
+                Cancel
+            </button>
+            <button
+                className={`px-4 py-2 text-white text-base font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${deleteEmail === currentAgent?.email
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-red-400 cursor-not-allowed'
+                    }`}
+                onClick={confirmDelete}
+                disabled={deleteEmail !== currentAgent?.email}
+            >
+                Delete Agent
+            </button>
+        </>
+    );
+
+    const viewModalActions = (
+        <button
+            className="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            onClick={() => setShowViewModal(false)}
+        >
+            Close
+        </button>
     );
 
     return (
         <div className="min-h-screen bg-gray-50">
-            <Header mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
-            <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+            <Header
+                mobileMenuOpen={mobileMenuOpen}
+                setMobileMenuOpen={setMobileMenuOpen}
+                isMinimized={isMinimized}
+                setIsMinimized={setIsMinimized}
+            />
+            <Sidebar
+                mobileMenuOpen={mobileMenuOpen}
+                setMobileMenuOpen={setMobileMenuOpen}
+                isMinimized={isMinimized}
+                setIsMinimized={setIsMinimized}
+            />
+
 
             {/* Delete Confirmation Modal */}
             <Modal
                 isOpen={showDeleteModal}
                 onClose={() => setShowDeleteModal(false)}
                 title="Confirm Delete"
-                actions={
-                    <>
-                        <button
-                            className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={() => setShowDeleteModal(false)}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            className="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={confirmDelete}
-                        >
-                            Delete
-                        </button>
-                    </>
-                }
+                actions={deleteModalActions}
             >
                 <div className="px-4 py-3">
-                    <p className="text-sm text-gray-500">
-                        Are you sure you want to delete the agent "{currentAgent?.firstName} {currentAgent?.lastName}"? This action cannot be undone.
+                    <p className="text-sm text-gray-500 mb-4">
+                        Are you sure you want to delete the agent "<strong>{currentAgent?.name}</strong>"? This action cannot be undone.
                     </p>
+                    <p className="text-sm text-gray-500 mb-4">
+                        To confirm, please type the agent's email address: <strong>{currentAgent?.email}</strong>
+                    </p>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Email</label>
+                        <input
+                            type="email"
+                            value={deleteEmail}
+                            onChange={handleDeleteEmailChange}
+                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${deleteError ? 'border-red-500' : 'border-gray-300'
+                                }`}
+                            placeholder="Enter agent's email to confirm"
+                        />
+                        {deleteError && <p className="mt-1 text-sm text-red-600">{deleteError}</p>}
+                    </div>
                 </div>
             </Modal>
 
             {/* Add Agent Modal */}
             <Modal
                 isOpen={showAddModal}
-                onClose={() => setShowAddModal(false)}
+                onClose={() => !addingAgent && setShowAddModal(false)}
                 title="Add New Agent"
-                actions={
-                    <>
-                        <button
-                            className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={() => setShowAddModal(false)}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            className="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={saveNewAgent}
-                        >
-                            Save Agent
-                        </button>
-                    </>
-                }
+                actions={addModalActions}
             >
-                <div className="px-4 py-3 space-y-4 max-h-96 overflow-y-auto">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
-                            <input
-                                type="text"
-                                name="firstName"
-                                value={newAgent.firstName}
-                                onChange={handleInputChange}
-                                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.firstName ? 'border-red-500' : 'border-gray-300'
-                                    }`}
-                                placeholder="Enter first name"
-                            />
-                            {formErrors.firstName && <p className="mt-1 text-sm text-red-600">{formErrors.firstName}</p>}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
-                            <input
-                                type="text"
-                                name="lastName"
-                                value={newAgent.lastName}
-                                onChange={handleInputChange}
-                                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.lastName ? 'border-red-500' : 'border-gray-300'
-                                    }`}
-                                placeholder="Enter last name"
-                            />
-                            {formErrors.lastName && <p className="mt-1 text-sm text-red-600">{formErrors.lastName}</p>}
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number *</label>
-                        <input
-                            type="text"
-                            name="mobileNumber"
-                            value={newAgent.mobileNumber}
-                            onChange={handleInputChange}
-                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.mobileNumber ? 'border-red-500' : 'border-gray-300'
-                                }`}
-                            placeholder="+1234567890"
-                        />
-                        {formErrors.mobileNumber && <p className="mt-1 text-sm text-red-600">{formErrors.mobileNumber}</p>}
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Username *</label>
-                        <input
-                            type="text"
-                            name="username"
-                            value={newAgent.username}
-                            onChange={handleInputChange}
-                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.username ? 'border-red-500' : 'border-gray-300'
-                                }`}
-                            placeholder="Enter username"
-                        />
-                        {formErrors.username && <p className="mt-1 text-sm text-red-600">{formErrors.username}</p>}
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                        <input
-                            type="email"
-                            name="email"
-                            value={newAgent.email}
-                            onChange={handleInputChange}
-                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.email ? 'border-red-500' : 'border-gray-300'
-                                }`}
-                            placeholder="Enter email"
-                        />
-                        {formErrors.email && <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>}
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
-                        <input
-                            type="password"
-                            name="password"
-                            value={newAgent.password}
-                            onChange={handleInputChange}
-                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.password ? 'border-red-500' : 'border-gray-300'
-                                }`}
-                            placeholder="Enter password"
-                        />
-                        {formErrors.password && <p className="mt-1 text-sm text-red-600">{formErrors.password}</p>}
-                    </div>
-
-                    <div className="pt-4 border-t mt-4">
-                        <h3 className="text-lg font-medium text-gray-900 mb-4">Permissions</h3>
-                        
-                        <PermissionSection 
-                            title="Administrative" 
-                            category="administrative" 
-                            permissions={newAgent.permissions.administrative} 
-                        />
-                        
-                        <PermissionSection 
-                            title="Manage Contacts" 
-                            category="manageContacts" 
-                            permissions={newAgent.permissions.manageContacts} 
-                        />
-                        
-                        <PermissionSection 
-                            title="Manage Campaigns" 
-                            category="manageCampaigns" 
-                            permissions={newAgent.permissions.manageCampaigns} 
-                        />
-                        
-                        <PermissionSection 
-                            title="Messaging" 
-                            category="messaging" 
-                            permissions={newAgent.permissions.messaging} 
-                        />
-                        
-                        <PermissionSection 
-                            title="Manage Templates" 
-                            category="manageTemplates" 
-                            permissions={newAgent.permissions.manageTemplates} 
-                        />
-                        
-                        <div className="border rounded-md p-4 mb-4">
-                            <div className="flex items-center">
-                                <input
-                                    type="checkbox"
-                                    id="assignedChatOnly"
-                                    name="assignedChatOnly"
-                                    checked={newAgent.permissions.assignedChatOnly}
-                                    onChange={handleInputChange}
-                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                                />
-                                <label htmlFor="assignedChatOnly" className="ml-2 block text-sm text-gray-900">
-                                    Assigned Chat Only (Restrict users to assigned chat only, unless they will have access to all chats)
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <PermissionSection 
-                            title="Manage Bot Replies and Flows" 
-                            category="manageBotReplies" 
-                            permissions={newAgent.permissions.manageBotReplies} 
-                        />
-                    </div>
-                </div>
+                <AddAgentForm
+                    newAgent={newAgent}
+                    formErrors={formErrors}
+                    addingAgent={addingAgent}
+                    fetchingAgent={fetchingAgent}
+                    fetchedAgent={fetchedAgent}
+                    onInputChange={handleInputChange}
+                    permissionOptions={permissionOptions}
+                    onFetchAgent={handleFetchAgent}
+                />
             </Modal>
 
-            {/* Edit Agent Modal */}
+            {/* Permission Change Modal */}
             <Modal
-                isOpen={showEditModal}
-                onClose={() => setShowEditModal(false)}
-                title="Edit Agent"
-                actions={
-                    <>
-                        <button
-                            className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={() => setShowEditModal(false)}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            className="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={saveEditedAgent}
-                        >
-                            Save Changes
-                        </button>
-                    </>
-                }
+                isOpen={showPermissionModal}
+                onClose={() => setShowPermissionModal(false)}
+                title="Change Agent Permissions"
+                actions={permissionModalActions}
             >
-                <div className="px-4 py-3 space-y-4 max-h-96 overflow-y-auto">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
-                            <input
-                                type="text"
-                                name="firstName"
-                                value={newAgent.firstName}
-                                onChange={handleInputChange}
-                                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.firstName ? 'border-red-500' : 'border-gray-300'
-                                    }`}
-                            />
-                            {formErrors.firstName && <p className="mt-1 text-sm text-red-600">{formErrors.firstName}</p>}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
-                            <input
-                                type="text"
-                                name="lastName"
-                                value={newAgent.lastName}
-                                onChange={handleInputChange}
-                                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.lastName ? 'border-red-500' : 'border-gray-300'
-                                    }`}
-                            />
-                            {formErrors.lastName && <p className="mt-1 text-sm text-red-600">{formErrors.lastName}</p>}
-                        </div>
-                    </div>
-
+                <div className="px-4 py-3 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number *</label>
-                        <input
-                            type="text"
-                            name="mobileNumber"
-                            value={newAgent.mobileNumber}
-                            onChange={handleInputChange}
-                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.mobileNumber ? 'border-red-500' : 'border-gray-300'
-                                }`}
-                        />
-                        {formErrors.mobileNumber && <p className="mt-1 text-sm text-red-600">{formErrors.mobileNumber}</p>}
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Permission Level for {currentAgent?.name}
+                        </label>
+                        <select
+                            value={selectedPermission}
+                            onChange={handlePermissionSelectChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            required
+                        >
+                            {permissionOptions.map(option => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
                     </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Username *</label>
-                        <input
-                            type="text"
-                            name="username"
-                            value={newAgent.username}
-                            onChange={handleInputChange}
-                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.username ? 'border-red-500' : 'border-gray-300'
-                                }`}
-                        />
-                        {formErrors.username && <p className="mt-1 text-sm text-red-600">{formErrors.username}</p>}
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                        <input
-                            type="email"
-                            name="email"
-                            value={newAgent.email}
-                            onChange={handleInputChange}
-                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.email ? 'border-red-500' : 'border-gray-300'
-                                }`}
-                        />
-                        {formErrors.email && <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>}
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
-                        <input
-                            type="password"
-                            name="password"
-                            value={newAgent.password}
-                            onChange={handleInputChange}
-                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.password ? 'border-red-500' : 'border-gray-300'
-                                }`}
-                            placeholder="Leave blank to keep current password"
-                        />
-                        {formErrors.password && <p className="mt-1 text-sm text-red-600">{formErrors.password}</p>}
-                    </div>
-
-                    <div className="pt-4 border-t mt-4">
-                        <h3 className="text-lg font-medium text-gray-900 mb-4">Permissions</h3>
-                        
-                        <PermissionSection 
-                            title="Administrative" 
-                            category="administrative" 
-                            permissions={newAgent.permissions.administrative} 
-                        />
-                        
-                        <PermissionSection 
-                            title="Manage Contacts" 
-                            category="manageContacts" 
-                            permissions={newAgent.permissions.manageContacts} 
-                        />
-                        
-                        <PermissionSection 
-                            title="Manage Campaigns" 
-                            category="manageCampaigns" 
-                            permissions={newAgent.permissions.manageCampaigns} 
-                        />
-                        
-                        <PermissionSection 
-                            title="Messaging" 
-                            category="messaging" 
-                            permissions={newAgent.permissions.messaging} 
-                        />
-                        
-                        <PermissionSection 
-                            title="Manage Templates" 
-                            category="manageTemplates" 
-                            permissions={newAgent.permissions.manageTemplates} 
-                        />
-                        
-                        <div className="border rounded-md p-4 mb-4">
-                            <div className="flex items-center">
-                                <input
-                                    type="checkbox"
-                                    id="edit-assignedChatOnly"
-                                    name="assignedChatOnly"
-                                    checked={newAgent.permissions.assignedChatOnly}
-                                    onChange={handleInputChange}
-                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                                />
-                                <label htmlFor="edit-assignedChatOnly" className="ml-2 block text-sm text-gray-900">
-                                    Assigned Chat Only (Restrict users to assigned chat only, unless they will have access to all chats)
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <PermissionSection 
-                            title="Manage Bot Replies and Flows" 
-                            category="manageBotReplies" 
-                            permissions={newAgent.permissions.manageBotReplies} 
-                        />
+                    <div className="text-sm text-gray-500">
+                        <p>This will update the agent's permission level and adjust their access rights accordingly.</p>
                     </div>
                 </div>
             </Modal>
@@ -866,92 +902,121 @@ function AgentManagement() {
                 isOpen={showViewModal}
                 onClose={() => setShowViewModal(false)}
                 title="Agent Details"
-                actions={
-                    <button
-                        className="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                        onClick={() => setShowViewModal(false)}
-                    >
-                        Close
-                    </button>
-                }
+                size="md"
+                actions={viewModalActions}
             >
                 {currentAgent && (
-                    <div className="px-4 py-3 space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-                                <p className="text-sm text-gray-900">{currentAgent.firstName}</p>
+                    <div className="px-4 py-3 space-y-6">
+                        {/* Basic Information */}
+                        <div>
+                            <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                                    <p className="text-sm text-gray-900">{currentAgent.name}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                    <p className="text-sm text-gray-900">
+                                        {currentAgent.status ? (
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                Active
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                Inactive
+                                            </span>
+                                        )}
+                                    </p>
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-                                <p className="text-sm text-gray-900">{currentAgent.lastName}</p>
+                        </div>
+
+                        {/* Contact Information */}
+                        <div>
+                            <h3 className="text-lg font-medium text-gray-900 mb-4">Contact Information</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
+                                    <p className="text-sm text-gray-900">{currentAgent.mobile}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                    <p className="text-sm text-gray-900">{currentAgent.email}</p>
+                                </div>
                             </div>
                         </div>
-                        
+
+                        {/* Permission Information */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
-                            <p className="text-sm text-gray-900">{currentAgent.mobileNumber}</p>
+                            <h3 className="text-lg font-medium text-gray-900 mb-4">Permission Level</h3>
+                            <div className="grid grid-cols-1 gap-4">
+                                <div>
+                                    <p className="text-sm text-gray-900">{getPermissionLabel(currentAgent.permission)} <button class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1 rounded" onClick={() => {
+                                        handlePermissionChange(currentAgent);
+                                        setShowViewModal(false);
+                                    }}>
+                                        <MdEdit />
+                                    </button></p>
+                                </div>
+                            </div>
                         </div>
-                        
+
+                        {/* Timeline Information */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                            <p className="text-sm text-gray-900">{currentAgent.username}</p>
+                            <h3 className="text-lg font-medium text-gray-900 mb-4">Timeline</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Created On</label>
+                                    <p className="text-sm text-gray-900">{formatDate(currentAgent.create_date)}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Last Modified</label>
+                                    <p className="text-sm text-gray-900">{formatDate(currentAgent.modify_date)}</p>
+                                </div>
+                            </div>
                         </div>
-                        
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                            <p className="text-sm text-gray-900">{currentAgent.email}</p>
-                        </div>
-                        
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Created On</label>
-                            <p className="text-sm text-gray-900">{currentAgent.createdOn}</p>
-                        </div>
-                        
-                        <div className="pt-4 border-t mt-4">
-                            <h3 className="text-lg font-medium text-gray-900 mb-4">Permissions</h3>
-                            
-                            <div className="space-y-4">
-                                {Object.entries(currentAgent.permissions).map(([category, permissions]) => (
-                                    <div key={category} className="border rounded-md p-4">
-                                        <h4 className="font-medium text-gray-900 mb-2 capitalize">{category.replace(/([A-Z])/g, ' $1').trim()}</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                                            {typeof permissions === 'object' ? (
-                                                Object.entries(permissions).map(([key, value]) => (
-                                                    <div key={key} className="flex items-center">
-                                                        {value ? (
-                                                            <FiCheckSquare className="h-4 w-4 text-green-500" />
-                                                        ) : (
-                                                            <FiSquare className="h-4 w-4 text-gray-300" />
-                                                        )}
-                                                        <span className="ml-2 text-sm text-gray-700 capitalize">
-                                                            {key.replace(/([A-Z])/g, ' $1').trim()}
-                                                        </span>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div className="flex items-center">
-                                                    {permissions ? (
-                                                        <FiCheckSquare className="h-4 w-4 text-green-500" />
-                                                    ) : (
-                                                        <FiSquare className="h-4 w-4 text-gray-300" />
-                                                    )}
-                                                    <span className="ml-2 text-sm text-gray-700 capitalize">
-                                                        {category.replace(/([A-Z])/g, ' $1').trim()}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
+
+                        {/* Created By Section */}
+                        {currentAgent.create_by && (
+                            <div className="pt-4 border-t">
+                                <h3 className="text-lg font-medium text-gray-900 mb-4">Created By</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                                        <p className="text-sm text-gray-900">{currentAgent.create_by.name}</p>
                                     </div>
-                                ))}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+                                        <p className="text-sm text-gray-900">{currentAgent.create_by.mobile}</p>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                        )}
+
+                        {/* Modified By Section */}
+                        {currentAgent.modify_by && (
+                            <div className="pt-4 border-t">
+                                <h3 className="text-lg font-medium text-gray-900 mb-4">Modified By</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                                        <p className="text-sm text-gray-900">{currentAgent.modify_by.name}</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+                                        <p className="text-sm text-gray-900">{currentAgent.modify_by.mobile}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </Modal>
 
             {/* Main content */}
-            <div className="pt-16 md:pl-64">
+            <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
+                }`}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
                     {/* Page header */}
                     <div className="md:flex md:items-center md:justify-between mb-6">
@@ -960,7 +1025,16 @@ function AgentManagement() {
                                 Agent Management
                             </h2>
                         </div>
-                        <div className="mt-4 flex md:mt-0 md:ml-4">
+                        <div className="mt-4 flex md:mt-0 md:ml-4 gap-2">
+                            <button
+                                onClick={() => {
+                                    fetchAgents();
+                                }}
+                                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            >
+                                <LuRefreshCcwDot className="mr-2" />
+                                Refresh
+                            </button>
                             <button
                                 onClick={handleAddAgent}
                                 className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -984,10 +1058,10 @@ function AgentManagement() {
                                             Contact Info
                                         </th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Username
+                                            Status
                                         </th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Created On
+                                            Permission
                                         </th>
                                         <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             Actions
@@ -1022,9 +1096,9 @@ function AgentManagement() {
                                         ))
                                     ) : (
                                         // Actual data rows
-                                        currentAgents.map((agent) => (
-                                            <tr key={agent.id} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap">
+                                        currentAgents.map((agent, index) => (
+                                            <tr key={agent.mapping_id || agent.email || index} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4">
                                                     <div className="flex items-center">
                                                         <div className="flex-shrink-0 h-10 w-10">
                                                             <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
@@ -1033,20 +1107,28 @@ function AgentManagement() {
                                                         </div>
                                                         <div className="ml-4">
                                                             <div className="text-sm font-medium text-gray-900">
-                                                                {agent.firstName} {agent.lastName}
+                                                                {agent.name}
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="text-sm text-gray-900">{agent.email}</div>
-                                                    <div className="text-sm text-gray-500">{agent.mobileNumber}</div>
+                                                    <div className="text-sm text-gray-500">{agent.mobile}</div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900">{agent.username}</div>
+                                                    {agent.status ? (
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                            Active
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                            Inactive
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900">{agent.createdOn}</div>
+                                                    <div className="text-sm text-gray-900">{getPermissionLabel(agent.permission)}</div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                     <div className="flex justify-end space-x-2">
@@ -1057,14 +1139,14 @@ function AgentManagement() {
                                                             <FiEye size={18} />
                                                         </button>
                                                         <button
-                                                            className="text-indigo-600 hover:text-indigo-900"
-                                                            onClick={() => handleEditAgent(agent)}
+                                                            className="text-green-600 hover:text-green-900"
+                                                            onClick={() => handlePermissionChange(agent)}
                                                         >
-                                                            <FiEdit size={18} />
+                                                            <FiKey size={18} />
                                                         </button>
                                                         <button
                                                             className="text-red-600 hover:text-red-900"
-                                                            onClick={() => handleDeleteAgent(agent.id)}
+                                                            onClick={() => handleDeleteAgent(agent.email)}
                                                         >
                                                             <FiTrash2 size={18} />
                                                         </button>
@@ -1136,7 +1218,7 @@ function AgentManagement() {
 
             {/* CSS for animations */}
             <style jsx>
-            {`
+                {`
                 @keyframes modalIn {
                 0% {
                     transform: scale(0.95);

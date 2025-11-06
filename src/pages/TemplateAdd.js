@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
 import { Encrypt } from './encryption/payload-encryption';
 import axios from 'axios';
@@ -57,7 +57,18 @@ function TemplateAdd() {
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [successData, setSuccessData] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isMinimized, setIsMinimized] = useState(() => {
+    const saved = localStorage.getItem('sidebarMinimized');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+
   const textareaRef = useRef(null);
+
+
+  useEffect(() => {
+    localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
+  }, [isMinimized]);
 
   // Language options
   const languages = [
@@ -213,20 +224,20 @@ function TemplateAdd() {
     const startPos = textarea.selectionStart;
     const endPos = textarea.selectionEnd;
     const currentText = formData.components.body.text;
-    
+
     const newVariable = {
       id: Date.now(),
       name: `var${bodyVariables.length + 1}`,
       sample: ''
     };
-    
+
     // Insert variable at cursor position
     const variableText = `{{${bodyVariables.length + 1}}}`;
     const newBodyText = currentText.slice(0, startPos) + variableText + currentText.slice(endPos);
-    
+
     setBodyVariables(prev => [...prev, newVariable]);
     handleBodyTextChange(newBodyText);
-    
+
     // Set cursor position after the inserted variable
     setTimeout(() => {
       textarea.focus();
@@ -236,7 +247,7 @@ function TemplateAdd() {
 
   // Update body variable sample
   const updateBodyVariable = (id, sample) => {
-    setBodyVariables(prev => prev.map(v => 
+    setBodyVariables(prev => prev.map(v =>
       v.id === id ? { ...v, sample } : v
     ));
   };
@@ -247,7 +258,7 @@ function TemplateAdd() {
     if (variable) {
       const varIndex = bodyVariables.findIndex(v => v.id === id);
       const varNumber = varIndex + 1;
-      
+
       // Remove variable from body text
       const newBodyText = formData.components.body.text.replace(new RegExp(`\\{\\{${varNumber}\\}\\}`, 'g'), '');
       handleBodyTextChange(newBodyText);
@@ -274,13 +285,13 @@ function TemplateAdd() {
     const textarea = textareaRef.current;
     const startPos = textarea.selectionStart;
     const endPos = textarea.selectionEnd;
-    
+
     if (startPos === endPos) return;
-    
+
     let formattedText = '';
     const selected = formData.components.body.text.slice(startPos, endPos);
-    
-    switch(format) {
+
+    switch (format) {
       case 'bold':
         formattedText = `*${selected}*`;
         break;
@@ -296,13 +307,13 @@ function TemplateAdd() {
       default:
         formattedText = selected;
     }
-    
-    const newBodyText = formData.components.body.text.slice(0, startPos) + 
-                        formattedText + 
-                        formData.components.body.text.slice(endPos);
-    
+
+    const newBodyText = formData.components.body.text.slice(0, startPos) +
+      formattedText +
+      formData.components.body.text.slice(endPos);
+
     handleBodyTextChange(newBodyText);
-    
+
     // Set cursor position after the formatted text
     setTimeout(() => {
       textarea.focus();
@@ -359,7 +370,7 @@ function TemplateAdd() {
         ...prev.components,
         buttons: {
           ...prev.components.buttons,
-          buttons: prev.components.buttons.buttons.map((btn, i) => 
+          buttons: prev.components.buttons.buttons.map((btn, i) =>
             i === index ? { ...btn, [field]: value } : btn
           )
         }
@@ -376,10 +387,10 @@ function TemplateAdd() {
         ...prev.components,
         buttons: {
           ...prev.components.buttons,
-          buttons: prev.components.buttons.buttons.map((btn, i) => 
-            i === index ? { 
-              ...btn, 
-              example: [...currentExamples, ''] 
+          buttons: prev.components.buttons.buttons.map((btn, i) =>
+            i === index ? {
+              ...btn,
+              example: [...currentExamples, '']
             } : btn
           )
         }
@@ -395,9 +406,9 @@ function TemplateAdd() {
         ...prev.components,
         buttons: {
           ...prev.components.buttons,
-          buttons: prev.components.buttons.buttons.map((btn, i) => 
-            i === buttonIndex ? { 
-              ...btn, 
+          buttons: prev.components.buttons.buttons.map((btn, i) =>
+            i === buttonIndex ? {
+              ...btn,
               example: btn.example.map((ex, j) => j === exampleIndex ? value : ex)
             } : btn
           )
@@ -414,9 +425,9 @@ function TemplateAdd() {
         ...prev.components,
         buttons: {
           ...prev.components.buttons,
-          buttons: prev.components.buttons.buttons.map((btn, i) => 
-            i === buttonIndex ? { 
-              ...btn, 
+          buttons: prev.components.buttons.buttons.map((btn, i) =>
+            i === buttonIndex ? {
+              ...btn,
               example: btn.example.filter((_, j) => j !== exampleIndex)
             } : btn
           )
@@ -548,18 +559,18 @@ function TemplateAdd() {
         }
       );
 
-      // console.log('Full API response:', response);
-      // console.log('Response data:', response?.data);
-      // console.log('Response status:', response?.status);
+      console.log('Full API response:', response);
+      console.log('Response data:', response?.data);
+      console.log('Response status:', response?.status);
 
       if (!response?.data?.error) {
         const result = response.data;
         console.log('Submission successful:', result);
-        
+
         // Set success data and show popup
         setSuccessData(result);
         setShowSuccessPopup(true);
-        
+
         // Reset form after successful submission
         setFormData({
           name: '',
@@ -588,7 +599,7 @@ function TemplateAdd() {
           }
         });
         setBodyVariables([]);
-        
+
       } else {
         // Handle specific error messages
         const errorMsg = response?.data?.error || response?.data?.message || 'Unknown error';
@@ -633,7 +644,7 @@ function TemplateAdd() {
   // Format text for WhatsApp preview
   const formatTextForPreview = (text) => {
     if (!text) return '';
-    
+
     return text
       .replace(/\*(.*?)\*/g, '<strong>$1</strong>')
       .replace(/_(.*?)_/g, '<em>$1</em>')
@@ -643,11 +654,22 @@ function TemplateAdd() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
-      <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+      <Header
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+        isMinimized={isMinimized}
+        setIsMinimized={setIsMinimized}
+      />
+      <Sidebar
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+        isMinimized={isMinimized}
+        setIsMinimized={setIsMinimized}
+      />
 
       {/* Main content */}
-      <div className="pt-16 md:pl-64">
+      <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
+        }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
           {/* Page header */}
           <div className="mb-6">
@@ -735,11 +757,10 @@ function TemplateAdd() {
                         key={format.code}
                         type="button"
                         onClick={() => handleHeaderFormatChange(format.code)}
-                        className={`p-2 border rounded-md text-sm text-center ${
-                          formData.components.header.format === format.code
-                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                            : 'border-gray-300 hover:bg-gray-50'
-                        }`}
+                        className={`p-2 border rounded-md text-sm text-center ${formData.components.header.format === format.code
+                          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                          : 'border-gray-300 hover:bg-gray-50'
+                          }`}
                       >
                         {format.name}
                       </button>
@@ -753,7 +774,7 @@ function TemplateAdd() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Header Content ({formData.components.header.format})
                     </label>
-                    
+
                     {formData.components.header.format === 'TEXT' && (
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
@@ -772,7 +793,7 @@ function TemplateAdd() {
                         </p>
                       </div>
                     )}
-                    
+
                     {(formData.components.header.format === 'IMAGE' || formData.components.header.format === 'VIDEO' || formData.components.header.format === 'DOCUMENT') && (
                       <div>
                         {formData.components.header.example.header_handle && formData.components.header.example.header_handle.length > 0 ? (
@@ -813,9 +834,9 @@ function TemplateAdd() {
                               onChange={handleHeaderMediaUpload}
                               disabled={isUploading}
                               accept={
-                                formData.components.header.format === 'IMAGE' ? 'image/*' : 
-                                formData.components.header.format === 'VIDEO' ? 'video/*' : 
-                                '*'
+                                formData.components.header.format === 'IMAGE' ? 'image/*' :
+                                  formData.components.header.format === 'VIDEO' ? 'video/*' :
+                                    '*'
                               }
                             />
                           </label>
@@ -848,7 +869,7 @@ function TemplateAdd() {
                     onChange={(e) => handleBodyTextChange(e.target.value)}
                     required
                   ></textarea>
-                  
+
                   {/* Text formatting toolbar */}
                   <div className="mt-2 flex space-x-2">
                     <button
@@ -884,11 +905,11 @@ function TemplateAdd() {
                       <FiCode size={16} />
                     </button>
                   </div>
-                  
+
                   <p className="mt-1 text-xs text-gray-500">
                     Use variables like {`{1}`} to personalize your message. Select text and use formatting buttons.
                   </p>
-                  
+
                   {/* Body Variables */}
                   {bodyVariables.length > 0 && (
                     <div className="mt-3 space-y-2">
@@ -950,7 +971,7 @@ function TemplateAdd() {
                       {formData.components.buttons.buttons.length}/3 added
                     </span>
                   </div>
-                  
+
                   {/* Button selection */}
                   <div className="grid grid-cols-2 gap-2 mb-4">
                     {buttonTypes.map(btn => (
@@ -966,7 +987,7 @@ function TemplateAdd() {
                       </button>
                     ))}
                   </div>
-                  
+
                   {/* Added buttons */}
                   <div className="space-y-3">
                     {formData.components.buttons.buttons.map((btn, index) => (
@@ -983,7 +1004,7 @@ function TemplateAdd() {
                             <FiX size={16} />
                           </button>
                         </div>
-                        
+
                         {/* Button Text */}
                         <input
                           type="text"
@@ -992,7 +1013,7 @@ function TemplateAdd() {
                           value={btn.text}
                           onChange={e => updateButton(index, 'text', e.target.value)}
                         />
-                        
+
                         {/* Phone Number Button */}
                         {btn.type === 'PHONE_NUMBER' && (
                           <input
@@ -1003,7 +1024,7 @@ function TemplateAdd() {
                             onChange={e => updateButton(index, 'phone_number', e.target.value)}
                           />
                         )}
-                        
+
                         {/* URL Button */}
                         {btn.type === 'URL' && (
                           <div className="space-y-2">
@@ -1044,7 +1065,7 @@ function TemplateAdd() {
                             ))}
                           </div>
                         )}
-                        
+
                         {/* Copy Code Button */}
                         {btn.type === 'COPY_CODE' && (
                           <div className="space-y-2">
@@ -1081,7 +1102,7 @@ function TemplateAdd() {
             {/* Preview section */}
             <div className="bg-white shadow rounded-lg p-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">WhatsApp Preview</h3>
-              
+
               <div className="bg-gray-100 p-4 rounded-lg">
                 <div className="bg-white rounded-lg shadow-md max-w-xs mx-auto overflow-hidden">
                   {/* Header */}
@@ -1094,33 +1115,33 @@ function TemplateAdd() {
                           </p>
                         </div>
                       )}
-                      
-                      {formData.components.header.example.header_handle && 
-                       formData.components.header.example.header_handle.length > 0 && 
-                       formData.components.header.format !== 'TEXT' && (
-                        <div className="h-48 bg-gray-200 overflow-hidden relative">
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <FiPaperclip className="text-3xl text-gray-600" />
+
+                      {formData.components.header.example.header_handle &&
+                        formData.components.header.example.header_handle.length > 0 &&
+                        formData.components.header.format !== 'TEXT' && (
+                          <div className="h-48 bg-gray-200 overflow-hidden relative">
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <FiPaperclip className="text-3xl text-gray-600" />
+                            </div>
+                            <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
+                              {formData.components.header.format}
+                            </div>
                           </div>
-                          <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
-                            {formData.components.header.format}
-                          </div>
-                        </div>
-                      )}
+                        )}
                     </div>
                   )}
-                  
+
                   {/* Body */}
                   <div className="p-4">
-                    <div 
+                    <div
                       className="text-sm text-gray-800 whitespace-pre-wrap break-words"
-                      dangerouslySetInnerHTML={{ 
-                        __html: bodyVariables.length > 0 
-                          ? formatTextForPreview(generatePreviewText(formData.components.body.text, bodyVariables)) 
+                      dangerouslySetInnerHTML={{
+                        __html: bodyVariables.length > 0
+                          ? formatTextForPreview(generatePreviewText(formData.components.body.text, bodyVariables))
                           : formatTextForPreview(formData.components.body.text) || "This is a preview of your template message. The actual content will appear here."
                       }}
                     ></div>
-                    
+
                     {/* Buttons preview */}
                     {formData.components.buttons.buttons.length > 0 && (
                       <div className="mt-4 space-y-2">
@@ -1134,7 +1155,7 @@ function TemplateAdd() {
                       </div>
                     )}
                   </div>
-                  
+
                   {/* Footer */}
                   {formData.components.footer.text && (
                     <div className="p-3 bg-gray-50 border-t border-gray-200">
@@ -1143,7 +1164,7 @@ function TemplateAdd() {
                   )}
                 </div>
               </div>
-              
+
               <div className="mt-4 text-sm text-gray-600">
                 <p className="font-medium">Template Guidelines:</p>
                 <ul className="list-disc pl-5 mt-1 space-y-1">
@@ -1167,87 +1188,87 @@ function TemplateAdd() {
                       category: formData.category || 'CATEGORY',
                       language: formData.language || 'en',
                       components: (() => {
-                      const comps = [];
-                      
-                      // Header component
-                      if (formData.components.header.format !== 'NONE') {
-                        const headerComp = {
-                          type: 'HEADER',
-                          format: formData.components.header.format
-                        };
-                        
-                        if (formData.components.header.format === 'TEXT') {
-                          headerComp.text = formData.components.header.text;
-                          // No variables allowed in header text for WhatsApp
-                        } else {
-                          headerComp.example = formData.components.header.example;
-                        }
-                        comps.push(headerComp);
-                      }
-                      
-                      // Body component
-                      if (formData.components.body.text) {
-                        const bodyComp = {
-                          type: 'BODY',
-                          text: formData.components.body.text
-                        };
-                        
-                        if (bodyVariables.length > 0) {
-                          const bodySamples = bodyVariables.map(v => v.sample || '');
-                          bodyComp.example = {
-                            body_text: [bodySamples]
+                        const comps = [];
+
+                        // Header component
+                        if (formData.components.header.format !== 'NONE') {
+                          const headerComp = {
+                            type: 'HEADER',
+                            format: formData.components.header.format
                           };
+
+                          if (formData.components.header.format === 'TEXT') {
+                            headerComp.text = formData.components.header.text;
+                            // No variables allowed in header text for WhatsApp
+                          } else {
+                            headerComp.example = formData.components.header.example;
+                          }
+                          comps.push(headerComp);
                         }
-                        comps.push(bodyComp);
-                      }
-                      
-                      // Footer component
-                      if (formData.components.footer.text) {
-                        comps.push({
-                          type: 'FOOTER',
-                          text: formData.components.footer.text
-                        });
-                      }
-                      
-                      // Buttons component
-                      if (formData.components.buttons.buttons.length > 0) {
-                        comps.push({
-                          type: 'BUTTONS',
-                          buttons: formData.components.buttons.buttons.map(btn => {
-                            if (btn.type === 'COPY_CODE') {
-                              return {
-                                type: 'otp',
-                                otp_type: 'copy_code',
-                                text: btn.text
-                              };
-                            } else if (btn.type === 'PHONE_NUMBER') {
-                              return {
-                                type: btn.type,
-                                text: btn.text,
-                                phone_number: btn.phone_number
-                              };
-                            } else if (btn.type === 'URL') {
-                              const buttonData = {
-                                type: btn.type,
-                                text: btn.text,
-                                url: btn.url
-                              };
-                              if (btn.example && btn.example.length > 0) {
-                                buttonData.example = btn.example;
+
+                        // Body component
+                        if (formData.components.body.text) {
+                          const bodyComp = {
+                            type: 'BODY',
+                            text: formData.components.body.text
+                          };
+
+                          if (bodyVariables.length > 0) {
+                            const bodySamples = bodyVariables.map(v => v.sample || '');
+                            bodyComp.example = {
+                              body_text: [bodySamples]
+                            };
+                          }
+                          comps.push(bodyComp);
+                        }
+
+                        // Footer component
+                        if (formData.components.footer.text) {
+                          comps.push({
+                            type: 'FOOTER',
+                            text: formData.components.footer.text
+                          });
+                        }
+
+                        // Buttons component
+                        if (formData.components.buttons.buttons.length > 0) {
+                          comps.push({
+                            type: 'BUTTONS',
+                            buttons: formData.components.buttons.buttons.map(btn => {
+                              if (btn.type === 'COPY_CODE') {
+                                return {
+                                  type: 'otp',
+                                  otp_type: 'copy_code',
+                                  text: btn.text
+                                };
+                              } else if (btn.type === 'PHONE_NUMBER') {
+                                return {
+                                  type: btn.type,
+                                  text: btn.text,
+                                  phone_number: btn.phone_number
+                                };
+                              } else if (btn.type === 'URL') {
+                                const buttonData = {
+                                  type: btn.type,
+                                  text: btn.text,
+                                  url: btn.url
+                                };
+                                if (btn.example && btn.example.length > 0) {
+                                  buttonData.example = btn.example;
+                                }
+                                return buttonData;
+                              } else {
+                                return {
+                                  type: btn.type,
+                                  text: btn.text
+                                };
                               }
-                              return buttonData;
-                            } else {
-                              return {
-                                type: btn.type,
-                                text: btn.text
-                              };
-                            }
-                          })
-                        });
-                      }
-                      
-                      return comps;
-                    })()
+                            })
+                          });
+                        }
+
+                        return comps;
+                      })()
                     }
                   }, null, 2)}
                 </pre>

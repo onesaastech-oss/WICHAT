@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Toaster } from 'react-hot-toast';
 import ChatList from './ChatList';
 import Conversation from './Conversation';
 import { dbHelper } from './db';
 import { socketManager } from './socket';
 import { FiArrowLeft, FiSun, FiMoon } from 'react-icons/fi';
+import { Header, Sidebar } from '../component/Menu';
 function LiveChat() {
     const navigate = useNavigate();
     const { phone } = useParams();
@@ -17,6 +17,16 @@ function LiveChat() {
     const [dbAvailable, setDbAvailable] = useState(false);
     const [chats, setChats] = useState([]);
     const [messages, setMessages] = useState([]);
+
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [isMinimized, setIsMinimized] = useState(() => {
+        const saved = localStorage.getItem('sidebarMinimized');
+        return saved ? JSON.parse(saved) : false;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
+    }, [isMinimized]);
 
     // Initialize app
     useEffect(() => {
@@ -80,7 +90,7 @@ function LiveChat() {
         if (phone) {
             // Only try to set activeChat if db is available and chats are loaded
             if (!dbAvailable || chats.length === 0) return;
-            
+
             // Find the chat with matching phone number
             const chat = chats.find(c => c.number === phone);
             if (chat) {
@@ -239,106 +249,119 @@ function LiveChat() {
     }
 
     return (
-        <>
-            <Toaster />
-            <motion.div
+        <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
             className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-gray-900"
         >
-            {/* Header */}
 
+            <Header
+                mobileMenuOpen={mobileMenuOpen}
+                setMobileMenuOpen={setMobileMenuOpen}
+                isMinimized={isMinimized}
+                setIsMinimized={setIsMinimized}
+            />
+            <Sidebar
+                mobileMenuOpen={mobileMenuOpen}
+                setMobileMenuOpen={setMobileMenuOpen}
+                isMinimized={isMinimized}
+                setIsMinimized={setIsMinimized}
+            />
 
-            <motion.div
-                initial={{ y: -50, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ duration: 0.4 }}
-                className="flex items-center justify-between p-2 pl-4 pr-4 border-b dark:border-gray-700 bg-gradient-to-r from-green-500 to-green-600 text-white"
-            >
+            <div className={`pt-16 flex flex-1 overflow-hidden transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
+                }`}>
 
-                <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => navigate(-1)}
-                    className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20 hover:bg-white/30"
+                {/* Header */}
+                {/* <motion.div
+                    initial={{ y: -50, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ duration: 0.4 }}
+                    className="flex items-center justify-between p-2 pl-4 pr-4 border-b dark:border-gray-700 bg-gradient-to-r from-green-500 to-green-600 text-white"
                 >
-                    <FiArrowLeft className="w-4 h-4" />
-                </motion.button>
-                <div className="flex items-center">
-                    <h1 className="text-md font-semibold">WhatsApp Chat</h1>
-                </div>
-                <div className="flex items-center space-x-4">
+
                     <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => setDarkMode(!darkMode)}
+                        onClick={() => navigate(-1)}
                         className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20 hover:bg-white/30"
                     >
-                        {darkMode ? <FiSun className="w-4 h-4" /> : <FiMoon className="w-4 h-4" />}
+                        <FiArrowLeft className="w-4 h-4" />
                     </motion.button>
-                </div>
-            </motion.div>
-
-            {/* Main Container */}
-            <div className="flex flex-1 overflow-hidden">
-                <AnimatePresence mode="wait">
-                    <motion.div
-                        key={activeChat ? 'chat-list-hidden' : 'chat-list-visible'}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        transition={{ duration: 0.3 }}
-                        className={`w-full md:w-1/3 border-r flex flex-col ${activeChat ? 'hidden md:flex' : 'flex'}`}
-                    >
-                        <ChatList
-                            tokens={tokens}
-                            onChatSelect={handleChatSelect}
-                            activeChat={activeChat}
-                            darkMode={darkMode}
-                            dbAvailable={dbAvailable}
-                            socket_chats={chats}
-                        />
-                    </motion.div>
-                </AnimatePresence>
-
-                <AnimatePresence mode="wait">
-                    {activeChat ? (
-                        <motion.div
-                            key="conversation-active"
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 20 }}
-                            transition={{ duration: 0.3 }}
-                            className={`w-full md:w-2/3 flex flex-col ${activeChat ? 'flex' : 'hidden md:flex'}`}
+                    <div className="flex items-center">
+                        <h1 className="text-md font-semibold">WhatsApp Chat</h1>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                        <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => setDarkMode(!darkMode)}
+                            className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20 hover:bg-white/30"
                         >
-                            <Conversation
-                                activeChat={activeChat}
+                            {darkMode ? <FiSun className="w-4 h-4" /> : <FiMoon className="w-4 h-4" />}
+                        </motion.button>
+                    </div>
+                </motion.div> */}
+
+                {/* Main Container */}
+                <div className={`flex flex-1 overflow-hidden`}>
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={activeChat ? 'chat-list-hidden' : 'chat-list-visible'}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            transition={{ duration: 0.3 }}
+                            className={`w-full md:w-1/3 border-r flex flex-col ${activeChat ? 'hidden md:flex' : 'flex'}`}
+                        >
+                            <ChatList
                                 tokens={tokens}
-                                onBack={handleBackToChatList}
+                                onChatSelect={handleChatSelect}
+                                activeChat={activeChat}
                                 darkMode={darkMode}
                                 dbAvailable={dbAvailable}
-                                refresh={activeChat.refresh}
-                                socketMessage={messages}
-                                onMessageStatusUpdate={handleMessageStatusUpdate}
+                                socket_chats={chats}
                             />
                         </motion.div>
-                    ) : (
-                        <motion.div
-                            key="conversation-placeholder"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ duration: 0.3 }}
-                            className="flex-1 hidden md:flex items-center justify-center text-gray-400 dark:text-gray-500"
-                        >
-                            Select a chat to start messaging
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                    </AnimatePresence>
+
+                    <AnimatePresence mode="wait">
+                        {activeChat ? (
+                            <motion.div
+                                key="conversation-active"
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 20 }}
+                                transition={{ duration: 0.3 }}
+                                className={`w-full md:w-2/3 flex flex-col ${activeChat ? 'flex' : 'hidden md:flex'}`}
+                            >
+                                <Conversation
+                                    activeChat={activeChat}
+                                    tokens={tokens}
+                                    onBack={handleBackToChatList}
+                                    darkMode={darkMode}
+                                    dbAvailable={dbAvailable}
+                                    refresh={activeChat.refresh}
+                                    socketMessage={messages}
+                                    onMessageStatusUpdate={handleMessageStatusUpdate}
+                                />
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                key="conversation-placeholder"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.3 }}
+                                className="flex-1 hidden md:flex items-center justify-center text-gray-400 dark:text-gray-500"
+                            >
+                                Select a chat to start messaging
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
             </div>
         </motion.div>
-        </>
     );
 }
 
