@@ -16,6 +16,36 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         activeChatRef.current = activeChat;
     }, [activeChat]);
 
+    // Ensure unread badge clears as soon as a chat becomes active
+    useEffect(() => {
+        if (!activeChat?.number) return;
+
+        const activeNumber = activeChat.number;
+        const activeChatFromState = chats.find(chat => chat.number === activeNumber);
+
+        if (!activeChatFromState) return;
+
+        const unreadValue = Number(activeChatFromState.unread_count ?? 0);
+        const normalizedUnread = Number.isFinite(unreadValue) ? unreadValue : 0;
+        const shouldClear = normalizedUnread > 0 || activeChatFromState.unread;
+
+        if (!shouldClear) return;
+
+        const clearedChat = { ...activeChatFromState, unread_count: 0, unread: false };
+
+        setChats(prevChats =>
+            prevChats.map(chat =>
+                chat.number === activeNumber ? clearedChat : chat
+            )
+        );
+
+        activeChatRef.current = clearedChat;
+
+        if (dbAvailable) {
+            dbHelper.updateChat(activeNumber, { unread_count: 0 });
+        }
+    }, [activeChat?.number, chats, dbAvailable]);
+
     // Load conversations from IndexedDB first, then sync with API
     useEffect(() => {
         if (!tokens) return;
@@ -50,20 +80,10 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                 const updatedChats = socket_chats.map(socketChat => {
                     // Find existing chat to get current unread_count
                     const existingChat = prevChats.find(c => c.number === socketChat.number);
-                    
-                    // If it's an incoming message and chat is not currently open, increment unread count
-                    // Use ref to check active chat without triggering effect re-run
+
+                    // Check if this is the currently open chat
                     const isCurrentlyOpen = activeChatRef.current?.number === socketChat.number;
-                    
-                    if (socketChat.type === 'in' && !isCurrentlyOpen) {
-                        const currentUnread = existingChat?.unread_count || 0;
-                        return {
-                            ...socketChat,
-                            unread_count: currentUnread + 1,
-                            unread: true
-                        };
-                    }
-                    
+
                     // If chat is currently open, keep count at 0
                     if (isCurrentlyOpen) {
                         return {
@@ -72,12 +92,30 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                             unread: false
                         };
                     }
-                    
-                    // Otherwise, keep existing unread count or default to 0
-                    const unreadCount = socketChat.unread_count !== undefined 
-                        ? socketChat.unread_count 
-                        : (existingChat?.unread_count || 0);
-                    
+
+                    // Check if this chat received a NEW incoming message
+                    // Compare message IDs to detect new messages
+                    const hasNewMessage = existingChat &&
+                        socketChat.type === 'in' &&
+                        (socketChat.wamid !== existingChat.wamid ||
+                            socketChat.unique_id !== existingChat.unique_id ||
+                            socketChat.last_id !== existingChat.last_id);
+
+                    // Only increment unread count if this specific chat received a new message
+                    if (hasNewMessage) {
+                        const currentUnread = existingChat?.unread_count || 0;
+                        return {
+                            ...socketChat,
+                            unread_count: currentUnread + 1,
+                            unread: true
+                        };
+                    }
+
+                    // Otherwise, keep existing unread count or use the one from socket
+                    const unreadCount = existingChat?.unread_count !== undefined
+                        ? existingChat.unread_count
+                        : (socketChat.unread_count || 0);
+
                     return {
                         ...socketChat,
                         unread_count: unreadCount,
@@ -275,7 +313,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
             : new Date(dateStringOrEpoch);
         const now = new Date();
         const diffInHours = (now - date) / (1000 * 60 * 60);
-        
+
         if (diffInHours < 24) {
             return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         } else if (diffInHours < 168) { // Less than a week
@@ -310,23 +348,29 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
     };
 
     const handleChatClick = (chat) => {
+        const updatedChat = {
+            ...chat,
+            unread_count: 0,
+            unread: false
+        };
+
         // Immediately update the active chat ref
-        activeChatRef.current = chat;
-        
+        activeChatRef.current = updatedChat;
+
         // Reset unread count immediately in UI state
         setChats(prevChats =>
             prevChats.map(c =>
-                c.number === chat.number ? { ...c, unread_count: 0 } : c
+                c.number === chat.number ? updatedChat : c
             )
         );
-        
+
         // Update IndexedDB in background (non-blocking)
-        if (dbAvailable && chat.unread_count > 0) {
+        if (dbAvailable && (chat.unread_count || 0) > 0) {
             dbHelper.updateChat(chat.number, { unread_count: 0 });
         }
-        
-        // Notify parent component
-        onChatSelect(chat);
+
+        // Notify parent component with the updated chat payload
+        onChatSelect(updatedChat);
     };
 
 
@@ -392,14 +436,16 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                                 {/* Chat Items */}
                                 <div className="divide-y" style={{ divideColor: darkMode ? '#374151' : '#e5e7eb' }}>
                                     {group.chats.map((chat) => {
-                                        const unreadCount = chat.unread_count || 0;
+                                        const unreadValueRaw = Number(chat.unread_count ?? 0);
+                                        const unreadCount = Number.isFinite(unreadValueRaw) ? Math.max(0, unreadValueRaw) : 0;
                                         const hasUnread = unreadCount > 0;
+                                        const isActive = activeChat?.number === chat.number;
                                         return (
                                             <div
                                                 key={chat.number || chat.id}
                                                 onClick={() => handleChatClick(chat)}
-                                                className={`p-4 cursor-pointer transition-colors ${hasUnread && !darkMode ? 'bg-blue-50' : ''
-                                                    } ${hasUnread && darkMode ? 'bg-blue-900/30' : ''
+                                                className={`p-4 cursor-pointer transition-colors  ${isActive && !darkMode ? 'bg-gray-100' : ''
+                                                    } ${isActive && darkMode ? 'bg-gray-700' : ''
                                                     } ${darkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}
                                             >
                                                 <div className="flex items-center space-x-3">
@@ -422,7 +468,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                                                                 <div className="text-xs text-gray-500 dark:text-gray-400">
                                                                     {formatTime(chat.timestamp || chat.create_date)}
                                                                 </div>
-                                                                {hasUnread && (
+                                                                {hasUnread && !isActive && (
                                                                     <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-green-500 text-white text-xs font-semibold flex items-center justify-center">
                                                                         {unreadCount > 99 ? '99+' : unreadCount}
                                                                     </span>
