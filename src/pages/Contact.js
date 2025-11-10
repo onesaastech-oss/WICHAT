@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
+import { useNavigate } from 'react-router-dom';
 import { contactDbHelper } from './db';
 import {
   FiPlus,
@@ -46,6 +47,7 @@ function Contact() {
   const [successMessage, setSuccessMessage] = useState('');
   const [sortColumn, setSortColumn] = useState(null); // 'name', 'email', 'firm_name'
   const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
+  const navigate = useNavigate();
 
   // Form state for creating new contact
   const [newContact, setNewContact] = useState({
@@ -960,8 +962,10 @@ function Contact() {
                                       <FiUser className="h-5 w-5 text-indigo-600" />
                                     </div>
                                   </div>
-                                  <div className="ml-4">
-                                    <div className="text-sm font-medium text-gray-900">
+                                  <div className="ml-4 cursor-pointer text-indigo-600">
+                                    <div className="text-sm font-medium  " onClick={()=>{
+                                      navigate(`/live-chat/${contact.mobile}`);
+                                    }}>
                                       {contact.name}
                                     </div>
                                   </div>
