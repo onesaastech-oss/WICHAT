@@ -646,6 +646,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         country: ''
     });
 
+    // Voice recording states
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingTime, setRecordingTime] = useState(0);
+    const [mediaRecorder, setMediaRecorder] = useState(null);
+    const audioChunksRef = useRef([]);
+    const recordingTimerRef = useRef(null);
+
     // Contact details side panel state
     const [showContactDetails, setShowContactDetails] = useState(false);
     const [contactDetails, setContactDetails] = useState(null);
@@ -1604,6 +1611,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     <AudioPreview
                         fileInfo={fileInfo}
                         isOwnMessage={message.send_by === 'You'}
+                        isVoiceMessage={message.is_voice || false}
                     />
                 );
             case 'document':
@@ -1811,6 +1819,271 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
     };
 
+    // Voice recording functions
+    const startRecording = async () => {
+        try {
+            alert('Requesting microphone access...');
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    sampleRate: 44100
+                } 
+            });
+            
+            alert('Microphone access granted, creating MediaRecorder...');
+            const recorder = new MediaRecorder(stream, {
+                mimeType: 'audio/webm;codecs=opus'
+            });
+            
+            // Clear previous chunks
+            audioChunksRef.current = [];
+            
+            setMediaRecorder(recorder);
+            setIsRecording(true);
+            setRecordingTime(0);
+            
+            // Start timer
+            recordingTimerRef.current = setInterval(() => {
+                setRecordingTime(prev => prev + 1);
+            }, 1000);
+            
+            recorder.ondataavailable = (event) => {
+                console.log('Audio data available:', event.data.size, 'bytes');
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data);
+                }
+            };
+            
+            recorder.onstop = () => {
+                console.log('Recording stopped, total chunks:', audioChunksRef.current.length);
+                stream.getTracks().forEach(track => track.stop());
+                
+                // Process the recording after a short delay
+                setTimeout(() => {
+                    if (audioChunksRef.current.length > 0) {
+                        sendVoiceMessage();
+                    }
+                }, 100);
+            };
+            
+            recorder.onerror = (event) => {
+                console.error('MediaRecorder error:', event.error);
+                toast.error('Recording error: ' + event.error);
+            };
+            
+            recorder.start(1000); // Collect data every second
+            console.log('Recording started...');
+            toast.success('Recording started! Tap mic again to stop.');
+            
+        } catch (error) {
+            console.error('Error starting recording:', error);
+            if (error.name === 'NotAllowedError') {
+                toast.error('Microphone permission denied. Please allow microphone access and try again.');
+            } else if (error.name === 'NotFoundError') {
+                toast.error('No microphone found. Please connect a microphone and try again.');
+            } else {
+                toast.error('Could not access microphone: ' + error.message);
+            }
+        }
+    };
+
+    const stopRecording = () => {
+        console.log('Stopping recording...');
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            setIsRecording(false);
+            
+            if (recordingTimerRef.current) {
+                clearInterval(recordingTimerRef.current);
+                recordingTimerRef.current = null;
+            }
+            
+            toast.success('Recording stopped! Processing...');
+        }
+    };
+
+    const cancelRecording = () => {
+        console.log('Cancelling recording...');
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+        }
+        
+        setIsRecording(false);
+        setRecordingTime(0);
+        audioChunksRef.current = [];
+        
+        if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+        }
+        
+        toast.info('Recording cancelled');
+    };
+
+    const sendVoiceMessage = async () => {
+        console.log('Sending voice message, chunks:', audioChunksRef.current.length);
+        if (audioChunksRef.current.length === 0) {
+            console.log('No audio chunks to send');
+            toast.error('No audio recorded');
+            return;
+        }
+        
+        try {
+            // Create audio blob
+            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+            console.log('Created audio blob, size:', audioBlob.size, 'bytes');
+            
+            // Create FormData for file upload
+            const formData = new FormData();
+            formData.append('file', audioBlob, `voice_${Date.now()}.webm`);
+            formData.append('project_id', tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c');
+            
+            // Upload audio file first
+            const uploadResponse = await axios.post(
+                'https://api.w1chat.com/file/upload',
+                formData,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'multipart/form-data'
+                    }
+                }
+            );
+            
+            if (uploadResponse.data.error) {
+                throw new Error(uploadResponse.data.message || 'Failed to upload audio');
+            }
+            
+            const audioUrl = uploadResponse.data.data.file_url;
+            
+            // Send voice message
+            const tempMessageId = `temp_${Date.now()}`;
+            const newMessage = {
+                id: Date.now().toString(),
+                message_id: tempMessageId,
+                type: 'out',
+                message_type: 'audio',
+                message: '',
+                status: 'pending',
+                timestamp: Date.now(),
+                send_by: 'You',
+                chat_number: activeChat.number,
+                media_url: audioUrl,
+                is_voice: true
+            };
+            
+            // Add message to UI immediately
+            setMessages(prev => [...prev, newMessage]);
+            
+            // Save to local DB if available
+            if (dbAvailable) {
+                try {
+                    await dbHelper.saveMessage([newMessage]);
+                } catch (e) {
+                    console.warn('Failed to persist temp message:', e);
+                }
+            }
+            
+            // Trigger parent to refresh chat list with pending state
+            if (onMessageStatusUpdate) {
+                onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
+            }
+            
+            const messagePayload = {
+                project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                message: '',
+                number: activeChat.number,
+                audio_link: audioUrl,
+                is_voice: true
+            };
+            
+            const { data, key } = Encrypt(messagePayload);
+            const data_pass = JSON.stringify({ "data": data, "key": key });
+            
+            const messageResponse = await axios.post(
+                `https://api.w1chat.com/message/send-audio-message`,
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            
+            if (!messageResponse.data.error) {
+                // Update message status to sent
+                setMessages(prev =>
+                    prev.map(msg =>
+                        msg.message_id === tempMessageId
+                            ? { ...msg, status: 'sent' }
+                            : msg
+                    )
+                );
+                
+                if (dbAvailable) {
+                    await dbHelper.updateMessageStatus(tempMessageId, 'sent');
+                }
+                
+                if (onMessageStatusUpdate) {
+                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'sent');
+                }
+                
+                toast.success('Voice message sent!');
+            } else {
+                // Update message status to failed
+                setMessages(prev =>
+                    prev.map(msg =>
+                        msg.message_id === tempMessageId
+                            ? { ...msg, status: 'failed' }
+                            : msg
+                    )
+                );
+                
+                if (dbAvailable) {
+                    await dbHelper.updateMessageStatus(tempMessageId, 'failed');
+                }
+                
+                if (onMessageStatusUpdate) {
+                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
+                }
+                
+                toast.error('Failed to send voice message');
+            }
+            
+        } catch (error) {
+            console.error('Error sending voice message:', error);
+            toast.error('Failed to send voice message');
+        } finally {
+            // Clean up
+            audioChunksRef.current = [];
+            setRecordingTime(0);
+        }
+    };
+
+    const handleMicClick = () => {
+        alert('hitt')
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    };
+
+    // Note: Recording completion is now handled in the recorder.onstop event
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (recordingTimerRef.current) {
+                clearInterval(recordingTimerRef.current);
+            }
+        };
+    }, []);
+
     const handleFileSelect = (fileType) => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -1949,7 +2222,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
                 if (fileType === 'photo') messagePayload.image_link = fileUrl;
                 else if (fileType === 'video') messagePayload.video_link = fileUrl;
-                else if (fileType === 'audio') messagePayload.audio_link = fileUrl;
+                else if (fileType === 'audio') {
+                    messagePayload.audio_link = fileUrl;
+                    messagePayload.is_voice = false; // Regular audio file, not voice message
+                }
                 else if (fileType === 'document') messagePayload.document_link = fileUrl;
 
                 let api_url = 'send-text-message';
@@ -2528,6 +2804,26 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     </div>
                 )}
 
+                {/* Recording Indicator */}
+                {isRecording && (
+                    <div className="px-4 py-2 bg-red-50 dark:bg-red-900/20 border-t border-red-200 dark:border-red-800">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                                <span className="text-red-600 dark:text-red-400 text-sm font-medium">
+                                    Recording... {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
+                                </span>
+                            </div>
+                            <button
+                                onClick={cancelRecording}
+                                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                            >
+                                <FiX className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* Input Area */}
                 <div className="p-3 sm:p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-800 w-full">
                     <div className="flex items-center space-x-2 sm:space-x-3">
@@ -2571,7 +2867,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                 darkMode={darkMode}
                                 className="m-auto"
                             />
-                            <button className="ml-2 sm:ml-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
+                            <button 
+                                onClick={handleMicClick}
+                                className={`ml-2 sm:ml-3 transition-colors ${
+                                    isRecording 
+                                        ? 'text-red-500 hover:text-red-600 animate-pulse' 
+                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                }`}
+                            >
                                 <FiMic className="w-4 h-4 sm:w-5 sm:h-5" />
                             </button>
                             <button

@@ -1,756 +1,1041 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
-import { Link } from 'react-router-dom';
+import axios from 'axios';
+import { Encrypt } from './encryption/payload-encryption';
 import {
-    FiMessageSquare,
-    FiMail,
-    FiSettings,
-    FiUsers,
-    FiZap,
-    FiCalendar,
-    FiActivity,
-    FiPlus,
-    FiDownload,
-    FiUpload,
-    FiEdit,
-    FiTrash2,
-    FiChevronLeft,
-    FiChevronRight,
-    FiUserPlus,
-    FiCheckSquare,
-    FiSquare,
-    FiChevronDown,
-    FiX,
-    FiUser,
-    FiFile,
-    FiSave,
-    FiEye
+  FiPlus,
+  FiEdit,
+  FiTrash2,
+  FiChevronUp,
+  FiChevronDown,
+  FiX,
+  FiUser,
+  FiFileText,
+  FiCheckCircle
 } from 'react-icons/fi';
 
 function ContactGroup() {
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const [groups, setGroups] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage] = useState(10);
-    const [selectedGroups, setSelectedGroups] = useState([]);
-    const [isAllSelected, setIsAllSelected] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [groups, setGroups] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tokens, setTokens] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedGroups, setSelectedGroups] = useState([]);
+  const [isAllSelected, setIsAllSelected] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingGroup, setEditingGroup] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingGroup, setDeletingGroup] = useState(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [sortColumn, setSortColumn] = useState(null); // 'name', '', 'firm_name'
+  const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
 
-    // Modal states
-    const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [showAddModal, setShowAddModal] = useState(false);
-    const [showEditModal, setShowEditModal] = useState(false);
-    const [showViewModal, setShowViewModal] = useState(false);
-    const [currentGroup, setCurrentGroup] = useState(null);
+  // Form state for creating new group
+  const [newGroup, setNewGroup] = useState({
+    name: '',
+    remark: ''
+  });
 
-    // Form states
-    const [newGroup, setNewGroup] = useState({
-        name: '',
-        description: '',
-        status: 'Active'
-    });
+  // Form state for editing group
+  const [editGroup, setEditGroup] = useState({
+    group_id: '',
+    name: '',
+    remark: ''
+  });
 
-    const [formErrors, setFormErrors] = useState({});
+  // Validation errors for create modal
+  const [createErrors, setCreateErrors] = useState({
+    name: '',
+    remark: ''
+  });
 
-    // Derived state for bulk actions
-    const showBulkActions = selectedGroups.length > 0;
-    const [showBulkDropdown, setShowBulkDropdown] = useState(false);
+  // Validation errors for edit modal
+  const [editErrors, setEditErrors] = useState({
+    name: '',
+    remark: ''
+  });
 
-    const [isMinimized, setIsMinimized] = useState(() => {
-        const saved = localStorage.getItem('sidebarMinimized');
-        return saved ? JSON.parse(saved) : false;
-    });
+  const [isMinimized, setIsMinimized] = useState(() => {
+    const saved = localStorage.getItem('sidebarMinimized');
+    return saved ? JSON.parse(saved) : false;
+  });
 
-    useEffect(() => {
-        localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
-    }, [isMinimized]);
+  useEffect(() => {
+    localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
+  }, [isMinimized]);
 
-    // Prevent background scrolling when mobile menu is open
-    useEffect(() => {
-        if (mobileMenuOpen) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = 'auto';
+  // Load auth tokens
+  useEffect(() => {
+    const loadTokens = async () => {
+      try {
+        // Load auth tokens from session
+        const sessionData = localStorage.getItem('userData');
+        if (sessionData) {
+          const parsed = JSON.parse(sessionData);
+          if (parsed && typeof parsed === 'object') {
+            setTokens(parsed);
+          }
         }
-        return () => {
-            document.body.style.overflow = 'auto';
+      } catch (e) {
+        console.error('Failed to load tokens:', e);
+      }
+    };
+
+    loadTokens();
+  }, []);
+
+  // Load groups from API
+  useEffect(() => {
+    if (!tokens?.token || !tokens?.username) return;
+
+    const loadGroups = async () => {
+      try {
+        setLoading(true);
+        console.log('🌐 Loading groups from API...');
+
+        const payload = {
+          project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          last_id: 0
         };
-    }, [mobileMenuOpen]);
 
-    // Fetch groups data (simulated)
-    useEffect(() => {
-        const fetchGroups = async () => {
-            setLoading(true);
-            try {
-                await new Promise(resolve => setTimeout(resolve, 1500));
+        const { data, key } = Encrypt(payload);
+        const data_pass = JSON.stringify({ data, key });
 
-                // Mock data for groups
-                const mockGroups = [
-                    { id: 1, name: 'Family', description: 'Close family members', createdOn: '2023-06-15', status: 'Active' },
-                    { id: 2, name: 'Friends', description: 'Personal friends and acquaintances', createdOn: '2023-06-10', status: 'Active' },
-                    { id: 3, name: 'Work', description: 'Colleagues and business contacts', createdOn: '2023-06-05', status: 'Active' },
-                    { id: 4, name: 'Clients', description: 'Business clients and customers', createdOn: '2023-05-28', status: 'Active' },
-                    { id: 5, name: 'VIP', description: 'Very important persons', createdOn: '2023-05-20', status: 'Active' },
-                    { id: 6, name: 'Suppliers', description: 'Vendors and suppliers', createdOn: '2023-05-15', status: 'Inactive' },
-                    { id: 7, name: 'Marketing', description: 'Marketing campaign recipients', createdOn: '2023-05-10', status: 'Active' },
-                    { id: 8, name: 'Newsletter', description: 'Newsletter subscribers', createdOn: '2023-05-05', status: 'Active' },
-                ];
-
-                setGroups(mockGroups);
-            } catch (error) {
-                console.error('Failed to fetch groups:', error);
-            } finally {
-                setLoading(false);
+        const response = await axios.post(
+          'https://api.w1chat.com/contact/group-list',
+          data_pass,
+          {
+            headers: {
+              'token': tokens.token,
+              'username': tokens.username,
+              'Content-Type': 'application/json'
             }
+          }
+        );
+
+        if (!response?.data?.error) {
+          const apiList = response?.data?.data || [];
+          console.log(`📥 Received ${apiList.length} groups from API`);
+
+          const mappedGroups = apiList.map(g => ({
+            id: g.group_id,
+            name: g.name,
+            remark: g.remark,
+            createdOn: g.create_date
+          }));
+
+          setGroups(mappedGroups);
+          console.log(`✅ Loaded ${mappedGroups.length} groups`);
+        } else {
+          console.warn('⚠️ API returned error:', response?.data?.message);
+          setGroups([]);
+        }
+      } catch (error) {
+        console.error('❌ Error loading groups:', error);
+        setGroups([]);
+      } finally {
+        setLoading(false);
+        setSelectedGroups([]);
+        setIsAllSelected(false);
+      }
+    };
+
+    loadGroups();
+  }, [tokens?.token, tokens?.username, tokens?.projects]);
+
+  // Validation functions
+  const validateGroupName = (name) => {
+    if (!name || name.trim() === '') {
+      return 'Group name is required';
+    }
+    if (name.trim().length < 2) {
+      return 'Group name must be at least 2 characters long';
+    }
+    if (name.trim().length > 100) {
+      return 'Group name must be less than 100 characters';
+    }
+    // Allow letters, spaces, hyphens, apostrophes, periods, and numbers
+    const nameRegex = /^[\p{L}\s\-'\.0-9]+$/u;
+    if (!nameRegex.test(name.trim())) {
+      return 'Group name contains invalid characters';
+    }
+    return '';
+  };
+
+  const validateRemark = (remark) => {
+    if (!remark || remark.trim() === '') {
+      return ''; // Remark is optional
+    }
+    if (remark.trim().length > 1000) {
+      return 'Remark must be less than 1000 characters';
+    }
+    return '';
+  };
+
+  // Validate create group form
+  const validateCreateForm = () => {
+    const errors = {
+      name: validateGroupName(newGroup.name),
+      remark: validateRemark(newGroup.remark)
+    };
+    setCreateErrors(errors);
+    return !Object.values(errors).some(error => error !== '');
+  };
+
+  // Validate edit group form
+  const validateEditForm = () => {
+    const errors = {
+      name: validateGroupName(editGroup.name),
+      remark: validateRemark(editGroup.remark)
+    };
+    setEditErrors(errors);
+    return !Object.values(errors).some(error => error !== '');
+  };
+
+  // Handle create group
+  const handleCreateGroup = async () => {
+    if (!tokens?.token || !tokens?.username) return;
+
+    // Validate form before submitting
+    if (!validateCreateForm()) {
+      return;
+    }
+
+    try {
+      const payload = {
+        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        name: newGroup.name,
+        remark: newGroup.remark
+      };
+
+      const { data, key } = Encrypt(payload);
+      const data_pass = JSON.stringify({ data, key });
+
+      const response = await axios.post(
+        'https://api.w1chat.com/contact/create-group',
+        data_pass,
+        {
+          headers: {
+            'token': tokens.token,
+            'username': tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response?.data?.error) {
+        // Close modal and reset form
+        setShowCreateModal(false);
+        setNewGroup({
+          name: '',
+          remark: ''
+        });
+        setCreateErrors({
+          name: '',
+          remark: ''
+        });
+
+        // Refresh groups list
+        const refreshPayload = {
+          project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          last_id: 0
         };
 
-        fetchGroups();
-    }, []);
+        const { data: refreshData, key: refreshKey } = Encrypt(refreshPayload);
+        const refresh_data_pass = JSON.stringify({ data: refreshData, key: refreshKey });
 
-    // Get current groups for pagination
-    const indexOfLastItem = currentPage * itemsPerPage;
-    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentGroups = groups.slice(indexOfFirstItem, indexOfLastItem);
-    const totalPages = Math.ceil(groups.length / itemsPerPage);
-
-    // Change page
-    const paginate = (pageNumber) => {
-        setCurrentPage(pageNumber);
-        setSelectedGroups([]);
-        setIsAllSelected(false);
-    };
-
-    // Handle individual group selection
-    const toggleGroupSelection = (groupId) => {
-        if (selectedGroups.includes(groupId)) {
-            setSelectedGroups(selectedGroups.filter(id => id !== groupId));
-            setIsAllSelected(false);
-        } else {
-            setSelectedGroups([...selectedGroups, groupId]);
-        }
-    };
-
-    // Handle select all on current page
-    const toggleSelectAll = () => {
-        if (isAllSelected) {
-            setSelectedGroups([]);
-            setIsAllSelected(false);
-        } else {
-            const currentPageIds = currentGroups.map(group => group.id);
-            setSelectedGroups(currentPageIds);
-            setIsAllSelected(true);
-        }
-    };
-
-    // Handle bulk delete
-    const handleBulkDelete = () => {
-        setShowDeleteModal(true);
-        setShowBulkDropdown(false);
-    };
-
-    // Confirm delete
-    const confirmDelete = () => {
-        setGroups(groups.filter(group => !selectedGroups.includes(group.id)));
-        setSelectedGroups([]);
-        setShowDeleteModal(false);
-        setIsAllSelected(false);
-    };
-
-    // Handle add group
-    const handleAddGroup = () => {
-        setNewGroup({
-            name: '',
-            description: '',
-            status: 'Active'
-        });
-        setFormErrors({});
-        setShowAddModal(true);
-    };
-
-    // Handle edit group
-    const handleEditGroup = (group) => {
-        setCurrentGroup(group);
-        setNewGroup({
-            name: group.name,
-            description: group.description,
-            status: group.status
-        });
-        setFormErrors({});
-        setShowEditModal(true);
-    };
-
-    // Handle view group
-    const handleViewGroup = (group) => {
-        setCurrentGroup(group);
-        setShowViewModal(true);
-    };
-
-    // Handle input change for forms
-    const handleInputChange = useCallback((e) => {
-        const { name, value } = e.target;
-        setNewGroup(prev => ({
-            ...prev,
-            [name]: value
-        }));
-
-        // Clear error when user starts typing
-        if (formErrors[name]) {
-            setFormErrors(prev => ({
-                ...prev,
-                [name]: ''
-            }));
-        }
-    }, [formErrors]);
-
-    // Validate form
-    const validateForm = () => {
-        const errors = {};
-
-        if (!newGroup.name.trim()) {
-            errors.name = 'Group name is required';
-        }
-
-        if (!newGroup.description.trim()) {
-            errors.description = 'Description is required';
-        }
-
-        setFormErrors(errors);
-        return Object.keys(errors).length === 0;
-    };
-
-    // Save new group
-    const saveNewGroup = () => {
-        if (validateForm()) {
-            const newGroupObj = {
-                id: groups.length + 1,
-                ...newGroup,
-                createdOn: new Date().toISOString().split('T')[0]
-            };
-            setGroups([...groups, newGroupObj]);
-            setShowAddModal(false);
-            setNewGroup({
-                name: '',
-                description: '',
-                status: 'Active'
-            });
-        }
-    };
-
-    // Save edited group
-    const saveEditedGroup = () => {
-        if (validateForm()) {
-            const updatedGroups = groups.map(group =>
-                group.id === currentGroup.id
-                    ? { ...group, ...newGroup }
-                    : group
-            );
-            setGroups(updatedGroups);
-            setShowEditModal(false);
-            setCurrentGroup(null);
-            setNewGroup({
-                name: '',
-                description: '',
-                status: 'Active'
-            });
-        }
-    };
-
-    // Modal component for reusability
-    const Modal = React.memo(({ isOpen, onClose, title, children, actions }) => {
-        if (!isOpen) return null;
-
-        return (
-            <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
-                <div className="relative mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white transform transition-all duration-300 scale-95 opacity-0 animate-modal-in">
-                    <div className="mt-3">
-                        <div className="flex items-center justify-between pb-3 border-b">
-                            <h3 className="text-lg leading-6 font-medium text-gray-900">
-                                {title}
-                            </h3>
-                            <button
-                                onClick={onClose}
-                                className="text-gray-400 hover:text-gray-500 focus:outline-none"
-                            >
-                                <FiX className="h-5 w-5" />
-                            </button>
-                        </div>
-                        <div className="mt-4 max-h-96 overflow-y-auto">
-                            {children}
-                        </div>
-                        <div className="items-center px-4 py-3 mt-4 flex justify-end space-x-4 border-t">
-                            {actions}
-                        </div>
-                    </div>
-                </div>
-            </div>
+        const refreshResponse = await axios.post(
+          'https://api.w1chat.com/contact/group-list',
+          refresh_data_pass,
+          {
+            headers: {
+              'token': tokens.token,
+              'username': tokens.username,
+              'Content-Type': 'application/json'
+            }
+          }
         );
+
+        if (!refreshResponse?.data?.error) {
+          const apiList = refreshResponse?.data?.data || [];
+          const mappedGroups = apiList.map(g => ({
+            id: g.group_id,
+            name: g.name,
+            remark: g.remark,
+            createdOn: g.create_date
+          }));
+          setGroups(mappedGroups);
+        }
+
+        // Show success message
+        const successMsg = response?.data?.msg || 'Group created successfully';
+        setSuccessMessage(successMsg);
+        setShowSuccessModal(true);
+      } else {
+        alert('Failed to create group: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Failed to create group:', error);
+      alert('Failed to create group. Please try again.');
+    }
+  };
+
+  // Handle opening edit modal
+  const handleOpenEditModal = (group) => {
+    console.log('🔧 Opening edit modal for group:', group);
+    setEditingGroup(group);
+    setEditGroup({
+      group_id: group.id,
+      name: group.name,
+      remark: group.remark || ''
     });
+    setEditErrors({
+      name: '',
+      remark: ''
+    });
+    setShowEditModal(true);
+  };
 
-    return (
-        <div className="min-h-screen bg-gray-50">
-            <Header
-                mobileMenuOpen={mobileMenuOpen}
-                setMobileMenuOpen={setMobileMenuOpen}
-                isMinimized={isMinimized}
-                setIsMinimized={setIsMinimized}
-            />
-            <Sidebar
-                mobileMenuOpen={mobileMenuOpen}
-                setMobileMenuOpen={setMobileMenuOpen}
-                isMinimized={isMinimized}
-                setIsMinimized={setIsMinimized}
-            />
+  // Handle update group
+  const handleUpdateGroup = async () => {
+    if (!tokens?.token || !tokens?.username || !editGroup.group_id) return;
 
-            {/* Delete Confirmation Modal */}
-            <Modal
-                isOpen={showDeleteModal}
-                onClose={() => setShowDeleteModal(false)}
-                title="Confirm Delete"
-                actions={
-                    <>
-                        <button
-                            className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={() => setShowDeleteModal(false)}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            className="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={confirmDelete}
-                        >
-                            Delete
-                        </button>
-                    </>
-                }
-            >
-                <div className="px-4 py-3">
-                    <p className="text-sm text-gray-500">
-                        Are you sure you want to delete {selectedGroups.length} group(s)? This action cannot be undone.
-                    </p>
+    // Validate form before submitting
+    if (!validateEditForm()) {
+      return;
+    }
+
+    try {
+      const payload = {
+        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        group_id: editGroup.group_id,
+        name: editGroup.name,
+        remark: editGroup.remark
+      };
+
+      console.log('📤 Sending update payload:', payload);
+
+      const { data, key } = Encrypt(payload);
+      const data_pass = JSON.stringify({ data, key });
+
+      const response = await axios.post(
+        'https://api.w1chat.com/contact/edit-group',
+        data_pass,
+        {
+          headers: {
+            'token': tokens.token,
+            'username': tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response?.data?.error) {
+        // Close modal and reset form
+        setShowEditModal(false);
+        setEditingGroup(null);
+        setEditGroup({
+          group_id: '',
+          name: '',
+          remark: ''
+        });
+        setEditErrors({
+          name: '',
+          remark: ''
+        });
+
+        // Refresh groups list
+        const refreshPayload = {
+          project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          last_id: 0
+        };
+
+        const { data: refreshData, key: refreshKey } = Encrypt(refreshPayload);
+        const refresh_data_pass = JSON.stringify({ data: refreshData, key: refreshKey });
+
+        const refreshResponse = await axios.post(
+          'https://api.w1chat.com/contact/group-list',
+          refresh_data_pass,
+          {
+            headers: {
+              'token': tokens.token,
+              'username': tokens.username,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (!refreshResponse?.data?.error) {
+          const apiList = refreshResponse?.data?.data || [];
+          const mappedGroups = apiList.map(g => ({
+            id: g.group_id,
+            name: g.name,
+            remark: g.remark,
+            createdOn: g.create_date
+          }));
+          setGroups(mappedGroups);
+        }
+
+        // Show success message
+        const successMsg = response?.data?.msg || 'Group updated successfully';
+        setSuccessMessage(successMsg);
+        setShowSuccessModal(true);
+      } else {
+        alert('Failed to update group: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Failed to update group:', error);
+      alert('Failed to update group. Please try again.');
+    }
+  };
+
+  // Handle delete group
+  const handleDeleteGroup = async () => {
+    if (!tokens?.token || !tokens?.username || !deletingGroup?.id) return;
+
+    try {
+      const payload = {
+        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        group_id: deletingGroup.id
+      };
+
+      console.log('🗑️ Deleting group:', { group: deletingGroup.name, payload });
+
+      const { data, key } = Encrypt(payload);
+      const data_pass = JSON.stringify({ data, key });
+
+      const response = await axios.post(
+        'https://api.w1chat.com/contact/delete-group',
+        data_pass,
+        {
+          headers: {
+            'token': tokens.token,
+            'username': tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response?.data?.error) {
+        // Close delete modal
+        setShowDeleteModal(false);
+        setDeletingGroup(null);
+
+        // Refresh groups list
+        const refreshPayload = {
+          project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          last_id: 0
+        };
+
+        const { data: refreshData, key: refreshKey } = Encrypt(refreshPayload);
+        const refresh_data_pass = JSON.stringify({ data: refreshData, key: refreshKey });
+
+        const refreshResponse = await axios.post(
+          'https://api.w1chat.com/contact/group-list',
+          refresh_data_pass,
+          {
+            headers: {
+              'token': tokens.token,
+              'username': tokens.username,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (!refreshResponse?.data?.error) {
+          const apiList = refreshResponse?.data?.data || [];
+          const mappedGroups = apiList.map(g => ({
+            id: g.group_id,
+            name: g.name,
+            remark: g.remark,
+            createdOn: g.create_date
+          }));
+          setGroups(mappedGroups);
+        }
+
+        // Show success message
+        const successMsg = response?.data?.msg || 'Group deleted successfully';
+        setSuccessMessage(successMsg);
+        setShowSuccessModal(true);
+      } else {
+        alert('Failed to delete group: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Failed to delete group:', error);
+      alert('Failed to delete group. Please try again.');
+    }
+  };
+
+  // Handle opening delete modal
+  const handleOpenDeleteModal = (group) => {
+    setDeletingGroup(group);
+    setShowDeleteModal(true);
+  };
+
+  // Handle export to Excel
+  const handleExportToExcel = () => {
+    if (groups.length === 0) {
+      alert('No groups to export');
+      return;
+    }
+
+    const csvContent = [
+      ['Name', 'Remark', 'Created On'],
+      ...groups.map(group => [
+        group.name,
+        group.remark,
+        group.createdOn
+      ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'groups.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  // Handle select all groups
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedGroups([]);
+      setIsAllSelected(false);
+    } else {
+      setSelectedGroups(groups.map(g => g.id));
+      setIsAllSelected(true);
+    }
+  };
+
+  // Handle individual group selection
+  const handleSelectGroup = (groupId) => {
+    if (selectedGroups.includes(groupId)) {
+      setSelectedGroups(selectedGroups.filter(id => id !== groupId));
+      setIsAllSelected(false);
+    } else {
+      const newSelected = [...selectedGroups, groupId];
+      setSelectedGroups(newSelected);
+      setIsAllSelected(newSelected.length === groups.length);
+    }
+  };
+
+  // Handle column sorting
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      // Toggle direction if clicking the same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Set new column and default to ascending
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  // Apply sorting to groups if a sort column is selected
+  let filteredGroups = [...groups];
+  if (sortColumn) {
+    filteredGroups = filteredGroups.sort((a, b) => {
+      let aValue = a[sortColumn] || '';
+      let bValue = b[sortColumn] || '';
+
+      // Convert to string and handle empty values
+      aValue = String(aValue).toLowerCase().trim();
+      bValue = String(bValue).toLowerCase().trim();
+
+      // Handle empty values - put them at the end
+      if (aValue === '' && bValue === '') return 0;
+      if (aValue === '') return 1;
+      if (bValue === '') return -1;
+
+      // Compare values
+      if (aValue < bValue) {
+        return sortDirection === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortDirection === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Header
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+        isMinimized={isMinimized}
+        setIsMinimized={setIsMinimized}
+      />
+      <Sidebar
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+        isMinimized={isMinimized}
+        setIsMinimized={setIsMinimized}
+      />
+
+      <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
+        }`}>
+        <div className="p-4 sm:p-6 md:p-8">
+          {/* Header Section */}
+          <div className="mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <h1 className="text-base font-bold text-gray-900">Group Management</h1>
                 </div>
-            </Modal>
+                <p className="text-gray-600 text-sm">Manage your contact groups and organize your contacts</p>
+              </div>
 
-            {/* Add Group Modal */}
-            <Modal
-                isOpen={showAddModal}
-                onClose={() => setShowAddModal(false)}
-                title="Add New Group"
-                actions={
-                    <>
-                        <button
-                            className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={() => setShowAddModal(false)}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            className="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={saveNewGroup}
-                        >
-                            Save Group
-                        </button>
-                    </>
-                }
-            >
-                <div className="px-4 py-3 space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Group Name *</label>
-                        <input
-                            type="text"
-                            name="name"
-                            value={newGroup.name}
-                            onChange={handleInputChange}
-                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.name ? 'border-red-500' : 'border-gray-300'
-                                }`}
-                            placeholder="Enter group name"
-                        />
-                        {formErrors.name && <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>}
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-                        <textarea
-                            name="description"
-                            value={newGroup.description}
-                            onChange={handleInputChange}
-                            rows="3"
-                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.description ? 'border-red-500' : 'border-gray-300'
-                                }`}
-                            placeholder="Enter group description"
-                        />
-                        {formErrors.description && <p className="mt-1 text-sm text-red-600">{formErrors.description}</p>}
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                        <select
-                            name="status"
-                            value={newGroup.status}
-                            onChange={handleInputChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                            <option value="Active">Active</option>
-                            <option value="Inactive">Inactive</option>
-                        </select>
-                    </div>
-                </div>
-            </Modal>
+              <div className="flex flex-wrap gap-3 mt-4 sm:mt-0">
 
-            {/* Edit Group Modal */}
-            <Modal
-                isOpen={showEditModal}
-                onClose={() => setShowEditModal(false)}
-                title="Edit Group"
-                actions={
-                    <>
-                        <button
-                            className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={() => setShowEditModal(false)}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            className="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={saveEditedGroup}
-                        >
-                            Save Changes
-                        </button>
-                    </>
-                }
-            >
-                <div className="px-4 py-3 space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Group Name *</label>
-                        <input
-                            type="text"
-                            name="name"
-                            value={newGroup.name}
-                            onChange={handleInputChange}
-                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.name ? 'border-red-500' : 'border-gray-300'
-                                }`}
-                        />
-                        {formErrors.name && <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>}
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-                        <textarea
-                            name="description"
-                            value={newGroup.description}
-                            onChange={handleInputChange}
-                            rows="3"
-                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${formErrors.description ? 'border-red-500' : 'border-gray-300'
-                                }`}
-                        />
-                        {formErrors.description && <p className="mt-1 text-sm text-red-600">{formErrors.description}</p>}
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                        <select
-                            name="status"
-                            value={newGroup.status}
-                            onChange={handleInputChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                            <option value="Active">Active</option>
-                            <option value="Inactive">Inactive</option>
-                        </select>
-                    </div>
-                </div>
-            </Modal>
 
-            {/* View Group Modal */}
-            <Modal
-                isOpen={showViewModal}
-                onClose={() => setShowViewModal(false)}
-                title="Group Details"
-                actions={
-                    <button
-                        className="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                        onClick={() => setShowViewModal(false)}
-                    >
-                        Close
-                    </button>
-                }
-            >
-                {currentGroup && (
-                    <div className="px-4 py-3 space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Group Name</label>
-                            <p className="text-sm text-gray-900">{currentGroup.name}</p>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                            <p className="text-sm text-gray-900">{currentGroup.description}</p>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                            <p className="text-sm text-gray-900">{currentGroup.status}</p>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Created On</label>
-                            <p className="text-sm text-gray-900">{currentGroup.createdOn}</p>
-                        </div>
-                    </div>
-                )}
-            </Modal>
-
-            {/* Main content */}
-            <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
-                }`}>
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
-                    {/* Page header */}
-                    <div className="md:flex md:items-center md:justify-between mb-6">
-                        <div className="flex-1 min-w-0">
-                            <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
-                                Contact Groups
-                            </h2>
-                        </div>
-                        <div className="mt-4 flex md:mt-0 md:ml-4">
-                            <button
-                                onClick={handleAddGroup}
-                                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            >
-                                <FiPlus className="mr-2" />
-                                Add Group
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Bulk Actions Dropdown */}
-                    {showBulkActions && (
-                        <div className="mb-4 bg-indigo-50 p-3 rounded-md flex items-center justify-between">
-                            <div className="flex items-center">
-                                <span className="text-indigo-800 font-medium">
-                                    {selectedGroups.length} group(s) selected
-                                </span>
-                            </div>
-                            <div className="relative inline-block text-left">
-                                <div>
-                                    <button
-                                        type="button"
-                                        className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                        onClick={() => setShowBulkDropdown(!showBulkDropdown)}
-                                    >
-                                        Bulk Actions
-                                        <FiChevronDown className="-mr-1 ml-2 h-5 w-5" />
-                                    </button>
-                                </div>
-
-                                {showBulkDropdown && (
-                                    <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
-                                        <div className="py-1">
-                                            <button
-                                                className="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100 w-full text-left"
-                                                onClick={handleBulkDelete}
-                                            >
-                                                Delete Selected
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Groups table */}
-                    <div className="bg-white shadow rounded-lg overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            <div className="flex items-center">
-                                                <button onClick={toggleSelectAll} className="mr-2 focus:outline-none">
-                                                    {isAllSelected ? <FiCheckSquare className="h-5 w-5 text-indigo-600" /> : <FiSquare className="h-5 w-5 text-gray-400" />}
-                                                </button>
-                                                Group Name
-                                            </div>
-                                        </th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Description
-                                        </th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Created Date
-                                        </th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Status
-                                        </th>
-                                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Actions
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {loading ? (
-                                        // Skeleton loading rows
-                                        Array.from({ length: itemsPerPage }).map((_, index) => (
-                                            <tr key={index}>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center">
-                                                        <div className="h-4 bg-gray-200 rounded w-4 mr-2 animate-pulse"></div>
-                                                        <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                    <div className="h-6 bg-gray-200 rounded w-16 animate-pulse ml-auto"></div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    ) : (
-                                        // Actual data rows
-                                        currentGroups.map((group) => (
-                                            <tr key={group.id} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center">
-                                                        <button
-                                                            onClick={() => toggleGroupSelection(group.id)}
-                                                            className="mr-2 focus:outline-none"
-                                                        >
-                                                            {selectedGroups.includes(group.id) ?
-                                                                <FiCheckSquare className="h-5 w-5 text-indigo-600" /> :
-                                                                <FiSquare className="h-5 w-5 text-gray-400" />
-                                                            }
-                                                        </button>
-                                                        <div className="text-sm font-medium text-gray-900">{group.name}</div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="text-sm text-gray-500 line-clamp-1">{group.description}</div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {group.createdOn}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={`px-2 py-1 text-xs font-medium rounded-full 
-                                                        ${group.status === 'Active'
-                                                            ? 'bg-green-100 text-green-800'
-                                                            : 'bg-red-100 text-red-800'
-                                                        }`}>
-                                                        {group.status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                    <div className="flex justify-end space-x-2">
-                                                        <button
-                                                            className="text-indigo-600 hover:text-indigo-900"
-                                                            onClick={() => handleViewGroup(group)}
-                                                        >
-                                                            <FiEye size={18} />
-                                                        </button>
-                                                        <button
-                                                            className="text-indigo-600 hover:text-indigo-900"
-                                                            onClick={() => handleEditGroup(group)}
-                                                        >
-                                                            <FiEdit size={18} />
-                                                        </button>
-                                                        <button
-                                                            className="text-red-600 hover:text-red-900"
-                                                            onClick={() => {
-                                                                setSelectedGroups([group.id]);
-                                                                setShowDeleteModal(true);
-                                                            }}
-                                                        >
-                                                            <FiTrash2 size={18} />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Pagination */}
-                        {!loading && (
-                            <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                                    <div>
-                                        <p className="text-sm text-gray-700">
-                                            Showing <span className="font-medium">{indexOfFirstItem + 1}</span> to{' '}
-                                            <span className="font-medium">
-                                                {Math.min(indexOfLastItem, groups.length)}
-                                            </span>{' '}
-                                            of <span className="font-medium">{groups.length}</span> results
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                                            <button
-                                                onClick={() => paginate(Math.max(1, currentPage - 1))}
-                                                disabled={currentPage === 1}
-                                                className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium 
-                          ${currentPage === 1 ? 'text-gray-300' : 'text-gray-500 hover:bg-gray-50'}`}
-                                            >
-                                                <span className="sr-only">Previous</span>
-                                                <FiChevronLeft className="h-5 w-5" aria-hidden="true" />
-                                            </button>
-
-                                            {/* Page numbers */}
-                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                                <button
-                                                    key={page}
-                                                    onClick={() => paginate(page)}
-                                                    className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium
-                            ${currentPage === page
-                                                            ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
-                                                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'}`}
-                                                >
-                                                    {page}
-                                                </button>
-                                            ))}
-
-                                            <button
-                                                onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
-                                                disabled={currentPage === totalPages}
-                                                className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium 
-                          ${currentPage === totalPages ? 'text-gray-300' : 'text-gray-500 hover:bg-gray-50'}`}
-                                            >
-                                                <span className="sr-only">Next</span>
-                                                <FiChevronRight className="h-5 w-5" aria-hidden="true" />
-                                            </button>
-                                        </nav>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <FiPlus className="mr-2 h-4 w-4" />
+                  Create Group
+                </button>
+              </div>
             </div>
+          </div>
 
-            {/* CSS for animations */}
-            <style jsx>
-                {`
-                @keyframes modalIn {
-                0% {
-                    transform: scale(0.95);
-                    opacity: 0;
-                }
-                100% {
-                    transform: scale(1);
-                    opacity: 1;
-                }
-                }
-                .animate-modal-in {
-                animation: modalIn 0.2s ease-out forwards;
-                }
-                .line-clamp-1 {
-                    display: -webkit-box;
-                    -webkit-line-clamp: 1;
-                    -webkit-box-orient: vertical;
-                    overflow: hidden;
-                }
-            `}
-            </style>
+          {/* Groups Table */}
+          <div className="bg-white shadow rounded-lg overflow-hidden">
+            <div className="px-4 py-5 sm:p-6">
+              {loading ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                  <span className="ml-2 text-gray-600">Loading groups...</span>
+                </div>
+              ) : (
+                <>
+                  {/* Table Header */}
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <input
+                              type="checkbox"
+                              checked={isAllSelected}
+                              onChange={handleSelectAll}
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            />
+                          </th>
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort('name')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Group Name</span>
+                              {sortColumn === 'name' ? (
+                                sortDirection === 'asc' ? (
+                                  <FiChevronUp className="h-4 w-4 text-gray-700" />
+                                ) : (
+                                  <FiChevronDown className="h-4 w-4 text-gray-700" />
+                                )
+                              ) : (
+                                <div className="flex flex-col -space-y-1">
+                                  <FiChevronUp className="h-3 w-3 text-gray-400" />
+                                  <FiChevronDown className="h-3 w-3 text-gray-400" />
+                                </div>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort('remark')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Remark</span>
+                              {sortColumn === 'remark' ? (
+                                sortDirection === 'asc' ? (
+                                  <FiChevronUp className="h-4 w-4 text-gray-700" />
+                                ) : (
+                                  <FiChevronDown className="h-4 w-4 text-gray-700" />
+                                )
+                              ) : (
+                                <div className="flex flex-col -space-y-1">
+                                  <FiChevronUp className="h-3 w-3 text-gray-400" />
+                                  <FiChevronDown className="h-3 w-3 text-gray-400" />
+                                </div>
+                              )}
+                            </div>
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredGroups.length === 0 ? (
+                          <tr>
+                            <td colSpan="4" className="px-6 py-12 text-center text-gray-500">
+                              No groups found. Create your first group to get started.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredGroups.map((group) => (
+                            <tr key={group.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedGroups.includes(group.id)}
+                                  onChange={() => handleSelectGroup(group.id)}
+                                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                />
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <div className="flex-shrink-0 h-10 w-10">
+                                    <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                                      <FiUser className="h-5 w-5 text-indigo-600" />
+                                    </div>
+                                  </div>
+                                  <div className="ml-4">
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {group.name}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {group.remark || '-'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => handleOpenEditModal(group)}
+                                    className="text-indigo-600 hover:text-indigo-900"
+                                    title="Edit group"
+                                  >
+                                    <FiEdit className="h-4 w-4" />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleOpenDeleteModal(group)}
+                                    className="text-red-600 hover:text-red-900" 
+                                    title="Delete group"
+                                  >
+                                    <FiTrash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                </>
+              )}
+            </div>
+          </div>
         </div>
-    );
+      </div>
+
+      {/* Create Group Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-5/6 sm:w-3/6 md:w-3/6 lg:w-2/6 xl:w-6/9 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Create Group</h3>
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setNewGroup({
+                      name: '',
+                      remark: ''
+                    });
+                    setCreateErrors({
+                      name: '',
+                      remark: ''
+                    });
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <FiX className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiUser className="inline h-4 w-4 mr-1" />
+                    Group Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={newGroup.name}
+                    onChange={(e) => {
+                      setNewGroup({ ...newGroup, name: e.target.value });
+                      if (createErrors.name) {
+                        setCreateErrors({ ...createErrors, name: validateGroupName(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => setCreateErrors({ ...createErrors, name: validateGroupName(newGroup.name) })}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      createErrors.name 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
+                    placeholder="Enter group name"
+                    required
+                  />
+                  {createErrors.name && (
+                    <p className="mt-1 text-sm text-red-600">{createErrors.name}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiFileText className="inline h-4 w-4 mr-1" />
+                    Remark
+                  </label>
+                  <textarea
+                    value={newGroup.remark}
+                    onChange={(e) => {
+                      setNewGroup({ ...newGroup, remark: e.target.value });
+                      if (createErrors.remark) {
+                        setCreateErrors({ ...createErrors, remark: validateRemark(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => setCreateErrors({ ...createErrors, remark: validateRemark(newGroup.remark) })}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      createErrors.remark 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
+                    placeholder="Enter group description or remark"
+                    rows="3"
+                  />
+                  {createErrors.remark && (
+                    <p className="mt-1 text-sm text-red-600">{createErrors.remark}</p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    {newGroup.remark.length}/1000 characters
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setNewGroup({
+                      name: '',
+                      remark: ''
+                    });
+                    setCreateErrors({
+                      name: '',
+                      remark: ''
+                    });
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateGroup}
+                  disabled={!newGroup.name}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Create Group
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Group Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-5/6 sm:w-3/6 md:w-3/6 lg:w-2/6 xl:w-6/9 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Edit Group</h3>
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingGroup(null);
+                    setEditGroup({
+                      group_id: '',
+                      name: '',
+                      remark: ''
+                    });
+                    setEditErrors({
+                      name: '',
+                      remark: ''
+                    });
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <FiX className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiUser className="inline h-4 w-4 mr-1" />
+                    Group Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={editGroup.name}
+                    onChange={(e) => {
+                      setEditGroup({ ...editGroup, name: e.target.value });
+                      if (editErrors.name) {
+                        setEditErrors({ ...editErrors, name: validateGroupName(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => setEditErrors({ ...editErrors, name: validateGroupName(editGroup.name) })}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      editErrors.name 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
+                    placeholder="Enter group name"
+                    required
+                  />
+                  {editErrors.name && (
+                    <p className="mt-1 text-sm text-red-600">{editErrors.name}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <FiFileText className="inline h-4 w-4 mr-1" />
+                    Remark
+                  </label>
+                  <textarea
+                    value={editGroup.remark}
+                    onChange={(e) => {
+                      setEditGroup({ ...editGroup, remark: e.target.value });
+                      if (editErrors.remark) {
+                        setEditErrors({ ...editErrors, remark: validateRemark(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => setEditErrors({ ...editErrors, remark: validateRemark(editGroup.remark) })}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      editErrors.remark 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
+                    placeholder="Enter group description or remark"
+                    rows="3"
+                  />
+                  {editErrors.remark && (
+                    <p className="mt-1 text-sm text-red-600">{editErrors.remark}</p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    {editGroup.remark.length}/1000 characters
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingGroup(null);
+                    setEditGroup({
+                      group_id: '',
+                      name: '',
+                      remark: ''
+                    });
+                    setEditErrors({
+                      name: '',
+                      remark: ''
+                    });
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateGroup}
+                  disabled={!editGroup.name}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Update Group
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Group Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-5/6 sm:w-3/6 md:w-2/6 lg:w-2/6 xl:w-1/4 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-center mb-4">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                  <FiTrash2 className="h-6 w-6 text-red-600" />
+                </div>
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Delete Group</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Are you sure you want to delete the group "{deletingGroup?.name}"? This action cannot be undone.
+                </p>
+                <div className="flex justify-center space-x-3">
+                  <button
+                    onClick={() => {
+                      setShowDeleteModal(false);
+                      setDeletingGroup(null);
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteGroup}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  >
+                    Delete Group
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-5/6 sm:w-3/6 md:w-2/6 lg:w-2/6 xl:w-1/4 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-center mb-4">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                  <FiCheckCircle className="h-6 w-6 text-green-600" />
+                </div>
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Success</h3>
+                <p className="text-sm text-gray-600 mb-4">{successMessage}</p>
+                <button
+                  onClick={() => setShowSuccessModal(false)}
+                  className="w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default ContactGroup;
