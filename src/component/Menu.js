@@ -109,7 +109,6 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
       submenus: [
         { title: 'All Contact', path: '/contact', icon: <FiLayers size={18} /> },
         { title: 'Contact Group', path: '/contact-group', icon: <FiMessageSquare size={18} /> },
-        { title: 'Add Input', path: '/contact-input-field', icon: <FiSettings size={18} /> }
       ]
     },
     {
@@ -122,7 +121,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
       key: 'campaigns',
       title: 'Campaigns',
       icon: <FiZap size={20} />,
-      path: '/campaigns'
+       path: '/campaigns'
     },
     // {
     //   key: 'automation',

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import {
@@ -15,8 +16,10 @@ import {
 } from 'react-icons/fi';
 
 function ContactGroup() {
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [groups, setGroups] = useState([]);
+  const [totalGroupCount, setTotalGroupCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [tokens, setTokens] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -114,19 +117,25 @@ function ContactGroup() {
           }
         );
 
+        console.log(response);
+        
+
         if (!response?.data?.error) {
           const apiList = response?.data?.data || [];
-          console.log(`📥 Received ${apiList.length} groups from API`);
+          const totalCount = response?.data?.count || 0;
+          console.log(`📥 Received ${apiList.length} groups from API, total count: ${totalCount}`);
 
           const mappedGroups = apiList.map(g => ({
             id: g.group_id,
             name: g.name,
+            contact_count: g.contact_count || 0,
             remark: g.remark,
             createdOn: g.create_date
           }));
 
           setGroups(mappedGroups);
-          console.log(`✅ Loaded ${mappedGroups.length} groups`);
+          setTotalGroupCount(totalCount);
+          console.log(`✅ Loaded ${mappedGroups.length} groups, total: ${totalCount}`);
         } else {
           console.warn('⚠️ API returned error:', response?.data?.message);
           setGroups([]);
@@ -259,13 +268,16 @@ function ContactGroup() {
 
         if (!refreshResponse?.data?.error) {
           const apiList = refreshResponse?.data?.data || [];
+          const totalCount = refreshResponse?.data?.count || 0;
           const mappedGroups = apiList.map(g => ({
             id: g.group_id,
             name: g.name,
+            contact_count: g.contact_count || 0,
             remark: g.remark,
             createdOn: g.create_date
           }));
           setGroups(mappedGroups);
+          setTotalGroupCount(totalCount);
         }
 
         // Show success message
@@ -368,13 +380,16 @@ function ContactGroup() {
 
         if (!refreshResponse?.data?.error) {
           const apiList = refreshResponse?.data?.data || [];
+          const totalCount = refreshResponse?.data?.count || 0;
           const mappedGroups = apiList.map(g => ({
             id: g.group_id,
             name: g.name,
+            contact_count: g.contact_count || 0,
             remark: g.remark,
             createdOn: g.create_date
           }));
           setGroups(mappedGroups);
+          setTotalGroupCount(totalCount);
         }
 
         // Show success message
@@ -445,13 +460,16 @@ function ContactGroup() {
 
         if (!refreshResponse?.data?.error) {
           const apiList = refreshResponse?.data?.data || [];
+          const totalCount = refreshResponse?.data?.count || 0;
           const mappedGroups = apiList.map(g => ({
             id: g.group_id,
             name: g.name,
+            contact_count: g.contact_count || 0,
             remark: g.remark,
             createdOn: g.create_date
           }));
           setGroups(mappedGroups);
+          setTotalGroupCount(totalCount);
         }
 
         // Show success message
@@ -473,6 +491,11 @@ function ContactGroup() {
     setShowDeleteModal(true);
   };
 
+  // Handle group name click to navigate to group contacts
+  const handleGroupNameClick = (group) => {
+    navigate(`/contact-group-list?group_id=${group.id}&group_name=${encodeURIComponent(group.name)}`);
+  };
+
   // Handle export to Excel
   const handleExportToExcel = () => {
     if (groups.length === 0) {
@@ -481,10 +504,11 @@ function ContactGroup() {
     }
 
     const csvContent = [
-      ['Name', 'Remark', 'Created On'],
+      ['Name', 'Remark', 'Contact Count', 'Created On'],
       ...groups.map(group => [
         group.name,
         group.remark,
+        group.contact_count,
         group.createdOn
       ])
     ].map(row => row.join(',')).join('\n');
@@ -537,12 +561,26 @@ function ContactGroup() {
   let filteredGroups = [...groups];
   if (sortColumn) {
     filteredGroups = filteredGroups.sort((a, b) => {
-      let aValue = a[sortColumn] || '';
-      let bValue = b[sortColumn] || '';
+      let aValue = a[sortColumn];
+      let bValue = b[sortColumn];
 
-      // Convert to string and handle empty values
-      aValue = String(aValue).toLowerCase().trim();
-      bValue = String(bValue).toLowerCase().trim();
+      // Handle numeric sorting for contact_count
+      if (sortColumn === 'contact_count') {
+        aValue = Number(aValue) || 0;
+        bValue = Number(bValue) || 0;
+        
+        if (aValue < bValue) {
+          return sortDirection === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortDirection === 'asc' ? 1 : -1;
+        }
+        return 0;
+      }
+
+      // Handle string sorting for other columns
+      aValue = String(aValue || '').toLowerCase().trim();
+      bValue = String(bValue || '').toLowerCase().trim();
 
       // Handle empty values - put them at the end
       if (aValue === '' && bValue === '') return 0;
@@ -585,7 +623,7 @@ function ContactGroup() {
                 <div className="flex items-center gap-3 mb-2">
                   <h1 className="text-base font-bold text-gray-900">Group Management</h1>
                 </div>
-                <p className="text-gray-600 text-sm">Manage your contact groups and organize your contacts</p>
+                <p className="text-gray-600 text-sm">Manage your contact groups and organize your contacts ({totalGroupCount} groups)</p>
               </div>
 
               <div className="flex flex-wrap gap-3 mt-4 sm:mt-0">
@@ -665,6 +703,26 @@ function ContactGroup() {
                               )}
                             </div>
                           </th>
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort('contact_count')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Contacts</span>
+                              {sortColumn === 'contact_count' ? (
+                                sortDirection === 'asc' ? (
+                                  <FiChevronUp className="h-4 w-4 text-gray-700" />
+                                ) : (
+                                  <FiChevronDown className="h-4 w-4 text-gray-700" />
+                                )
+                              ) : (
+                                <div className="flex flex-col -space-y-1">
+                                  <FiChevronUp className="h-3 w-3 text-gray-400" />
+                                  <FiChevronDown className="h-3 w-3 text-gray-400" />
+                                </div>
+                              )}
+                            </div>
+                          </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Actions
                           </th>
@@ -673,7 +731,7 @@ function ContactGroup() {
                       <tbody className="bg-white divide-y divide-gray-200">
                         {filteredGroups.length === 0 ? (
                           <tr>
-                            <td colSpan="4" className="px-6 py-12 text-center text-gray-500">
+                            <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
                               No groups found. Create your first group to get started.
                             </td>
                           </tr>
@@ -696,14 +754,23 @@ function ContactGroup() {
                                     </div>
                                   </div>
                                   <div className="ml-4">
-                                    <div className="text-sm font-medium text-gray-900">
+                                    <button
+                                      onClick={() => handleGroupNameClick(group)}
+                                      className="text-sm font-medium text-indigo-600 hover:text-indigo-900 hover:underline cursor-pointer text-left"
+                                      title="View group contacts"
+                                    >
                                       {group.name}
-                                    </div>
+                                    </button>
                                   </div>
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 {group.remark || '-'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                                  {group.contact_count} contacts
+                                </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <div className="flex space-x-2">
@@ -715,9 +782,18 @@ function ContactGroup() {
                                     <FiEdit className="h-4 w-4" />
                                   </button>
                                   <button 
-                                    onClick={() => handleOpenDeleteModal(group)}
-                                    className="text-red-600 hover:text-red-900" 
-                                    title="Delete group"
+                                    onClick={() => group.contact_count === 0 && handleOpenDeleteModal(group)}
+                                    className={`${
+                                      group.contact_count > 0 
+                                        ? 'text-gray-400 cursor-not-allowed' 
+                                        : 'text-red-600 hover:text-red-900 cursor-pointer'
+                                    }`}
+                                    title={
+                                      group.contact_count > 0 
+                                        ? `Cannot delete group with ${group.contact_count} contacts. Remove all contacts first.`
+                                        : "Delete group"
+                                    }
+                                    disabled={group.contact_count > 0}
                                   >
                                     <FiTrash2 className="h-4 w-4" />
                                   </button>

@@ -11,12 +11,13 @@ import TemplateAdd from './pages/TemplateAdd';
 import TemplateEdit from './pages/TemplateEdit';
 import Contact from './pages/Contact';
 import ContactGroup from './pages/ContactGroup';
-import ContactInputField from './pages/ContactInputField';
+import ContactGroupList from './pages/ContactGroupList';
 import AgentManagement from './pages/AgentManagement';
 import MyPlan from './pages/MyPlan';
 import Blank from './pages/Blank';
 import PermissionsList from './pages/PermissionsList';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import Campaign from './pages/Campaign';
 
 const GOOGLE_CLIENT_ID = "124604231994-dtnflivbu049428d1cg9ngfuhgq38efs.apps.googleusercontent.com";
 
@@ -34,12 +35,12 @@ root.render(
         <Route path="/template-edit/:templateId" element={<TemplateEdit />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/contact-group" element={<ContactGroup />} />
-        <Route path="/contact-input-field" element={<ContactInputField />} />
+        <Route path="/contact-group-list" element={<ContactGroupList />} />
         <Route path="/agent-management" element={<AgentManagement />} />
         <Route path="/my-plan" element={<MyPlan />} />
         <Route path="/permission-list" element={<PermissionsList />} />
         <Route path="/blank" element={<Blank />} />
-
+        <Route path="/campaigns" element={<Campaign />} />
         {/* Login related page */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />

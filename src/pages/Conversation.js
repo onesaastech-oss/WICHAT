@@ -3228,6 +3228,7 @@ const formatDateForDisplay = (timestamp) => {
 // Helper function to group messages by date
 const groupMessagesByDate = (messages) => {
     const groups = {};
+    //i dont want to work any more
 
     messages.forEach(message => {
         const dateString = getDateString(message.timestamp || message.create_date);
@@ -3249,6 +3250,7 @@ const groupMessagesByDate = (messages) => {
         }));
 
     return sortedGroups;
+
 };
 
 export default Conversation;
