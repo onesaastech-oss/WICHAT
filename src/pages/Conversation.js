@@ -1941,7 +1941,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             
             // Upload audio file first
             const uploadResponse = await axios.post(
-                'https://api.w1chat.com/file/upload',
+                'https://api.w1chat.com/upload/upload-media',
                 formData,
                 {
                     headers: {

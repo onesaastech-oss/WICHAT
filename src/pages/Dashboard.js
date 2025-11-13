@@ -10,7 +10,9 @@ import {
     FiActivity,
     FiCreditCard,
     FiUser,
-    FiBarChart2
+    FiBarChart2,
+    FiCheckCircle,
+    FiXCircle
 } from 'react-icons/fi';
 
 function Dashboard() {
@@ -58,7 +60,8 @@ function Dashboard() {
         name: "Bmtax",
         email: "bmtax@example.com",
         plan: "Starter",
-        status: "Active"
+        status: "Active",
+        verified: true // Change to false for unverified
     };
 
     // Balance and limits data
@@ -88,17 +91,7 @@ function Dashboard() {
                 }`}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
                     {/* Upgrade plan banner */}
-                    <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl p-6 mb-8 flex justify-between items-center">
-                        <div>
-                            <h2 className="text-xl font-bold mb-2">Upgrade Your Plan</h2>
-                            <p className="max-w-2xl">
-                                Unlock more features, higher limits, and premium support with our Business plan.
-                            </p>
-                        </div>
-                        <button className="bg-white text-indigo-600 font-medium px-6 py-2 rounded-lg hover:bg-indigo-50 transition-colors duration-200">
-                            Upgrade Now
-                        </button>
-                    </div>
+
 
                     {/* Metrics */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -188,6 +181,25 @@ function Dashboard() {
                                     <div>
                                         <p className="text-sm text-gray-500">Email</p>
                                         <p className="font-medium">{userProfile.email}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-gray-500">Verification Status</p>
+                                        <div className="flex justify-between items-center">
+                                            <p className="font-medium">
+                                                {userProfile.verified ? 'Verified' : 'Unverified'}
+                                            </p>
+                                            {userProfile.verified ? (
+                                                <span className="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                                    <FiCheckCircle className="mr-1" size={14} />
+                                                    Verified
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">
+                                                    <FiXCircle className="mr-1" size={14} />
+                                                    Unverified
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div>
                                         <p className="text-sm text-gray-500">Current Plan</p>

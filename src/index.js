@@ -17,8 +17,13 @@ import MyPlan from './pages/MyPlan';
 import Blank from './pages/Blank';
 import PermissionsList from './pages/PermissionsList';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import Campaign from './pages/Campaign';
-
+import CreateCampaign from './pages/Campaign/CreateCampaign';
+import Transactions from './pages/Transactions';
+import Projects from './pages/Projects';
+import CampaignList from './pages/Campaign/CampaignList';
+import CampaignDetails from './pages/Campaign/CampaignDetails.js';
+import AutoReply from './pages/Automation/AutoReply';
+import Flow from './pages/Automation/Flow';
 const GOOGLE_CLIENT_ID = "124604231994-dtnflivbu049428d1cg9ngfuhgq38efs.apps.googleusercontent.com";
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -40,11 +45,16 @@ root.render(
         <Route path="/my-plan" element={<MyPlan />} />
         <Route path="/permission-list" element={<PermissionsList />} />
         <Route path="/blank" element={<Blank />} />
-        <Route path="/campaigns" element={<Campaign />} />
+        <Route path="/campaigns" element={<CampaignList />} />
+        <Route path="/campaign/:campaignId" element={<CampaignDetails />} />
+        <Route path="/create-campaign" element={<CreateCampaign />} />
+        <Route path="/projects" element={<Projects />} />
         {/* Login related page */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-
+        <Route path="/transactions" element={<Transactions />} />
+        <Route path="/auto-reply" element={<AutoReply />} />
+        <Route path="/flow" element={<Flow />} />
         {/* Add more routes as needed */}
         <Route path="*" element={<Error_404 />} />
       </Routes>

@@ -129,6 +129,7 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                 template_id: template.id,
                 component: formattedComponents
             };
+            console.log('Sending template with payload:', payload);
 
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
@@ -168,12 +169,12 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
         }
     };
 
-    // Load templates when modal opens
+    // Load templates when modal opens or tokens/status become available/changed
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && tokens?.token && tokens?.username) {
             fetchTemplates(true);
         }
-    }, [isOpen]);
+    }, [isOpen, tokens?.token, tokens?.username, statusFilter]);
 
     // Extract unique categories from templates
     const getUniqueCategories = () => {
@@ -211,6 +212,10 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                 });
             }
             onSendTemplate(template, formattedComponents);
+            onClose();
+        } else if (onTemplateSelect) {
+            // For Campaign/other contexts where we just need to select a template
+            onTemplateSelect(template);
             onClose();
         } else {
             sendTemplate(template);
@@ -404,16 +409,29 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
 
                                         {/* Action Buttons */}
                                         <div className="flex items-center gap-2">
+                                            {onTemplatePreview && (
+                                                <button
+                                                    onClick={() => onTemplatePreview(template)}
+                                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                        darkMode 
+                                                            ? 'bg-gray-600 text-gray-300 hover:bg-gray-500' 
+                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                    }`}
+                                                >
+                                                    <FiEye className="w-4 h-4" />
+                                                    Preview
+                                                </button>
+                                            )}
                                             <button
-                                                onClick={() => onTemplatePreview(template)}
-                                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                onClick={() => handleTemplateSelect(template)}
+                                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                                                     darkMode 
-                                                        ? 'bg-gray-600 text-gray-300 hover:bg-gray-500' 
-                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                        ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
+                                                        : 'bg-indigo-500 text-white hover:bg-indigo-600'
                                                 }`}
                                             >
-                                                <FiEye className="w-4 h-4" />
-                                                Preview
+                                                <FiCheck className="w-4 h-4" />
+                                                Select
                                             </button>
                                         </div>
                                     </div>

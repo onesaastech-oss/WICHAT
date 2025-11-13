@@ -19,10 +19,17 @@ import {
   FiHelpCircle,
   FiBell,
   FiPieChart,
-  FiChevronLeft,
-  FiChevronRight
+  FiBarChart2,
+  FiCreditCard,
+  FiDollarSign,
+  FiPlus,
+  FiBriefcase,
+  FiRefreshCw,
+  FiCpu,
+  FiGitBranch
 } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
+import SwitchProjectModal from './Modals/SwitchProjectModal';
 
 export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized }) => {
   const [openSubmenus, setOpenSubmenus] = useState({});
@@ -121,18 +128,24 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
       key: 'campaigns',
       title: 'Campaigns',
       icon: <FiZap size={20} />,
-       path: '/campaigns'
+      path: '/campaigns'
     },
-    // {
-    //   key: 'automation',
-    //   title: 'Automation',
-    //   icon: <FiZap size={20} />,
-    //   submenus: [
-    //     { title: 'Flows', path: '/flows', icon: <FiLayers size={18} /> },
-    //     { title: 'Chatbot', path: '/chatbot', icon: <FiMessageSquare size={18} /> },
-    //     { title: 'API Setup', path: '/api-setup', icon: <FiSettings size={18} /> }
-    //   ]
-    // },
+    {
+      key: 'automation',
+      title: 'Automation',
+      icon: <FiCpu size={20} />, // represents automated systems / logic
+      submenus: [
+        { title: 'Auto Reply', path: '/auto-reply', icon: <FiMessageSquare size={18} /> }, // chat or messaging
+        { title: 'Flow', path: '/flow', icon: <FiGitBranch size={18} /> } // represents workflow / branching logic
+      ]
+    }
+    ,
+    {
+      key: 'projects',
+      title: 'Projects',
+      icon: <FiBriefcase size={20} />,
+      path: '/projects'
+    },
     {
       key: 'management',
       title: 'Management',
@@ -144,20 +157,15 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
       ]
     },
     {
-      key: 'tools',
-      title: 'Tools',
-      icon: <FiSettings size={20} />,
+      key: 'billing',
+      title: 'Billing',
+      icon: <FiCreditCard size={20} />,
       submenus: [
-        { title: 'QR Code', path: '/qr-code', icon: <FiMaximize size={18} /> },
-        { title: 'Setup', path: '/setup', icon: <FiSettings size={18} /> }
+        { title: 'My Plan', path: '/my-plan', icon: <FiBarChart2 size={18} /> },
+        { title: 'Transactions', path: '/transactions', icon: <FiDollarSign size={18} /> }
       ]
-    },
-    {
-      key: 'my-plan',
-      title: 'My Plan',
-      icon: <FiPieChart size={20} />,
-      path: '/my-plan'
-    },
+    }
+
   ];
 
   // Animation variants
@@ -533,6 +541,9 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
 
 export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized }) => {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(120.50); // 💰 example static balance
+  const [switchProjectModalOpen, setSwitchProjectModalOpen] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState(null);
 
   const toggleSidebar = () => {
     setIsMinimized(!isMinimized);
@@ -545,7 +556,14 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
     navigate('/login');
   }
 
-  // Profile dropdown items
+  const handleSelectCompany = (company) => {
+    setSelectedCompany(company);
+    // You can add additional logic here, such as updating the app context or making an API call
+    console.log('Selected company:', company);
+    // Example: Update localStorage or context
+    // localStorage.setItem('selectedCompany', JSON.stringify(company));
+  }
+
   const profileItems = [
     { title: 'My Profile', icon: <FiUser className="mr-2" size={16} />, path: '#' },
     { title: 'Settings', icon: <FiSettings className="mr-2" size={16} />, path: '#' },
@@ -555,44 +573,64 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
   return (
     <header className="fixed top-0 inset-x-0 bg-white shadow-sm z-50 border-b">
       <div className="flex items-center justify-between h-16 px-4 sm:px-6 md:px-6">
-        {/* Left side - Menu button and Logo */}
+        {/* Left side - Menu + Logo */}
         <div className='left flex items-center'>
-          {/* Desktop sidebar toggle button */}
           <button
-            className="hidden md:block text-gray-500 hover:text-gray-600 focus:outline-none focus:ring-0 mr-3"
+            className="hidden md:block text-gray-500 hover:text-gray-600 focus:outline-none mr-3"
             onClick={toggleSidebar}
             aria-label="Toggle sidebar"
           >
             <FiMenu size={24} />
           </button>
 
-          {/* Mobile menu button */}
           <button
-            className="md:hidden text-gray-500 hover:text-gray-600 focus:outline-none focus:ring-0 mr-3"
+            className="md:hidden text-gray-500 hover:text-gray-600 focus:outline-none mr-3"
             onClick={() => setMobileMenuOpen(true)}
             aria-label="Open menu"
           >
             <FiMenu size={24} />
           </button>
 
-          {/* Logo */}
           <h1 className="text-xl font-bold text-indigo-600">WICHAT</h1>
         </div>
 
-        {/* Right side - Notifications and Profile */}
+        {/* Right side */}
         <div className="flex items-center space-x-4 text-xs sm:text-sm">
-          {/* Success Button */}
-          <button className="bg-green-600 text-white px-2 py-1 rounded-md hover:bg-green-700 font-medium text-[10px] sm:text-sm focus:outline-none focus:ring-0">
-            Apply Now
+
+          {/* Switch Project Button */}
+          <button
+            onClick={() => setSwitchProjectModalOpen(true)}
+            className="hidden md:flex items-center space-x-2 px-3 py-1.5 text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors focus:outline-none"
+            title="Switch Project"
+          >
+            <FiBriefcase size={18} />
+            <span className="font-medium">
+              {selectedCompany ? selectedCompany.name : 'Switch Project'}
+            </span>
           </button>
-          <button className="relative p-1 text-gray-500 hover:text-gray-600 focus:outline-none focus:ring-0">
+
+          <div className="flex items-center bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-md font-semibold">
+            <FiCreditCard className="mr-1.5" size={16} />
+            <span className="mr-2">₹{walletBalance.toFixed(2)}</span>
+            <button
+              // onClick={handleRefill} // your refill handler
+              className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+              title="Add Money"
+            >
+              <FiPlus size={12} />
+            </button>
+          </div>
+
+          {/* Notifications */}
+          <button className="relative p-1 text-gray-500 hover:text-gray-600 focus:outline-none">
             <FiBell size={20} />
             <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
           </button>
 
+          {/* Profile Dropdown */}
           <div className="relative">
             <button
-              className="flex items-center focus:outline-none focus:ring-0"
+              className="flex items-center focus:outline-none"
               onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
             >
               <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
@@ -600,28 +638,35 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
               </div>
             </button>
 
-            {/* Profile Dropdown */}
             {profileDropdownOpen && (
               <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setProfileDropdownOpen(false)}
-                ></div>
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 transition-all duration-200 transform origin-top-right border-0">
+                <div className="fixed inset-0 z-40" onClick={() => setProfileDropdownOpen(false)}></div>
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
                   {profileItems.map((item, index) => (
                     <a
                       key={index}
                       href={item.path}
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150 outline-none"
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       onClick={() => setProfileDropdownOpen(false)}
                     >
                       {item.icon}
                       {item.title}
                     </a>
                   ))}
+                  {/* Switch Project - Mobile Only */}
+                  <button
+                    className="md:hidden flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      setSwitchProjectModalOpen(true);
+                    }}
+                  >
+                    <FiBriefcase className="mr-2" size={16} />
+                    Switch Project
+                  </button>
                   <a
-                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150 outline-none cursor-pointer"
-                    onClick={() => handleLogout()}
+                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                    onClick={handleLogout}
                   >
                     <FiLogOut className="mr-2" size={16} /> Logout
                   </a>
@@ -631,6 +676,13 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
           </div>
         </div>
       </div>
+
+      {/* Switch Project Modal */}
+      <SwitchProjectModal
+        isOpen={switchProjectModalOpen}
+        onClose={() => setSwitchProjectModalOpen(false)}
+        onSelectCompany={handleSelectCompany}
+      />
     </header>
   );
 };
