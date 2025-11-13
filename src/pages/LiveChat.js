@@ -100,12 +100,6 @@ function LiveChat() {
                 return;
             }
 
-            // If db is not available, we can't load chats, so don't set activeChat
-            if (!dbAvailable) {
-                setActiveChat(null);
-                return;
-            }
-
             // Find the chat with matching phone number
             const chat = chats.find(c => c.number === phone);
             if (chat) {
@@ -117,8 +111,32 @@ function LiveChat() {
                     return prev;
                 });
             } else {
-                // Phone in URL but chat not found, clear activeChat
-                setActiveChat(null);
+                // Phone in URL but chat not found - create a new chat object for any phone number
+                // This allows opening conversations for phone numbers that don't have existing chats
+                const newChat = {
+                    number: phone,
+                    name: phone, // Use phone number as name initially, will be updated if contact details are fetched
+                    unread_count: 0,
+                    unread: false,
+                    is_favorite: false,
+                    timestamp: Date.now(),
+                    create_date: new Date().toISOString(),
+                    type: 'out',
+                    message_type: 'text',
+                    message: '',
+                    status: 'pending',
+                    unique_id: '',
+                    last_id: '',
+                    send_by_username: '',
+                    send_by_mobile: ''
+                };
+                
+                setActiveChat(prev => {
+                    if (!prev || prev.number !== phone) {
+                        return newChat;
+                    }
+                    return prev;
+                });
             }
         } else {
             // Always clear activeChat when no phone in URL (no need to wait for db/chats)

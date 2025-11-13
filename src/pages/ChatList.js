@@ -327,9 +327,20 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
     const groupedChats = () => {
         const filtered = chats.filter((chat) => {
             const lastMessageText = formatLastMessage(chat);
+            const searchLower = searchQuery.toLowerCase().trim();
+            const chatNumber = chat.number || '';
+            const chatName = chat.name || '';
+            
+            // Normalize phone numbers for search (remove spaces, dashes, plus signs)
+            const normalizePhone = (phone) => phone.replace(/[\s\-+]/g, '');
+            const normalizedSearch = normalizePhone(searchQuery);
+            const normalizedChatNumber = normalizePhone(chatNumber);
+            
             const matchesSearch =
-                chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                lastMessageText.toLowerCase().includes(searchQuery.toLowerCase());
+                chatName.toLowerCase().includes(searchLower) ||
+                chatNumber.toLowerCase().includes(searchLower) ||
+                normalizedChatNumber.includes(normalizedSearch) ||
+                lastMessageText.toLowerCase().includes(searchLower);
             let matchesTab = true;
             if (activeTab === 'Unread') matchesTab = (chat.unread_count || 0) > 0;
             if (activeTab === 'Favourites') matchesTab = chat.is_favorite;

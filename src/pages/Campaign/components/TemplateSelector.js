@@ -10,7 +10,8 @@ export default function TemplateSelector({
   variableSources,
   setVariableSources,
   excelHeaders = [],
-  selectedContactDetails = []
+  selectedContactDetails = [],
+  audienceType = null
 }) {
   const [openDropdowns, setOpenDropdowns] = useState({});
   const dropdownRefs = useRef({});
@@ -167,31 +168,93 @@ export default function TemplateSelector({
   };
 
   const contactFieldOptions = useMemo(() => {
-    if (!selectedContactDetails || selectedContactDetails.length === 0) return [];
-    const firstContact = selectedContactDetails[0] || {};
+    // Show contact variables for 'contacts' and 'groups' audience types
+    const shouldShowContactOptions = audienceType === 'contacts' || audienceType === 'groups';
+    if (!shouldShowContactOptions) return [];
+
+    const firstContact = selectedContactDetails?.[0] || {};
     const options = [];
 
-    if (firstContact?.name) {
+    // For groups, always show all contact variables even without contact details
+    // For contacts, show variables based on available contact details
+    const isGroup = audienceType === 'groups';
+
+    // Contact name
+    if (isGroup || firstContact?.name) {
       options.push({
         type: 'contact',
         key: 'contact.name',
-        label: 'Contact Name',
-        sample: firstContact.name
+        label: 'Name',
+        sample: firstContact?.name || 'John Doe'
       });
     }
 
+    // Contact number
     const contactNumber = firstContact?.number || firstContact?.phone;
-    if (contactNumber) {
+    if (isGroup || contactNumber) {
       options.push({
         type: 'contact',
         key: 'contact.number',
-        label: 'Contact Number',
-        sample: contactNumber
+        label: 'Number',
+        sample: contactNumber || '1234567890'
       });
     }
 
+    // Firm name
+    if (isGroup || firstContact?.firm_name) {
+      options.push({
+        type: 'contact',
+        key: 'contact.firm_name',
+        label: 'Firm Name',
+        sample: firstContact?.firm_name || 'Company Name'
+      });
+    }
+
+    // Website
+    if (isGroup || firstContact?.website) {
+      options.push({
+        type: 'contact',
+        key: 'contact.website',
+        label: 'Website',
+        sample: firstContact?.website || 'www.example.com'
+      });
+    }
+
+    // Email
+    if (isGroup || firstContact?.email) {
+      options.push({
+        type: 'contact',
+        key: 'contact.email',
+        label: 'Email',
+        sample: firstContact?.email || 'email@example.com'
+      });
+    }
+
+    // Dynamic variables (always available for contacts and groups)
+    const now = new Date();
+    options.push({
+      type: 'contact',
+      key: 'contact.current_date',
+      label: 'Current Date',
+      sample: now.toLocaleDateString()
+    });
+
+    options.push({
+      type: 'contact',
+      key: 'contact.current_time',
+      label: 'Current Time',
+      sample: now.toLocaleTimeString()
+    });
+
+    options.push({
+      type: 'contact',
+      key: 'contact.current_day',
+      label: 'Current Day',
+      sample: now.toLocaleDateString('en-US', { weekday: 'long' })
+    });
+
     return options;
-  }, [selectedContactDetails]);
+  }, [selectedContactDetails, audienceType]);
 
   const allDropdownOptions = useMemo(() => {
     const excelOptions = excelHeaders.map((header) => ({

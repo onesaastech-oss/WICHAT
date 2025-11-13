@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Header, Sidebar } from '../../component/Menu';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -12,9 +12,12 @@ import {
     FiCalendar,
     FiCheckCircle,
     FiClock,
-    FiXCircle
+    FiXCircle,
+    FiAlertCircle
 } from 'react-icons/fi';
 import moment from 'moment';
+import axios from 'axios';
+import { Encrypt } from '../encryption/payload-encryption';
 
 const CampaignList = () => {
     const navigate = useNavigate();
@@ -25,6 +28,12 @@ const CampaignList = () => {
     });
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
+    const [campaigns, setCampaigns] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [tokens, setTokens] = useState(null);
+    const [lastId, setLastId] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
 
     useEffect(() => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -41,147 +50,170 @@ const CampaignList = () => {
         };
     }, [mobileMenuOpen]);
 
-    // Dummy campaign data
-    const [campaigns] = useState([
-        {
-            id: 'CAMP-001',
-            name: 'Summer Sale 2024',
-            template: 'Summer Promotion',
-            audience: 'All Contacts',
-            recipients: 1250,
-            sent: 1180,
-            delivered: 1150,
-            read: 890,
-            status: 'completed',
-            createdDate: '2024-01-15T10:30:00',
-            scheduledDate: '2024-01-16T09:00:00',
-            completedDate: '2024-01-16T10:15:00'
-        },
-        {
-            id: 'CAMP-002',
-            name: 'New Product Launch',
-            template: 'Product Announcement',
-            audience: 'VIP Customers',
-            recipients: 450,
-            sent: 450,
-            delivered: 435,
-            read: 320,
-            status: 'completed',
-            createdDate: '2024-01-12T14:20:00',
-            scheduledDate: '2024-01-13T10:00:00',
-            completedDate: '2024-01-13T10:30:00'
-        },
-        {
-            id: 'CAMP-003',
-            name: 'Weekly Newsletter',
-            template: 'Newsletter Template',
-            audience: 'Subscribed Users',
-            recipients: 3200,
-            sent: 0,
-            delivered: 0,
-            read: 0,
-            status: 'scheduled',
-            createdDate: '2024-01-18T09:15:00',
-            scheduledDate: '2024-01-20T08:00:00',
-            completedDate: null
-        },
-        {
-            id: 'CAMP-004',
-            name: 'Holiday Greetings',
-            template: 'Holiday Message',
-            audience: 'All Contacts',
-            recipients: 2100,
-            sent: 2100,
-            delivered: 2050,
-            read: 1650,
-            status: 'completed',
-            createdDate: '2023-12-20T11:00:00',
-            scheduledDate: '2023-12-25T00:00:00',
-            completedDate: '2023-12-25T01:30:00'
-        },
-        {
-            id: 'CAMP-005',
-            name: 'Customer Feedback Request',
-            template: 'Feedback Survey',
-            audience: 'Recent Customers',
-            recipients: 680,
-            sent: 0,
-            delivered: 0,
-            read: 0,
-            status: 'draft',
-            createdDate: '2024-01-19T15:45:00',
-            scheduledDate: null,
-            completedDate: null
-        },
-        {
-            id: 'CAMP-006',
-            name: 'Flash Sale Alert',
-            template: 'Sale Notification',
-            audience: 'Premium Members',
-            recipients: 890,
-            sent: 890,
-            delivered: 875,
-            read: 720,
-            status: 'completed',
-            createdDate: '2024-01-10T08:30:00',
-            scheduledDate: '2024-01-10T12:00:00',
-            completedDate: '2024-01-10T12:45:00'
-        },
-        {
-            id: 'CAMP-007',
-            name: 'Account Verification',
-            template: 'Verification Request',
-            audience: 'Unverified Users',
-            recipients: 340,
-            sent: 340,
-            delivered: 320,
-            read: 180,
-            status: 'completed',
-            createdDate: '2024-01-08T13:20:00',
-            scheduledDate: '2024-01-08T14:00:00',
-            completedDate: '2024-01-08T14:20:00'
-        },
-        {
-            id: 'CAMP-008',
-            name: 'Event Invitation',
-            template: 'Event Invite',
-            audience: 'Local Contacts',
-            recipients: 520,
-            sent: 0,
-            delivered: 0,
-            read: 0,
-            status: 'failed',
-            createdDate: '2024-01-17T10:00:00',
-            scheduledDate: '2024-01-18T09:00:00',
-            completedDate: null
+    // Load tokens from storage
+    useEffect(() => {
+        const loadTokens = () => {
+            try {
+                if (typeof window === 'undefined') return;
+                const storages = [localStorage, sessionStorage];
+                for (const storage of storages) {
+                    try {
+                        const data = storage?.getItem('userData');
+                        if (data) {
+                            const parsed = JSON.parse(data);
+                            if (parsed && typeof parsed === 'object') {
+                                setTokens(parsed);
+                                return;
+                            }
+                        }
+                    } catch (storageError) {
+                        console.error('Failed to parse tokens from storage:', storageError);
+                    }
+                }
+                setTokens(null);
+            } catch (e) {
+                console.error('Failed to load tokens:', e);
+            }
+        };
+        loadTokens();
+    }, []);
+
+    // Fetch campaigns from API
+    const fetchCampaigns = useCallback(async (reset = false, currentLastId = null) => {
+        if (!tokens?.token || !tokens?.username) {
+            setLoading(false);
+            return;
         }
-    ]);
+
+        try {
+            setLoading(true);
+            setError(null);
+
+            // Use provided lastId, or get from state, or reset to 0
+            const lastIdToUse = reset ? 0 : (currentLastId !== null ? currentLastId : lastId);
+
+            const payload = {
+                project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                last_id: lastIdToUse,
+                status: filterStatus // filterStatus already uses API values: 'all', 'complete', 'pending', 'stopped'
+            };
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            const response = await axios.post(
+                'https://api.w1chat.com/campaign/list',
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (!response?.data?.error) {
+                const apiCampaigns = response?.data?.data || [];
+                
+                // Map API response to component format
+                const mappedCampaigns = apiCampaigns.map(campaign => {
+                    // Map status: API uses 'pending'/'complete'/'stopped', component uses 'scheduled'/'completed'/'failed'
+                    let status = campaign.status;
+                    if (status === 'pending') status = 'scheduled';
+                    else if (status === 'complete') status = 'completed';
+                    else if (status === 'stopped') status = 'failed';
+
+                    // Get audience source
+                    const audienceSource = campaign.source === 'excel' ? 'Excel Upload' : 
+                                         campaign.source === 'sheet' ? 'Google Sheet' : 
+                                         campaign.source === 'group' ? 'Contact Groups' : 
+                                         'Custom';
+
+                    return {
+                        id: campaign.campaign_id,
+                        name: campaign.name,
+                        template: campaign.template?.template_name || 'N/A',
+                        audience: audienceSource,
+                        recipients: parseInt(campaign.recipients?.total || 0),
+                        sent: parseInt(campaign.recipients?.sent || 0),
+                        delivered: parseInt(campaign.recipients?.delivered || 0),
+                        read: parseInt(campaign.recipients?.read || 0),
+                        status: status,
+                        createdDate: campaign.create_date,
+                        scheduledDate: null, // API doesn't provide this
+                        completedDate: campaign.status === 'complete' ? campaign.modify_date : null,
+                        hasError: campaign.has_error,
+                        errorFile: campaign.error_file
+                    };
+                });
+
+                if (reset) {
+                    setCampaigns(mappedCampaigns);
+                } else {
+                    setCampaigns(prev => [...prev, ...mappedCampaigns]);
+                }
+
+                setLastId(response?.data?.last_id || 0);
+                setHasMore(response?.data?.has_more || false);
+            } else {
+                setError(response?.data?.message || 'Failed to fetch campaigns');
+                setCampaigns([]);
+            }
+        } catch (err) {
+            console.error('Error fetching campaigns:', err);
+            setError(err?.response?.data?.message || err?.message || 'Failed to fetch campaigns');
+            setCampaigns([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [tokens, filterStatus]); // Removed lastId to avoid infinite loop - we use it from state when needed
+
+    // Fetch campaigns when tokens are loaded or filter changes
+    useEffect(() => {
+        if (tokens?.token && tokens?.username) {
+            setLastId(0);
+            fetchCampaigns(true);
+        }
+    }, [tokens?.token, tokens?.username, filterStatus, fetchCampaigns]);
 
     const getStatusBadge = (status) => {
         const statusConfig = {
             completed: {
-                bg: 'bg-green-100',
-                text: 'text-green-800',
+                bg: 'bg-green-100 dark:bg-green-900',
+                text: 'text-green-800 dark:text-green-200',
                 icon: <FiCheckCircle className="w-4 h-4" />,
                 label: 'Completed'
             },
             scheduled: {
-                bg: 'bg-blue-100',
-                text: 'text-blue-800',
+                bg: 'bg-blue-100 dark:bg-blue-900',
+                text: 'text-blue-800 dark:text-blue-200',
                 icon: <FiClock className="w-4 h-4" />,
                 label: 'Scheduled'
             },
+            pending: {
+                bg: 'bg-yellow-100 dark:bg-yellow-900',
+                text: 'text-yellow-800 dark:text-yellow-200',
+                icon: <FiClock className="w-4 h-4" />,
+                label: 'Pending'
+            },
             draft: {
-                bg: 'bg-gray-100',
-                text: 'text-gray-800',
+                bg: 'bg-gray-100 dark:bg-gray-700',
+                text: 'text-gray-800 dark:text-gray-200',
                 icon: <FiClock className="w-4 h-4" />,
                 label: 'Draft'
             },
             failed: {
-                bg: 'bg-red-100',
-                text: 'text-red-800',
+                bg: 'bg-red-100 dark:bg-red-900',
+                text: 'text-red-800 dark:text-red-200',
                 icon: <FiXCircle className="w-4 h-4" />,
                 label: 'Failed'
+            },
+            stopped: {
+                bg: 'bg-red-100 dark:bg-red-900',
+                text: 'text-red-800 dark:text-red-200',
+                icon: <FiXCircle className="w-4 h-4" />,
+                label: 'Stopped'
             }
         };
 
@@ -198,7 +230,21 @@ const CampaignList = () => {
         const matchesSearch = campaign.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             campaign.template.toLowerCase().includes(searchTerm.toLowerCase()) ||
             campaign.id.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesStatus = filterStatus === 'all' || campaign.status === filterStatus;
+        
+        // Map filter status to component status values
+        let matchesStatus = true;
+        if (filterStatus !== 'all') {
+            if (filterStatus === 'complete') {
+                matchesStatus = campaign.status === 'completed';
+            } else if (filterStatus === 'pending') {
+                matchesStatus = campaign.status === 'scheduled' || campaign.status === 'pending';
+            } else if (filterStatus === 'stopped') {
+                matchesStatus = campaign.status === 'failed' || campaign.status === 'stopped';
+            } else {
+                matchesStatus = campaign.status === filterStatus;
+            }
+        }
+        
         return matchesSearch && matchesStatus;
     });
 
@@ -276,9 +322,9 @@ const CampaignList = () => {
                                 </div>
                             </div>
                             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Scheduled</div>
+                                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Pending</div>
                                 <div className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">
-                                    {campaigns.filter(c => c.status === 'scheduled').length}
+                                    {campaigns.filter(c => c.status === 'scheduled' || c.status === 'pending').length}
                                 </div>
                             </div>
                             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
@@ -318,14 +364,23 @@ const CampaignList = () => {
                                         className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                                     >
                                         <option value="all">All Status</option>
-                                        <option value="completed">Completed</option>
-                                        <option value="scheduled">Scheduled</option>
-                                        <option value="draft">Draft</option>
-                                        <option value="failed">Failed</option>
+                                        <option value="complete">Completed</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="stopped">Stopped</option>
                                     </select>
                                 </div>
                             </div>
                         </div>
+
+                        {/* Error Message */}
+                        {error && (
+                            <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                                <div className="flex items-center">
+                                    <FiAlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mr-2" />
+                                    <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Campaigns Table */}
                         <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
@@ -357,7 +412,16 @@ const CampaignList = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                        {filteredCampaigns.length === 0 ? (
+                                        {loading ? (
+                                            <tr>
+                                                <td colSpan="7" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                                    <div className="flex items-center justify-center">
+                                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                                                        <span className="ml-2">Loading campaigns...</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ) : filteredCampaigns.length === 0 ? (
                                             <tr>
                                                 <td colSpan="7" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                                                     No campaigns found
@@ -372,12 +436,25 @@ const CampaignList = () => {
                                                                 <FiZap size={20} />
                                                             </div>
                                                             <div className="ml-4">
+                                                                <div className="flex items-center">
                                                                 <button
                                                                     onClick={() => handleViewCampaign(campaign.id)}
                                                                     className="text-sm font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-left"
                                                                 >
                                                                     {campaign.name}
                                                                 </button>
+                                                                    {campaign.hasError && (
+                                                                        <a
+                                                                            href={campaign.errorFile}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="ml-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                                                                            title="View error file"
+                                                                        >
+                                                                            <FiAlertCircle size={16} />
+                                                                        </a>
+                                                                    )}
+                                                                </div>
                                                                 <div className="text-sm text-gray-500 dark:text-gray-400">
                                                                     {campaign.id}
                                                                 </div>
@@ -426,7 +503,7 @@ const CampaignList = () => {
                                                             >
                                                                 <FiEye size={18} />
                                                             </button>
-                                                            {campaign.status === 'draft' && (
+                                                            {(campaign.status === 'draft' || campaign.status === 'scheduled' || campaign.status === 'pending') && (
                                                                 <button
                                                                     onClick={() => handleEditCampaign(campaign.id)}
                                                                     className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
@@ -450,6 +527,17 @@ const CampaignList = () => {
                                     </tbody>
                                 </table>
                             </div>
+                            {/* Load More Button */}
+                            {hasMore && !loading && (
+                                <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 text-center">
+                                    <button
+                                        onClick={() => fetchCampaigns(false, lastId)}
+                                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-200 dark:hover:bg-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                    >
+                                        Load More
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
 

@@ -21,6 +21,8 @@ export default function AudienceSelector({
   setExcelContacts,
   excelHeaders,
   setExcelHeaders,
+  excelData,
+  setExcelData,
   onExcelFileUploaded,
   tokens
 }) {
@@ -113,6 +115,17 @@ export default function AudienceSelector({
           setSheetLink={setSheetLink}
           excelMapping={excelMapping}
           setExcelMapping={setExcelMapping}
+          onContactsExtracted={(contacts) => {
+            setExcelContacts(contacts);
+            // Log contacts as JSON for debugging
+            console.log('Extracted contacts from Google Sheet:', JSON.stringify(contacts, null, 2));
+          }}
+          onHeadersExtracted={(headers) => {
+            setExcelHeaders(headers);
+          }}
+          onDataExtracted={(data) => {
+            setExcelData(data);
+          }}
         />
       )}
 

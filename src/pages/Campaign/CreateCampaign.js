@@ -128,6 +128,7 @@ export default function CampaignBuilder() {
                     setVariableSources={setVariableSources}
                     excelHeaders={excelHeaders}
                     selectedContactDetails={selectedContactDetails}
+                    audienceType={audienceType}
                   />
                 )}
               </div>
@@ -161,6 +162,7 @@ export default function CampaignBuilder() {
                   excelData={excelData}
                   excelHeaders={excelHeaders}
                   excelFileUrl={excelFileUrl}
+                  selectedContactDetails={selectedContactDetails}
                   tokens={tokens}
                 />
               </div>

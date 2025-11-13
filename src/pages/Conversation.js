@@ -745,20 +745,56 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 return;
             }
 
+            // Check if contactDetails exists and matches current contact
+            let currentContactDetails = null;
+            if (contactDetails?.contact?.number === activeChat.number && contactDetails?.has_contact) {
+                currentContactDetails = contactDetails.contact;
+            } else {
+                // Fetch fresh contact details for current contact
+                if (tokens?.token && tokens?.username) {
+                    try {
+                        const payload = {
+                            project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                            number: activeChat.number
+                        };
+                        const { data, key } = Encrypt(payload);
+                        const data_pass = JSON.stringify({ data, key });
+                        const response = await axios.post(
+                            'https://api.w1chat.com/contact/contact-details',
+                            data_pass,
+                            {
+                                headers: {
+                                    'token': tokens.token,
+                                    'username': tokens.username,
+                                    'Content-Type': 'application/json'
+                                }
+                            }
+                        );
+                        if (!response?.data?.error && response?.data?.has_contact) {
+                            currentContactDetails = response.data.contact;
+                            setContactDetails(response.data);
+                        }
+                    } catch (fetchError) {
+                        console.error('Failed to fetch contact details:', fetchError);
+                        // Continue with existing data if fetch fails
+                    }
+                }
+            }
+
             let existing = await contactDbHelper.getContactByNumber(activeChat.number);
 
             console.log(6);
             
             setExistingContactId(existing?.contact_id || null);
             setContactForm({
-                name: contactDetails.contact.name || existing?.name || activeChat.name || '',
-                number: contactDetails.contact.number || activeChat.number || '',
-                email: contactDetails.contact.email || existing?.email || '',
-                firm_name:contactDetails.contact.firm_name || existing?.firm_name || '',
-                website: contactDetails.contact.website || existing?.website || '',
-                remark: contactDetails.contact.remark || existing?.remark || '',
-                language_code: contactDetails.contact.language_code || existing?.language_code || '',
-                country: contactDetails.contact.country || existing?.country || ''
+                name: currentContactDetails?.name || existing?.name || activeChat.name || '',
+                number: activeChat.number || '',
+                email: currentContactDetails?.email || existing?.email || '',
+                firm_name: currentContactDetails?.firm_name || existing?.firm_name || '',
+                website: currentContactDetails?.website || existing?.website || '',
+                remark: currentContactDetails?.remark || existing?.remark || '',
+                language_code: currentContactDetails?.language_code || existing?.language_code || '',
+                country: currentContactDetails?.country || existing?.country || ''
             });
         } catch (error) {
             console.error('Failed to load contact details:', error);
@@ -766,7 +802,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         } finally {
             setContactLoading(false);
         }
-    }, [activeChat, ensureContactDb]);
+    }, [activeChat, ensureContactDb, contactDetails, tokens]);
 
     const handleContactSave = useCallback(async () => {
         if (contactSubmitting) return;
