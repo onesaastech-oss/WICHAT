@@ -25,7 +25,11 @@ import CampaignDetails from './pages/Campaign/CampaignDetails.js';
 import AutoReply from './pages/Automation/AutoReply';
 import Flow from './pages/Automation/Flow';
 import MyProfile from './pages/MyProfile.js';
+import { useEffect } from 'react';
+import ProtectedRoute from './component/ProtectedRoute';
 const GOOGLE_CLIENT_ID = "124604231994-dtnflivbu049428d1cg9ngfuhgq38efs.apps.googleusercontent.com";
+
+
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
@@ -34,11 +38,48 @@ root.render(
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/dasboard" element={<Dashboard />} />
-        <Route path="/live-chat" element={<LiveChat />} />
-        <Route path="/live-chat/:phone" element={<LiveChat />} />
-        <Route path="/template" element={<Template />} />
-        <Route path="/template-add" element={<TemplateAdd />} />
-        <Route path="/template-edit/:templateId" element={<TemplateEdit />} />
+        {/* Protected routes that require project */}
+        <Route path="/live-chat" element={
+          <ProtectedRoute requiresProject={true}>
+            <LiveChat />
+          </ProtectedRoute>
+        } />
+        <Route path="/live-chat/:phone" element={
+          <ProtectedRoute requiresProject={true}>
+            <LiveChat />
+          </ProtectedRoute>
+        } />
+        <Route path="/template" element={
+          <ProtectedRoute requiresProject={true}>
+            <Template />
+          </ProtectedRoute>
+        } />
+        <Route path="/template-add" element={
+          <ProtectedRoute requiresProject={true}>
+            <TemplateAdd />
+          </ProtectedRoute>
+        } />
+        <Route path="/template-edit/:templateId" element={
+          <ProtectedRoute requiresProject={true}>
+            <TemplateEdit />
+          </ProtectedRoute>
+        } />
+        <Route path="/campaigns" element={
+          <ProtectedRoute requiresProject={true}>
+            <CampaignList />
+          </ProtectedRoute>
+        } />
+        <Route path="/campaign/:campaignId" element={
+          <ProtectedRoute requiresProject={true}>
+            <CampaignDetails />
+          </ProtectedRoute>
+        } />
+        <Route path="/create-campaign" element={
+          <ProtectedRoute requiresProject={true}>
+            <CreateCampaign />
+          </ProtectedRoute>
+        } />
+        {/* Regular protected routes */}
         <Route path="/contact" element={<Contact />} />
         <Route path="/contact-group" element={<ContactGroup />} />
         <Route path="/contact-group-list" element={<ContactGroupList />} />
@@ -46,9 +87,6 @@ root.render(
         <Route path="/my-plan" element={<MyPlan />} />
         <Route path="/permission-list" element={<PermissionsList />} />
         <Route path="/blank" element={<Blank />} />
-        <Route path="/campaigns" element={<CampaignList />} />
-        <Route path="/campaign/:campaignId" element={<CampaignDetails />} />
-        <Route path="/create-campaign" element={<CreateCampaign />} />
         <Route path="/projects" element={<Projects />} />
         {/* Login related page */}
         <Route path="/login" element={<Login />} />

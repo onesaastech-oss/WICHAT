@@ -36,6 +36,27 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
   const [hoveredMenu, setHoveredMenu] = useState(null);
   const [isHovered, setIsHovered] = useState(false);
   const [currentPath, setCurrentPath] = useState('');
+  
+  // Get user data and project count
+  const getUserData = () => {
+    try {
+      const userData = localStorage.getItem('userData');
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      console.error('Error parsing userData from localStorage:', error);
+      return null;
+    }
+  };
+  
+  const userData = getUserData();
+  const hasProjects = userData && userData.project_count > 0;
+
+  // Check if menu item requires project
+  const requiresProject = (item) => {
+    const protectedPaths = ['/live-chat', '/template', '/campaigns'];
+    return protectedPaths.includes(item.path) || 
+           (item.submenus && item.submenus.some(submenu => protectedPaths.includes(submenu.path)));
+  };
 
   // Get current path on component mount and when location changes
   useEffect(() => {
@@ -278,23 +299,42 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
                 <nav className="flex-1 p-4 overflow-y-auto scrollbar-hide">
                   {menuItems.map((item) => {
                     const isActive = isItemActive(item);
+                    const isDisabled = requiresProject(item) && !hasProjects;
                     return (
                       <div key={item.key} className="mb-1">
                         {item.path ? (
                           <motion.a
-                            href={item.path}
-                            className={`flex items-center w-full p-4 text-left rounded-lg transition-colors duration-150 outline-none ring-0 ${isActive
-                              ? 'bg-indigo-600 text-white'
-                              : 'text-gray-700 hover:bg-gray-100'
+                            href={isDisabled ? '#' : item.path}
+                            className={`flex items-center w-full p-4 text-left rounded-lg transition-colors duration-150 outline-none ring-0 ${
+                              isDisabled 
+                                ? 'text-gray-400 cursor-not-allowed opacity-50' 
+                                : isActive
+                                  ? 'bg-indigo-600 text-white'
+                                  : 'text-gray-700 hover:bg-gray-100'
                               }`}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => setMobileMenuOpen(false)}
+                            whileHover={!isDisabled ? { scale: 1.02 } : {}}
+                            whileTap={!isDisabled ? { scale: 0.98 } : {}}
+                            onClick={(e) => {
+                              if (isDisabled) {
+                                e.preventDefault();
+                                return;
+                              }
+                              setMobileMenuOpen(false);
+                            }}
                           >
-                            <span className={`mr-3 ${isActive ? 'text-white' : 'text-gray-600'}`}>
+                            <span className={`mr-3 ${
+                              isDisabled 
+                                ? 'text-gray-400' 
+                                : isActive 
+                                  ? 'text-white' 
+                                  : 'text-gray-600'
+                              }`}>
                               {item.icon}
                             </span>
                             <span className="font-medium text-base">{item.title}</span>
+                            {isDisabled && (
+                              <span className="ml-auto text-xs text-gray-400">Requires Project</span>
+                            )}
                           </motion.a>
                         ) : (
                           <>
@@ -379,6 +419,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
           <nav className="flex-1 px-3 py-4 space-y-1">
             {menuItems.map((item) => {
               const isActive = isItemActive(item);
+              const isDisabled = requiresProject(item) && !hasProjects;
               return (
                 <div
                   key={item.key}
@@ -388,17 +429,32 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
                 >
                   {item.path ? (
                     <motion.a
-                      href={item.path}
-                      className={`flex items-center w-full p-3 rounded-lg transition-colors duration-150 group outline-none ring-0 ${isActive
-                        ? 'bg-indigo-600 text-white'
-                        : 'text-gray-700 hover:bg-gray-50'
+                      href={isDisabled ? '#' : item.path}
+                      className={`flex items-center w-full p-3 rounded-lg transition-colors duration-150 group outline-none ring-0 ${
+                        isDisabled 
+                          ? 'text-gray-400 cursor-not-allowed opacity-50' 
+                          : isActive
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-gray-700 hover:bg-gray-50'
                         }`}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
+                      whileHover={!isDisabled ? { scale: 1.02 } : {}}
+                      whileTap={!isDisabled ? { scale: 0.98 } : {}}
                       layout
                       transition={{ duration: 0.15 }}
+                      onClick={(e) => {
+                        if (isDisabled) {
+                          e.preventDefault();
+                          return;
+                        }
+                      }}
                     >
-                      <span className={`flex items-center justify-center ${(isMinimized && !isHovered) ? 'w-6 h-6 mx-auto' : 'mr-3'} ${isActive ? 'text-white' : 'text-gray-600'}`}>
+                      <span className={`flex items-center justify-center ${(isMinimized && !isHovered) ? 'w-6 h-6 mx-auto' : 'mr-3'} ${
+                        isDisabled 
+                          ? 'text-gray-400' 
+                          : isActive 
+                            ? 'text-white' 
+                            : 'text-gray-600'
+                        }`}>
                         {item.icon}
                       </span>
                       <AnimatePresence mode="wait">
@@ -412,6 +468,9 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
                             key={`text-${item.key}`}
                           >
                             {item.title}
+                            {isDisabled && (
+                              <span className="ml-2 text-xs text-gray-400">(Requires Project)</span>
+                            )}
                           </motion.span>
                         )}
                       </AnimatePresence>
@@ -419,13 +478,17 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
                       {/* Tooltip for minimized state when not hovered */}
                       {(isMinimized && !isHovered && hoveredMenu === item.key) && (
                         <motion.div
-                          className="absolute left-full ml-2 px-3 py-2 bg-gray-800 text-white text-sm rounded-md whitespace-nowrap z-50 border-0"
+                          className={`absolute left-full ml-2 px-3 py-2 text-sm rounded-md whitespace-nowrap z-50 border-0 ${
+                            isDisabled 
+                              ? 'bg-red-600 text-white' 
+                              : 'bg-gray-800 text-white'
+                          }`}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
                           exit={{ opacity: 0, x: -10 }}
                           style={{ boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' }}
                         >
-                          {item.title}
+                          {isDisabled ? `${item.title} - Requires Project` : item.title}
                         </motion.div>
                       )}
                     </motion.a>
@@ -482,13 +545,17 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
                         {/* Tooltip for minimized state when not hovered */}
                         {(isMinimized && !isHovered && hoveredMenu === item.key) && (
                           <motion.div
-                            className="absolute left-full ml-2 px-3 py-2 bg-gray-800 text-white text-sm rounded-md whitespace-nowrap z-50 border-0"
+                            className={`absolute left-full ml-2 px-3 py-2 text-sm rounded-md whitespace-nowrap z-50 border-0 ${
+                              isDisabled 
+                                ? 'bg-red-600 text-white' 
+                                : 'bg-gray-800 text-white'
+                            }`}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: -10 }}
                             style={{ boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' }}
                           >
-                            {item.title}
+                            {isDisabled ? `${item.title} - Requires Project` : item.title}
                           </motion.div>
                         )}
                       </motion.button>

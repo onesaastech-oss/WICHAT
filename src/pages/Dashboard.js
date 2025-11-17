@@ -19,7 +19,9 @@ import {
     FiTrendingUp,
     FiFileText,
     FiUserCheck,
-    FiUserX
+    FiUserX,
+    FiBriefcase,
+    FiPlus
 } from 'react-icons/fi';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
@@ -35,6 +37,20 @@ function Dashboard() {
         const saved = localStorage.getItem('sidebarMinimized');
         return saved ? JSON.parse(saved) : false;
     });
+
+    // Get user data and check project count
+    const getUserData = () => {
+        try {
+            const userData = localStorage.getItem('userData');
+            return userData ? JSON.parse(userData) : null;
+        } catch (error) {
+            console.error('Error parsing userData from localStorage:', error);
+            return null;
+        }
+    };
+
+    const userData = getUserData();
+    const hasProjects = userData && userData.project_count > 0;
 
     useEffect(() => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -76,12 +92,40 @@ function Dashboard() {
                 return;
             }
 
+            // If user has no projects, skip API call and show zero data
+            if (!hasProjects) {
+                setLoading(false);
+                setError(null);
+                setDashboardData({
+                    campaign: {
+                        total: 0,
+                        message: {
+                            total: 0,
+                            sent: 0,
+                            pending: 0,
+                            delivered: 0,
+                            read: 0,
+                            failed: 0
+                        }
+                    },
+                    chat: { total: 0 },
+                    contact: { total: 0 },
+                    template: {
+                        total: 0,
+                        approved: 0,
+                        pending: 0,
+                        rejected: 0
+                    }
+                });
+                return;
+            }
+
             try {
                 setLoading(true);
                 setError(null);
 
                 const payload = {
-                    project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                    project_id: tokens.projects?.[0]?.project_id || '',
                 };
 
                 const { data, key } = Encrypt(payload);
@@ -113,7 +157,7 @@ function Dashboard() {
         };
 
         fetchDashboardData();
-    }, [tokens]);
+    }, [tokens, hasProjects]);
 
     // Prevent background scrolling when mobile menu is open
     useEffect(() => {
@@ -284,6 +328,44 @@ function Dashboard() {
             <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
                 }`}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+                    {/* No Projects Warning */}
+                    {!hasProjects && (
+                        <div className="mb-8 bg-amber-50 border border-amber-200 rounded-xl p-6">
+                            <div className="flex items-start">
+                                <div className="flex-shrink-0">
+                                    <FiBriefcase className="h-6 w-6 text-amber-400" />
+                                </div>
+                                <div className="ml-4 flex-1">
+                                    <h3 className="text-lg font-medium text-amber-800 mb-2">
+                                        No Projects Found for Your ID
+                                    </h3>
+                                    <div className="text-sm text-amber-700 mb-4">
+                                        <p>
+                                            You need to create at least one project to access Live Chat, Templates, and Campaigns features. 
+                                            Create your first project to unlock the full dashboard experience and start managing your communications.
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row gap-3">
+                                        <a
+                                            href="/projects"
+                                            className="inline-flex items-center px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2"
+                                        >
+                                            <FiPlus className="mr-2" size={16} />
+                                            Create New Project
+                                        </a>
+                                        <a
+                                            href="/projects"
+                                            className="inline-flex items-center px-4 py-2 border border-amber-300 text-amber-700 rounded-lg text-sm font-medium hover:bg-amber-100 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2"
+                                        >
+                                            <FiBriefcase className="mr-2" size={16} />
+                                            View Projects Page
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Upgrade plan banner */}
 
 

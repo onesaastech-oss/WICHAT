@@ -26,6 +26,20 @@ const Projects = () => {
   const [editingProject, setEditingProject] = useState(null);
   const [showActionsMenu, setShowActionsMenu] = useState(null);
 
+  // Get user data from localStorage
+  const getUserData = () => {
+    try {
+      const userData = localStorage.getItem('userData');
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      console.error('Error parsing userData from localStorage:', error);
+      return null;
+    }
+  };
+
+  const userData = getUserData();
+  const hasUserProjects = userData && userData.project_count > 0;
+
   // Dummy projects data
   const [projects, setProjects] = useState([
     {
@@ -225,6 +239,36 @@ const Projects = () => {
               <span>Create Project</span>
             </button>
           </div>
+
+          {/* No Projects Warning */}
+          {!hasUserProjects && (
+            <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <FiBriefcase className="h-5 w-5 text-amber-400" />
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-amber-800">
+                    No Projects Found
+                  </h3>
+                  <div className="mt-2 text-sm text-amber-700">
+                    <p>
+                      You need to create at least one project to access Live Chat, Templates, and Campaigns features. 
+                      Create your first project to unlock these features.
+                    </p>
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      onClick={handleCreateProject}
+                      className="bg-amber-600 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-amber-700 transition-colors"
+                    >
+                      Create Your First Project
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Search Bar */}
           <div className="mb-6">
