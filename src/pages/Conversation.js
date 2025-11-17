@@ -668,6 +668,27 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const headerMenuRef = useRef(null);
     const contactDbInitRef = useRef(false);
 
+    useEffect(() => {
+        const inputEl = messageInputRef.current;
+        if (!inputEl || isUploading || loadingHistory) {
+            return;
+        }
+
+        const handleFocus = () => {
+            if (document.activeElement === inputEl) return;
+            inputEl.focus();
+            try {
+                const caretPos = inputEl.value?.length ?? 0;
+                inputEl.setSelectionRange(caretPos, caretPos);
+            } catch (err) {
+                // Some input types do not support setSelectionRange (e.g., mobile number types).
+            }
+        };
+
+        const raf = requestAnimationFrame(handleFocus);
+        return () => cancelAnimationFrame(raf);
+    }, [activeChat, isUploading, loadingHistory]);
+
     const projectId = tokens?.projects?.[0]?.project_id;
 
     const ensureContactDb = useCallback(async () => {
@@ -2881,6 +2902,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                             </button>
                             <input
                                 type="text"
+                                autoFocus
                                 placeholder="Type a message..."
                                 className="flex-1 bg-transparent focus:outline-none placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white text-sm sm:text-base"
                                 value={messageInput}

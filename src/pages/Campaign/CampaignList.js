@@ -115,7 +115,7 @@ const CampaignList = () => {
 
             if (!response?.data?.error) {
                 const apiCampaigns = response?.data?.data || [];
-                
+
                 // Map API response to component format
                 const mappedCampaigns = apiCampaigns.map(campaign => {
                     // Map status: API uses 'pending'/'complete'/'stopped', component uses 'scheduled'/'completed'/'failed'
@@ -125,10 +125,10 @@ const CampaignList = () => {
                     else if (status === 'stopped') status = 'failed';
 
                     // Get audience source
-                    const audienceSource = campaign.source === 'excel' ? 'Excel Upload' : 
-                                         campaign.source === 'sheet' ? 'Google Sheet' : 
-                                         campaign.source === 'group' ? 'Contact Groups' : 
-                                         'Custom';
+                    const audienceSource = campaign.source === 'excel' ? 'Excel Upload' :
+                        campaign.source === 'sheet' ? 'Google Sheet' :
+                            campaign.source === 'group' ? 'Contact Groups' :
+                                'Custom';
 
                     return {
                         id: campaign.campaign_id,
@@ -230,7 +230,7 @@ const CampaignList = () => {
         const matchesSearch = campaign.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             campaign.template.toLowerCase().includes(searchTerm.toLowerCase()) ||
             campaign.id.toLowerCase().includes(searchTerm.toLowerCase());
-        
+
         // Map filter status to component status values
         let matchesStatus = true;
         if (filterStatus !== 'all') {
@@ -244,7 +244,7 @@ const CampaignList = () => {
                 matchesStatus = campaign.status === filterStatus;
             }
         }
-        
+
         return matchesSearch && matchesStatus;
     });
 
@@ -269,7 +269,13 @@ const CampaignList = () => {
     };
 
     return (
-        <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+            <Header
+                mobileMenuOpen={mobileMenuOpen}
+                setMobileMenuOpen={setMobileMenuOpen}
+                isMinimized={isMinimized}
+                setIsMinimized={setIsMinimized}
+            />
             <Sidebar
                 mobileMenuOpen={mobileMenuOpen}
                 setMobileMenuOpen={setMobileMenuOpen}
@@ -277,272 +283,261 @@ const CampaignList = () => {
                 setIsMinimized={setIsMinimized}
             />
 
-            <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isMinimized ? 'lg:ml-16' : 'lg:ml-64'}`}>
-                <Header
-                    mobileMenuOpen={mobileMenuOpen}
-                    setMobileMenuOpen={setMobileMenuOpen}
-                    isMinimized={isMinimized}
-                    setIsMinimized={setIsMinimized}
-                />
-
-                <main className="mt-16 flex-1 overflow-y-auto p-4 sm:p-6">
-                    <div className="max-w-7xl mx-auto">
-                        {/* Page Header */}
-                        <div className="mb-6">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Campaigns</h1>
-                                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                        Manage and track your WhatsApp campaigns
-                                    </p>
-                                </div>
-                                <div className="mt-4 sm:mt-0">
-                                    <button
-                                        onClick={handleCreateCampaign}
-                                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-                                    >
-                                        <FiPlus className="mr-2" size={18} />
-                                        Create Campaign
-                                    </button>
-                                </div>
+            {/* Main content */}
+            <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+                    {/* Page Header */}
+                    <div className="mb-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Campaigns</h1>
+                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    Manage and track your WhatsApp campaigns
+                                </p>
+                            </div>
+                            <div className="mt-4 sm:mt-0">
+                                <button
+                                    onClick={handleCreateCampaign}
+                                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                                >
+                                    <FiPlus className="mr-2" size={18} />
+                                    Create Campaign
+                                </button>
                             </div>
                         </div>
+                    </div>
 
 
-                        {/* Summary Stats */}
-                        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Campaigns</div>
-                                <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{campaigns.length}</div>
-                            </div>
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Completed</div>
-                                <div className="mt-2 text-2xl font-bold text-green-600 dark:text-green-400">
-                                    {campaigns.filter(c => c.status === 'completed').length}
-                                </div>
-                            </div>
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Pending</div>
-                                <div className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">
-                                    {campaigns.filter(c => c.status === 'scheduled' || c.status === 'pending').length}
-                                </div>
-                            </div>
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Recipients</div>
-                                <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
-                                    {campaigns.reduce((sum, c) => sum + c.recipients, 0).toLocaleString()}
-                                </div>
+                    {/* Summary Stats */}
+                    <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                            <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Campaigns</div>
+                            <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{campaigns.length}</div>
+                        </div>
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                            <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Completed</div>
+                            <div className="mt-2 text-2xl font-bold text-green-600 dark:text-green-400">
+                                {campaigns.filter(c => c.status === 'completed').length}
                             </div>
                         </div>
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                            <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Pending</div>
+                            <div className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">
+                                {campaigns.filter(c => c.status === 'scheduled' || c.status === 'pending').length}
+                            </div>
+                        </div>
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                            <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Recipients</div>
+                            <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+                                {campaigns.reduce((sum, c) => sum + c.recipients, 0).toLocaleString()}
+                            </div>
+                        </div>
+                    </div>
 
 
 
-                        {/* Search and Filter Bar */}
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 p-4 mt-6">
-                            <div className="flex flex-col sm:flex-row gap-4">
-                                {/* Search */}
-                                <div className="flex-1">
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <FiSearch className="h-5 w-5 text-gray-400" />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            placeholder="Search campaigns..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                                        />
+                    {/* Search and Filter Bar */}
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 p-4 mt-6">
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            {/* Search */}
+                            <div className="flex-1">
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <FiSearch className="h-5 w-5 text-gray-400" />
                                     </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Search campaigns..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                    />
                                 </div>
+                            </div>
 
-                                {/* Status Filter */}
-                                <div className="sm:w-48">
-                                    <select
-                                        value={filterStatus}
-                                        onChange={(e) => setFilterStatus(e.target.value)}
-                                        className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                                    >
-                                        <option value="all">All Status</option>
-                                        <option value="complete">Completed</option>
-                                        <option value="pending">Pending</option>
-                                        <option value="stopped">Stopped</option>
-                                    </select>
-                                </div>
+                            {/* Status Filter */}
+                            <div className="sm:w-48">
+                                <select
+                                    value={filterStatus}
+                                    onChange={(e) => setFilterStatus(e.target.value)}
+                                    className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                >
+                                    <option value="all">All Status</option>
+                                    <option value="complete">Completed</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="stopped">Stopped</option>
+                                </select>
                             </div>
                         </div>
+                    </div>
 
-                        {/* Error Message */}
-                        {error && (
-                            <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                                <div className="flex items-center">
-                                    <FiAlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mr-2" />
-                                    <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-                                </div>
+                    {/* Error Message */}
+                    {error && (
+                        <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                            <div className="flex items-center">
+                                <FiAlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mr-2" />
+                                <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
                             </div>
-                        )}
+                        </div>
+                    )}
 
-                        {/* Campaigns Table */}
-                        <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                    <thead className="bg-gray-50 dark:bg-gray-700">
+                    {/* Campaigns Table */}
+                    <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-gray-50 dark:bg-gray-700">
+                                    <tr>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Campaign
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Template
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Audience
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Recipients
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Status
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Created
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Actions
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                    {loading ? (
                                         <tr>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                                Campaign
-                                            </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                                Template
-                                            </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                                Audience
-                                            </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                                Recipients
-                                            </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                                Status
-                                            </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                                Created
-                                            </th>
-                                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                                Actions
-                                            </th>
+                                            <td colSpan="7" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                                <div className="flex items-center justify-center">
+                                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                                                    <span className="ml-2">Loading campaigns...</span>
+                                                </div>
+                                            </td>
                                         </tr>
-                                    </thead>
-                                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                        {loading ? (
-                                            <tr>
-                                                <td colSpan="7" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                                                    <div className="flex items-center justify-center">
-                                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
-                                                        <span className="ml-2">Loading campaigns...</span>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ) : filteredCampaigns.length === 0 ? (
-                                            <tr>
-                                                <td colSpan="7" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                                                    No campaigns found
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            filteredCampaigns.map((campaign) => (
-                                                <tr key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="flex items-center">
-                                                            <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300">
-                                                                <FiZap size={20} />
-                                                            </div>
-                                                            <div className="ml-4">
-                                                                <div className="flex items-center">
+                                    ) : filteredCampaigns.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="7" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                                No campaigns found
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filteredCampaigns.map((campaign) => (
+                                            <tr key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center">
+                                                        <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300">
+                                                            <FiZap size={20} />
+                                                        </div>
+                                                        <div className="ml-4">
+                                                            <div className="flex items-center">
                                                                 <button
                                                                     onClick={() => handleViewCampaign(campaign.id)}
                                                                     className="text-sm font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-left"
                                                                 >
                                                                     {campaign.name}
                                                                 </button>
-                                                                    {campaign.hasError && (
-                                                                        <a
-                                                                            href={campaign.errorFile}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
-                                                                            className="ml-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
-                                                                            title="View error file"
-                                                                        >
-                                                                            <FiAlertCircle size={16} />
-                                                                        </a>
-                                                                    )}
-                                                                </div>
-                                                                <div className="text-sm text-gray-500 dark:text-gray-400">
-                                                                    {campaign.id}
-                                                                </div>
+                                                                {campaign.hasError && (
+                                                                    <a
+                                                                        href={campaign.errorFile}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="ml-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                                                                        title="View error file"
+                                                                    >
+                                                                        <FiAlertCircle size={16} />
+                                                                    </a>
+                                                                )}
                                                             </div>
                                                         </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="text-sm text-gray-900 dark:text-white">{campaign.template}</div>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="flex items-center text-sm text-gray-900 dark:text-white">
-                                                            <FiUsers className="mr-1" size={16} />
-                                                            {campaign.audience}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="text-sm text-gray-900 dark:text-white">
-                                                            <div className="font-medium">{campaign.recipients.toLocaleString()}</div>
-                                                            {campaign.status === 'completed' && (
-                                                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                                    {campaign.delivered} delivered, {campaign.read} read
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        {getStatusBadge(campaign.status)}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                        <div className="flex items-center">
-                                                            <FiCalendar className="mr-1" size={14} />
-                                                            {moment(campaign.createdDate).format('MMM DD, YYYY')}
-                                                        </div>
-                                                        {campaign.scheduledDate && (
-                                                            <div className="text-xs mt-1">
-                                                                Scheduled: {moment(campaign.scheduledDate).format('MMM DD, HH:mm')}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-900 dark:text-white">{campaign.template}</div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center text-sm text-gray-900 dark:text-white">
+                                                        <FiUsers className="mr-1" size={16} />
+                                                        {campaign.audience}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-900 dark:text-white">
+                                                        <div className="font-medium">{campaign.recipients.toLocaleString()}</div>
+                                                        {campaign.status === 'completed' && (
+                                                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                                {campaign.delivered} delivered, {campaign.read} read
                                                             </div>
                                                         )}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                        <div className="flex items-center justify-end space-x-2">
-                                                            <button
-                                                                onClick={() => handleViewCampaign(campaign.id)}
-                                                                className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                                                                title="View campaign"
-                                                            >
-                                                                <FiEye size={18} />
-                                                            </button>
-                                                            {(campaign.status === 'draft' || campaign.status === 'scheduled' || campaign.status === 'pending') && (
-                                                                <button
-                                                                    onClick={() => handleEditCampaign(campaign.id)}
-                                                                    className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                                                                    title="Edit campaign"
-                                                                >
-                                                                    <FiEdit size={18} />
-                                                                </button>
-                                                            )}
-                                                            <button
-                                                                onClick={() => handleDeleteCampaign(campaign.id)}
-                                                                className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                                                                title="Delete campaign"
-                                                            >
-                                                                <FiTrash2 size={18} />
-                                                            </button>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    {getStatusBadge(campaign.status)}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                    <div className="flex items-center">
+                                                        <FiCalendar className="mr-1" size={14} />
+                                                        {moment(campaign.createdDate).format('MMM DD, YYYY')}
+                                                    </div>
+                                                    {campaign.scheduledDate && (
+                                                        <div className="text-xs mt-1">
+                                                            Scheduled: {moment(campaign.scheduledDate).format('MMM DD, HH:mm')}
                                                         </div>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                            {/* Load More Button */}
-                            {hasMore && !loading && (
-                                <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 text-center">
-                                    <button
-                                        onClick={() => fetchCampaigns(false, lastId)}
-                                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-200 dark:hover:bg-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                    >
-                                        Load More
-                                    </button>
-                                </div>
-                            )}
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                    <div className="flex items-center justify-end space-x-2">
+                                                        <button
+                                                            onClick={() => handleViewCampaign(campaign.id)}
+                                                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                                            title="View campaign"
+                                                        >
+                                                            <FiEye size={18} />
+                                                        </button>
+                                                        {(campaign.status === 'draft' || campaign.status === 'scheduled' || campaign.status === 'pending') && (
+                                                            <button
+                                                                onClick={() => handleEditCampaign(campaign.id)}
+                                                                className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                                                title="Edit campaign"
+                                                            >
+                                                                <FiEdit size={18} />
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            onClick={() => handleDeleteCampaign(campaign.id)}
+                                                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                                            title="Delete campaign"
+                                                        >
+                                                            <FiTrash2 size={18} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
-
-
+                        {/* Load More Button */}
+                        {hasMore && !loading && (
+                            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 text-center">
+                                <button
+                                    onClick={() => fetchCampaigns(false, lastId)}
+                                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-200 dark:hover:bg-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                >
+                                    Load More
+                                </button>
+                            </div>
+                        )}
                     </div>
-                </main>
+
+
+                </div>
             </div>
         </div>
     );
