@@ -24,6 +24,7 @@ import CampaignList from './pages/Campaign/CampaignList';
 import CampaignDetails from './pages/Campaign/CampaignDetails.js';
 import AutoReply from './pages/Automation/AutoReply';
 import Flow from './pages/Automation/Flow';
+import MyProfile from './pages/MyProfile.js';
 const GOOGLE_CLIENT_ID = "124604231994-dtnflivbu049428d1cg9ngfuhgq38efs.apps.googleusercontent.com";
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -55,6 +56,7 @@ root.render(
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/auto-reply" element={<AutoReply />} />
         <Route path="/flow" element={<Flow />} />
+        <Route path="/my-profile" element={<MyProfile />} />
         {/* Add more routes as needed */}
         <Route path="*" element={<Error_404 />} />
       </Routes>

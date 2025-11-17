@@ -565,7 +565,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
   }
 
   const profileItems = [
-    { title: 'My Profile', icon: <FiUser className="mr-2" size={16} />, path: '#' },
+    { title: 'My Profile', icon: <FiUser className="mr-2" size={16} />, path: '/my-profile' },
     { title: 'Settings', icon: <FiSettings className="mr-2" size={16} />, path: '#' },
     { title: 'Help', icon: <FiHelpCircle className="mr-2" size={16} />, path: '#' },
   ];

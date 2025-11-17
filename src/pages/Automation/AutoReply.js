@@ -20,7 +20,8 @@ import {
     FiCalendar,
     FiBarChart2,
     FiZap,
-    FiSettings
+    FiSettings,
+    FiLayers
 } from 'react-icons/fi';
 import moment from 'moment';
 
@@ -52,7 +53,8 @@ const AutoReply = () => {
         startTime: '09:00',
         endTime: '17:00',
         daysOfWeek: [1, 2, 3, 4, 5], // Monday to Friday
-        priority: 1
+        priority: 1,
+        multiSteps: [] // additional automated follow-up messages
     });
 
     useEffect(() => {
@@ -94,7 +96,8 @@ const AutoReply = () => {
             startTime: '09:00',
             endTime: '17:00',
             daysOfWeek: [1, 2, 3, 4, 5],
-            priority: rules.length + 1
+            priority: rules.length + 1,
+            multiSteps: []
         });
         setShowCreateModal(true);
     };
@@ -111,9 +114,44 @@ const AutoReply = () => {
             startTime: rule.startTime || '09:00',
             endTime: rule.endTime || '17:00',
             daysOfWeek: rule.daysOfWeek || [1, 2, 3, 4, 5],
-            priority: rule.priority
+            priority: rule.priority,
+            multiSteps: rule.multiSteps || []
         });
         setShowCreateModal(true);
+    };
+
+    // Multi-level (follow-up) steps helpers
+    const handleAddMultiStep = () => {
+        setFormData((prev) => ({
+            ...prev,
+            multiSteps: [
+                ...prev.multiSteps,
+                {
+                    id: Date.now().toString() + '-' + prev.multiSteps.length,
+                    label: `Step ${prev.multiSteps.length + 1}`,
+                    delaySeconds: 30,
+                    message: ''
+                }
+            ]
+        }));
+    };
+
+    const handleUpdateMultiStep = (index, field, value) => {
+        setFormData((prev) => {
+            const updated = [...prev.multiSteps];
+            updated[index] = {
+                ...updated[index],
+                [field]: field === 'delaySeconds' ? (parseInt(value, 10) || 0) : value
+            };
+            return { ...prev, multiSteps: updated };
+        });
+    };
+
+    const handleRemoveMultiStep = (index) => {
+        setFormData((prev) => ({
+            ...prev,
+            multiSteps: prev.multiSteps.filter((_, i) => i !== index)
+        }));
     };
 
     const handleDeleteRule = (ruleId) => {
@@ -155,6 +193,14 @@ const AutoReply = () => {
             endTime: formData.businessHours ? formData.endTime : null,
             daysOfWeek: formData.businessHours ? formData.daysOfWeek : null,
             priority: formData.priority,
+            multiSteps: (formData.multiSteps || []).map((step, idx) => ({
+                id: step.id || `${Date.now().toString()}-${idx}`,
+                label: step.label || `Step ${idx + 1}`,
+                delaySeconds: typeof step.delaySeconds === 'number'
+                    ? step.delaySeconds
+                    : parseInt(step.delaySeconds, 10) || 0,
+                message: step.message || ''
+            })),
             createdAt: editingRule ? editingRule.createdAt : new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             stats: editingRule ? editingRule.stats : {
@@ -424,6 +470,20 @@ const AutoReply = () => {
                                                             </div>
                                                         </div>
 
+                                        {Array.isArray(rule.multiSteps) && rule.multiSteps.length > 0 && (
+                                            <div className="flex items-start">
+                                                <FiLayers className="mt-1 mr-2 text-gray-400 flex-shrink-0" size={16} />
+                                                <div>
+                                                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                                        Multi-level follow-ups:
+                                                    </span>
+                                                    <p className="mt-1 text-sm text-gray-900 dark:text-white">
+                                                        {rule.multiSteps.length} step{rule.multiSteps.length > 1 ? 's' : ''} configured
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+
                                                         {rule.businessHours && (
                                                             <div className="flex items-start">
                                                                 <FiClock className="mt-1 mr-2 text-gray-400 flex-shrink-0" size={16} />
@@ -583,6 +643,90 @@ const AutoReply = () => {
                                             className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                             required
                                         />
+                                    </div>
+
+                                    {/* Multi-level (Follow-up) Responses */}
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Multi-level follow-up messages
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={handleAddMultiStep}
+                                                className="inline-flex items-center px-2.5 py-1.5 border border-indigo-600 text-xs font-medium rounded-md text-indigo-600 bg-white hover:bg-indigo-50 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-indigo-300"
+                                            >
+                                                <FiPlus className="mr-1" size={14} />
+                                                Add step
+                                            </button>
+                                        </div>
+                                        {(!formData.multiSteps || formData.multiSteps.length === 0) && (
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                Optionally send additional automated messages after the first response
+                                                (e.g., follow-ups after a delay). This is your simple multi-level auto-reply.
+                                            </p>
+                                        )}
+                                        {Array.isArray(formData.multiSteps) && formData.multiSteps.length > 0 && (
+                                            <div className="space-y-4">
+                                                {formData.multiSteps.map((step, index) => (
+                                                    <div
+                                                        key={step.id || index}
+                                                        className="border border-gray-200 dark:border-gray-700 rounded-md p-3 bg-gray-50 dark:bg-gray-800/60"
+                                                    >
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <div className="flex items-center space-x-2">
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                                                                    Step {index + 1}
+                                                                </span>
+                                                                <input
+                                                                    type="text"
+                                                                    value={step.label || ''}
+                                                                    onChange={(e) => handleUpdateMultiStep(index, 'label', e.target.value)}
+                                                                    placeholder="Short label (optional)"
+                                                                    className="block w-40 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                                />
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRemoveMultiStep(index)}
+                                                                className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                                                            <div className="sm:col-span-2">
+                                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                    Delay (seconds)
+                                                                </label>
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    value={step.delaySeconds}
+                                                                    onChange={(e) => handleUpdateMultiStep(index, 'delaySeconds', e.target.value)}
+                                                                    className="block w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                                />
+                                                                <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                                                                    How long after the previous reply this message should be sent.
+                                                                </p>
+                                                            </div>
+                                                            <div className="sm:col-span-3">
+                                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                                    Follow-up message
+                                                                </label>
+                                                                <textarea
+                                                                    rows={2}
+                                                                    value={step.message}
+                                                                    onChange={(e) => handleUpdateMultiStep(index, 'message', e.target.value)}
+                                                                    placeholder="Enter the follow-up message..."
+                                                                    className="block w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Priority */}
