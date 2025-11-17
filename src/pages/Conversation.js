@@ -652,6 +652,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const [mediaRecorder, setMediaRecorder] = useState(null);
     const audioChunksRef = useRef([]);
     const recordingTimerRef = useRef(null);
+    const recordingCancelledRef = useRef(false);
 
     // Contact details side panel state
     const [showContactDetails, setShowContactDetails] = useState(false);
@@ -667,6 +668,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const headerMenuButtonRef = useRef(null);
     const headerMenuRef = useRef(null);
     const contactDbInitRef = useRef(false);
+
+    useEffect(() => {
+        return () => {
+            if (selectedFile?.previewUrl && typeof URL !== 'undefined') {
+                URL.revokeObjectURL(selectedFile.previewUrl);
+            }
+        };
+    }, [selectedFile]);
 
     useEffect(() => {
         const inputEl = messageInputRef.current;
@@ -1879,60 +1888,102 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     // Voice recording functions
     const startRecording = async () => {
         try {
-            alert('Requesting microphone access...');
-            const stream = await navigator.mediaDevices.getUserMedia({ 
+            if (!navigator?.mediaDevices?.getUserMedia) {
+                toast.error('Audio recording is not supported in this browser.');
+                return;
+            }
+
+            // Clear any previously selected attachment (including older voice drafts)
+            if (selectedFile) {
+                setSelectedFile(null);
+            }
+
+            recordingCancelledRef.current = false;
+
+            const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,
                     noiseSuppression: true,
                     sampleRate: 44100
-                } 
+                }
             });
-            
-            alert('Microphone access granted, creating MediaRecorder...');
+
             const recorder = new MediaRecorder(stream, {
                 mimeType: 'audio/webm;codecs=opus'
             });
-            
-            // Clear previous chunks
+
             audioChunksRef.current = [];
-            
+
             setMediaRecorder(recorder);
             setIsRecording(true);
             setRecordingTime(0);
-            
-            // Start timer
+
             recordingTimerRef.current = setInterval(() => {
-                setRecordingTime(prev => prev + 1);
+                setRecordingTime((prev) => prev + 1);
             }, 1000);
-            
+
             recorder.ondataavailable = (event) => {
-                console.log('Audio data available:', event.data.size, 'bytes');
                 if (event.data.size > 0) {
                     audioChunksRef.current.push(event.data);
                 }
             };
-            
+
             recorder.onstop = () => {
-                console.log('Recording stopped, total chunks:', audioChunksRef.current.length);
                 stream.getTracks().forEach(track => track.stop());
-                
-                // Process the recording after a short delay
+                setMediaRecorder(null);
+
+                const wasCancelled = recordingCancelledRef.current;
+                recordingCancelledRef.current = false;
+
                 setTimeout(() => {
-                    if (audioChunksRef.current.length > 0) {
-                        sendVoiceMessage();
+                    const chunks = audioChunksRef.current;
+                    audioChunksRef.current = [];
+
+                    if (wasCancelled) {
+                        setRecordingTime(0);
+                        return;
                     }
-                }, 100);
+
+                    if (!chunks.length) {
+                        toast.error('No audio captured. Please try again.');
+                        setRecordingTime(0);
+                        return;
+                    }
+
+                    const mimeType = 'audio/webm;codecs=opus';
+                    const audioBlob = new Blob(chunks, { type: mimeType });
+                    const fileName = `voice_${Date.now()}.webm`;
+                    let audioFile;
+
+                    try {
+                        audioFile = new File([audioBlob], fileName, { type: mimeType });
+                    } catch {
+                        audioFile = audioBlob;
+                    }
+
+                    const previewUrl = URL.createObjectURL(audioBlob);
+
+                    setSelectedFile({
+                        file: audioFile,
+                        type: 'audio',
+                        isVoiceRecording: true,
+                        previewUrl,
+                        displayName: fileName
+                    });
+
+                    toast.success('Voice recording ready. Tap send to share.');
+                    setRecordingTime(0);
+                }, 80);
             };
-            
+
             recorder.onerror = (event) => {
                 console.error('MediaRecorder error:', event.error);
                 toast.error('Recording error: ' + event.error);
             };
-            
-            recorder.start(1000); // Collect data every second
-            console.log('Recording started...');
+
+            recorder.start();
             toast.success('Recording started! Tap mic again to stop.');
-            
+
         } catch (error) {
             console.error('Error starting recording:', error);
             if (error.name === 'NotAllowedError') {
@@ -1946,183 +1997,39 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     };
 
     const stopRecording = () => {
-        console.log('Stopping recording...');
         if (mediaRecorder && mediaRecorder.state === 'recording') {
+            recordingCancelledRef.current = false;
             mediaRecorder.stop();
             setIsRecording(false);
-            
+
             if (recordingTimerRef.current) {
                 clearInterval(recordingTimerRef.current);
                 recordingTimerRef.current = null;
             }
-            
-            toast.success('Recording stopped! Processing...');
+
+            toast.success('Recording stopped. Processing audio…');
         }
     };
 
     const cancelRecording = () => {
-        console.log('Cancelling recording...');
         if (mediaRecorder && mediaRecorder.state === 'recording') {
+            recordingCancelledRef.current = true;
             mediaRecorder.stop();
         }
-        
+
         setIsRecording(false);
         setRecordingTime(0);
         audioChunksRef.current = [];
-        
+
         if (recordingTimerRef.current) {
             clearInterval(recordingTimerRef.current);
             recordingTimerRef.current = null;
         }
-        
+
         toast.info('Recording cancelled');
     };
 
-    const sendVoiceMessage = async () => {
-        console.log('Sending voice message, chunks:', audioChunksRef.current.length);
-        if (audioChunksRef.current.length === 0) {
-            console.log('No audio chunks to send');
-            toast.error('No audio recorded');
-            return;
-        }
-        
-        try {
-            // Create audio blob
-            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-            console.log('Created audio blob, size:', audioBlob.size, 'bytes');
-            
-            // Create FormData for file upload
-            const formData = new FormData();
-            formData.append('file', audioBlob, `voice_${Date.now()}.webm`);
-            formData.append('project_id', tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c');
-            
-            // Upload audio file first
-            const uploadResponse = await axios.post(
-                'https://api.w1chat.com/upload/upload-media',
-                formData,
-                {
-                    headers: {
-                        'token': tokens.token,
-                        'username': tokens.username,
-                        'Content-Type': 'multipart/form-data'
-                    }
-                }
-            );
-            
-            if (uploadResponse.data.error) {
-                throw new Error(uploadResponse.data.message || 'Failed to upload audio');
-            }
-            
-            const audioUrl = uploadResponse.data.data.file_url;
-            
-            // Send voice message
-            const tempMessageId = `temp_${Date.now()}`;
-            const newMessage = {
-                id: Date.now().toString(),
-                message_id: tempMessageId,
-                type: 'out',
-                message_type: 'audio',
-                message: '',
-                status: 'pending',
-                timestamp: Date.now(),
-                send_by: 'You',
-                chat_number: activeChat.number,
-                media_url: audioUrl,
-                is_voice: true
-            };
-            
-            // Add message to UI immediately
-            setMessages(prev => [...prev, newMessage]);
-            
-            // Save to local DB if available
-            if (dbAvailable) {
-                try {
-                    await dbHelper.saveMessage([newMessage]);
-                } catch (e) {
-                    console.warn('Failed to persist temp message:', e);
-                }
-            }
-            
-            // Trigger parent to refresh chat list with pending state
-            if (onMessageStatusUpdate) {
-                onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
-            }
-            
-            const messagePayload = {
-                project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
-                message: '',
-                number: activeChat.number,
-                audio_link: audioUrl,
-                is_voice: true
-            };
-            
-            const { data, key } = Encrypt(messagePayload);
-            const data_pass = JSON.stringify({ "data": data, "key": key });
-            
-            const messageResponse = await axios.post(
-                `https://api.w1chat.com/message/send-audio-message`,
-                data_pass,
-                {
-                    headers: {
-                        'token': tokens.token,
-                        'username': tokens.username,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-            
-            if (!messageResponse.data.error) {
-                // Update message status to sent
-                setMessages(prev =>
-                    prev.map(msg =>
-                        msg.message_id === tempMessageId
-                            ? { ...msg, status: 'sent' }
-                            : msg
-                    )
-                );
-                
-                if (dbAvailable) {
-                    await dbHelper.updateMessageStatus(tempMessageId, 'sent');
-                }
-                
-                if (onMessageStatusUpdate) {
-                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'sent');
-                }
-                
-                toast.success('Voice message sent!');
-            } else {
-                // Update message status to failed
-                setMessages(prev =>
-                    prev.map(msg =>
-                        msg.message_id === tempMessageId
-                            ? { ...msg, status: 'failed' }
-                            : msg
-                    )
-                );
-                
-                if (dbAvailable) {
-                    await dbHelper.updateMessageStatus(tempMessageId, 'failed');
-                }
-                
-                if (onMessageStatusUpdate) {
-                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
-                }
-                
-                toast.error('Failed to send voice message');
-            }
-            
-        } catch (error) {
-            console.error('Error sending voice message:', error);
-            toast.error('Failed to send voice message');
-        } finally {
-            // Clean up
-            audioChunksRef.current = [];
-            setRecordingTime(0);
-        }
-    };
-
     const handleMicClick = () => {
-        alert('hitt')
         if (isRecording) {
             stopRecording();
         } else {
@@ -2152,7 +2059,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             if (file) {
                 setSelectedFile({
                     file,
-                    type: fileType
+                    type: fileType,
+                    displayName: file.name
                 });
                 setShowMediaModal(false);
             }
@@ -2197,10 +2105,15 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         setIsUploading(true);
         setUploadProgress(0);
         const tempMessageId = `temp_${Date.now()}`;
+        const isVoiceRecording = Boolean(selectedFile?.isVoiceRecording);
+        const fileLabel = getFileTypeLabel(selectedFile.type).toLowerCase();
+        const attachmentMessage = isVoiceRecording ? '' : (messageInput || `Sent a ${fileLabel}`);
 
         try {
             const formData = new FormData();
-            formData.append('file', selectedFile.file);
+            const fallbackFileName = selectedFile.file?.name || selectedFile.displayName || `attachment_${Date.now()}`;
+            formData.append('file', selectedFile.file, fallbackFileName);
+            formData.append('project_id', tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c');
 
             const uploadResponse = await axios.post(
                 `https://api.w1chat.com/upload/upload-media`,
@@ -2220,24 +2133,28 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 }
             );
 
-            if (uploadResponse.data && !uploadResponse.data.error && uploadResponse.data.link) {
-                const fileUrl = uploadResponse.data.link;
+            const fileUrl = uploadResponse?.data?.link
+                || uploadResponse?.data?.data?.file_url
+                || uploadResponse?.data?.data?.fileUrl;
+
+            if (uploadResponse.data && !uploadResponse.data.error && fileUrl) {
                 const fileType = selectedFile.type;
-                const fileName = selectedFile.file.name;
+                const fileName = selectedFile.file?.name || selectedFile.displayName || fallbackFileName;
 
                 const tempMessage = {
                     id: Date.now().toString(),
                     message_id: tempMessageId,
                     type: 'out',
                     message_type: fileType,
-                    message: messageInput || `Sent a ${getFileTypeLabel(fileType).toLowerCase()}`,
+                    message: attachmentMessage,
                     media_url: fileUrl,
                     media_name: fileName,
                     status: 'pending',
                     timestamp: Date.now(),
                     send_by: 'You',
                     chat_number: activeChat.number,
-                    create_date: new Date().toISOString()
+                    create_date: new Date().toISOString(),
+                    is_voice: isVoiceRecording
                 };
 
                 if (dbAvailable) {
@@ -2251,7 +2168,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                             create_date: tempMessage.create_date,
                             type: 'out',
                             message_type: fileType,
-                            message: tempMessage.message,
+                        message: tempMessage.message,
                             status: 'pending',
                             unique_id: tempMessageId,
                             last_id: Date.now(),
@@ -2273,7 +2190,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
                 const messagePayload = {
                     project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
-                    message: messageInput || '',
+                    message: isVoiceRecording ? '' : (messageInput || ''),
                     number: activeChat.number
                 };
 
@@ -2281,7 +2198,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 else if (fileType === 'video') messagePayload.video_link = fileUrl;
                 else if (fileType === 'audio') {
                     messagePayload.audio_link = fileUrl;
-                    messagePayload.is_voice = false; // Regular audio file, not voice message
+                    messagePayload.is_voice = isVoiceRecording;
                 }
                 else if (fileType === 'document') messagePayload.document_link = fileUrl;
 
@@ -2368,6 +2285,9 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
                     }
                 }
+            }
+            else {
+                throw new Error(uploadResponse?.data?.message || 'Failed to upload file');
             }
         } catch (error) {
             console.error('Upload failed:', error);
@@ -2834,29 +2754,49 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 {/* Selected File Preview */}
                 {selectedFile && (
                     <div className="px-3 sm:px-4 py-2 sm:py-3 border-t dark:border-gray-700 bg-white dark:bg-gray-800 w-full">
-                        <div className="flex items-center justify-between p-2 sm:p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-                            <div className="flex items-center space-x-2 sm:space-x-3">
-                                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-100 dark:bg-blue-800 flex items-center justify-center">
-                                    {selectedFile.type === 'photo' && <FiImage className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" />}
-                                    {selectedFile.type === 'video' && <FiVideo className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" />}
-                                    {selectedFile.type === 'audio' && <FiMusic className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" />}
-                                    {selectedFile.type === 'document' && <FiFile className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" />}
+                        <div className="flex flex-col space-y-2">
+                            <div className="flex items-center justify-between p-2 sm:p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                                <div className="flex items-center space-x-2 sm:space-x-3">
+                                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-100 dark:bg-blue-800 flex items-center justify-center">
+                                        {selectedFile.type === 'photo' && <FiImage className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" />}
+                                        {selectedFile.type === 'video' && <FiVideo className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" />}
+                                        {selectedFile.type === 'audio' && <FiMusic className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" />}
+                                        {selectedFile.type === 'document' && <FiFile className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" />}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white truncate">
+                                            {selectedFile.file?.name || selectedFile.displayName || 'Attachment'}
+                                        </p>
+                                        <p className="text-xs text-gray-600 dark:text-gray-300">
+                                            {getFileTypeLabel(selectedFile.type)}
+                                            {selectedFile.file?.size ? ` • ${(selectedFile.file.size / 1024 / 1024).toFixed(2)} MB` : ''}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className="min-w-0">
-                                    <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white truncate">
-                                        {selectedFile.file.name}
-                                    </p>
-                                    <p className="text-xs text-gray-600 dark:text-gray-300">
-                                        {getFileTypeLabel(selectedFile.type)} • {(selectedFile.file.size / 1024 / 1024).toFixed(2)} MB
-                                    </p>
-                                </div>
+                                <button
+                                    onClick={removeSelectedFile}
+                                    className="p-1 sm:p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                >
+                                    <FiX className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </button>
                             </div>
-                            <button
-                                onClick={removeSelectedFile}
-                                className="p-1 sm:p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-colors"
-                            >
-                                <FiX className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </button>
+
+                            {selectedFile.type === 'audio' && selectedFile.previewUrl && (
+                                <div className="p-2 sm:p-3 rounded-xl bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+                                    <audio
+                                        controls
+                                        className="w-full"
+                                        src={selectedFile.previewUrl}
+                                    >
+                                        Your browser does not support the audio element.
+                                    </audio>
+                                    {selectedFile.isVoiceRecording && (
+                                        <p className="text-xs text-gray-600 dark:text-gray-300 mt-2">
+                                            Voice recording ready. Tap send to share.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
