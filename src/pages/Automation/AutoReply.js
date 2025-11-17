@@ -259,7 +259,13 @@ const AutoReply = () => {
     ];
 
     return (
-        <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+            <Header
+                mobileMenuOpen={mobileMenuOpen}
+                setMobileMenuOpen={setMobileMenuOpen}
+                isMinimized={isMinimized}
+                setIsMinimized={setIsMinimized}
+            />
             <Sidebar
                 mobileMenuOpen={mobileMenuOpen}
                 setMobileMenuOpen={setMobileMenuOpen}
@@ -267,16 +273,9 @@ const AutoReply = () => {
                 setIsMinimized={setIsMinimized}
             />
 
-            <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isMinimized ? 'lg:ml-16' : 'lg:ml-64'}`}>
-                <Header
-                    mobileMenuOpen={mobileMenuOpen}
-                    setMobileMenuOpen={setMobileMenuOpen}
-                    isMinimized={isMinimized}
-                    setIsMinimized={setIsMinimized}
-                />
-
-                <main className="mt-16 flex-1 overflow-y-auto p-4 sm:p-6">
-                    <div className="max-w-7xl mx-auto">
+            {/* Main content */}
+            <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
                         {/* Page Header */}
                         <div className="mb-6">
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
@@ -538,8 +537,7 @@ const AutoReply = () => {
                                 </div>
                             )}
                         </div>
-                    </div>
-                </main>
+                </div>
             </div>
 
             {/* Create/Edit Rule Modal */}
