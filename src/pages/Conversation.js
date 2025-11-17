@@ -1128,6 +1128,24 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         setShowHeaderMenu(false);
     }, [activeChat?.number]);
 
+    const restoreMessageInputFocus = useCallback(() => {
+        const inputEl = messageInputRef.current;
+        if (!inputEl) return;
+
+        const { start, end } = inputSelectionRef.current || {};
+        const caretStart = Number.isInteger(start) ? start : inputEl.value.length;
+        const caretEnd = Number.isInteger(end) ? end : caretStart;
+
+        requestAnimationFrame(() => {
+            inputEl.focus();
+            try {
+                inputEl.setSelectionRange(caretStart, caretEnd);
+            } catch (_) {
+                // Ignore selection errors (e.g., unsupported inputs)
+            }
+        });
+    }, []);
+
     const updateSelectionFromInput = () => {
         const inputEl = messageInputRef.current;
         if (!inputEl) return;
@@ -1158,6 +1176,17 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             }
         });
     };
+
+    const handleEmojiButtonMouseDown = useCallback((event) => {
+        event.preventDefault();
+        restoreMessageInputFocus();
+    }, [restoreMessageInputFocus]);
+
+    const handleEmojiButtonClick = useCallback((event) => {
+        event.preventDefault();
+        setShowEmojiPicker((prev) => !prev);
+        restoreMessageInputFocus();
+    }, [restoreMessageInputFocus]);
 
     useEffect(() => {
         markAsRead(activeChat.number);
@@ -2108,6 +2137,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         const isVoiceRecording = Boolean(selectedFile?.isVoiceRecording);
         const fileLabel = getFileTypeLabel(selectedFile.type).toLowerCase();
         const attachmentMessage = isVoiceRecording ? '' : (messageInput || `Sent a ${fileLabel}`);
+        const isVoiceParam = isVoiceRecording ? 'true' : 'false';
 
         try {
             const formData = new FormData();
@@ -2198,7 +2228,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 else if (fileType === 'video') messagePayload.video_link = fileUrl;
                 else if (fileType === 'audio') {
                     messagePayload.audio_link = fileUrl;
-                    messagePayload.is_voice = isVoiceRecording;
+                    messagePayload.is_voice = isVoiceParam;
                 }
                 else if (fileType === 'document') messagePayload.document_link = fileUrl;
 
@@ -2834,7 +2864,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         <div className="flex-1 flex items-center px-3 sm:px-4 py-2 sm:py-3 rounded-full bg-gray-100 dark:bg-gray-700 border border-transparent focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 dark:focus-within:ring-blue-800 transition-all relative">
                             <button
                                 ref={emojiButtonRef}
-                                onClick={() => setShowEmojiPicker((v) => !v)}
+                                onMouseDown={handleEmojiButtonMouseDown}
+                                onClick={handleEmojiButtonClick}
                                 aria-label="Toggle emoji picker"
                                 className="mr-2 sm:mr-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                             >
@@ -2860,7 +2891,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                             <EmojiPickerPopover
                                 open={showEmojiPicker}
                                 onEmojiClick={(emojiData) => handleEmojiSelect(emojiData.emoji)}
-                                onClose={() => setShowEmojiPicker(false)}
+                                onClose={() => {
+                                    setShowEmojiPicker(false);
+                                    restoreMessageInputFocus();
+                                }}
                                 anchorRef={emojiButtonRef}
                                 darkMode={darkMode}
                                 className="m-auto"
