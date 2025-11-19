@@ -425,15 +425,15 @@ const TemplateMessageRenderer = ({ msg, darkMode, renderFilePreview, isOwnMessag
     // Get buttons
     const buttons = buttonsComponent?.buttons || [];
 
-    // Determine text colors based on message type (outgoing has white text on blue bg)
+    // Determine text colors based on message type (outgoing has white text on green bg)
     const textColorClass = isOwnMessage
-        ? 'text-white'
+        ? 'text-gray-800'
         : (darkMode ? 'text-white' : 'text-gray-900');
     const footerColorClass = isOwnMessage
-        ? 'text-white/80'
+        ? 'text-gray-800'
         : (darkMode ? 'text-gray-300' : 'text-gray-600');
     const buttonClass = isOwnMessage
-        ? 'bg-white/20 text-white border border-white/30 hover:bg-white/30'
+        ? 'bg-[#D9FDD3] text-gray-800 border border-gray-600 hover:bg-white/30'
         : (darkMode
             ? 'bg-white/20 text-white border border-white/30 hover:bg-white/30'
             : 'bg-white text-gray-800 border border-gray-200 hover:bg-gray-50');
@@ -540,7 +540,7 @@ const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime,
                         <div
                             id={`message-${messageKey}`}
                             className={`p-3 sm:p-4 rounded-2xl ${msg.type === 'out'
-                                ? 'bg-blue-500 text-white rounded-br-md'
+                                ? 'bg-[#D9FDD3] text-gray-800 rounded-br-md'
                                 : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-md border border-gray-200 dark:border-gray-700'
                                 } max-w-full relative ${bubbleHighlightClass}`}
                         >
@@ -1429,7 +1429,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
         try {
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                project_id: tokens.projects?.[0]?.project_id || '',
                 number: number
             };
 
@@ -2219,10 +2219,12 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 }
 
                 const messagePayload = {
-                    project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                    project_id: tokens.projects?.[0]?.project_id || '',
                     message: isVoiceRecording ? '' : (messageInput || ''),
                     number: activeChat.number
                 };
+
+                console.log(messagePayload);
 
                 if (fileType === 'photo') messagePayload.image_link = fileUrl;
                 else if (fileType === 'video') messagePayload.video_link = fileUrl;
@@ -2620,14 +2622,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     );
 
     return (
-        <div className="flex h-full bg-white dark:bg-gray-900 w-full">
+        <div className="flex h-full dark:bg-gray-900 w-full" style={{ backgroundImage: "url('/wpbg.png')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}>
             {/* Main conversation area */}
             <div className={`flex flex-col transition-all duration-300 ${showContactDetails ? 'w-2/3' : 'w-full'}`}>
                 {/* Chat header */}
-                <div className="flex items-center justify-between p-3 sm:p-4 border-b dark:border-gray-700 bg-white dark:bg-gray-800 w-full">
+                <div className="flex items-center justify-between p-3 pt-1 sm:p-2 border-b dark:border-gray-700 bg-white dark:bg-gray-800 w-full">
                     {/* user profile name or number */}
                     <div
-                        className="flex items-center space-x-2 sm:space-x-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg p-2 transition-colors"
+                        className="flex items-center space-x-2 sm:space-x-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg p-1 transition-colors"
                         onClick={() => {
                             setShowContactDetails(true);
                             fetchContactDetails(activeChat.number);
@@ -2715,7 +2717,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 </div>
 
                 {/* Messages */}
-                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 w-full">
+                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-4 dark:bg-gray-900 w-full">
                     {loadingHistory ? (
                         <div className="flex items-center justify-center py-6 sm:py-8">
                             <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-blue-500"></div>

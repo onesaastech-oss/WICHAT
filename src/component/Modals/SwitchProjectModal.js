@@ -5,6 +5,29 @@ import { FiX, FiCheck, FiBriefcase } from 'react-icons/fi';
 const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }) => {
     const [selectedCompany, setSelectedCompany] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [projects, setProjects] = useState([]);
+
+    // Get projects from localStorage
+    useEffect(() => {
+        if (isOpen) {
+            try {
+                const userData = localStorage.getItem('userData');
+                if (userData) {
+                    const parsedData = JSON.parse(userData);
+                    if (parsedData.projects && Array.isArray(parsedData.projects)) {
+                        setProjects(parsedData.projects);
+                    } else {
+                        setProjects([]);
+                    }
+                } else {
+                    setProjects([]);
+                }
+            } catch (error) {
+                console.error('Error parsing userData from localStorage:', error);
+                setProjects([]);
+            }
+        }
+    }, [isOpen]);
 
     // Prevent background scrolling when modal is open
     useEffect(() => {
@@ -29,21 +52,13 @@ const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }
         }
     }, [isOpen]);
 
-    // Default companies if none provided
-    const defaultCompanies = [
-        { id: 1, name: 'Acme Corporation', description: 'Technology Solutions' },
-        { id: 2, name: 'Global Industries', description: 'Manufacturing & Trade' },
-        { id: 3, name: 'Digital Ventures', description: 'Software Development' },
-        { id: 4, name: 'TechStart Inc.', description: 'Startup Accelerator' },
-        { id: 5, name: 'Enterprise Solutions', description: 'Business Consulting' },
-    ];
+    // Use projects from localStorage, fallback to companies prop, then empty array
+    const projectList = projects.length > 0 ? projects : (companies.length > 0 ? companies : []);
 
-    const companyList = companies.length > 0 ? companies : defaultCompanies;
-
-    // Filter companies based on search query
-    const filteredCompanies = companyList.filter(company =>
-        company.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (company.description && company.description.toLowerCase().includes(searchQuery.toLowerCase()))
+    // Filter projects based on search query
+    const filteredProjects = projectList.filter(project =>
+        project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (project.description && project.description.toLowerCase().includes(searchQuery.toLowerCase()))
     );
 
     const handleSelect = (company) => {
@@ -99,61 +114,65 @@ const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }
                     <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                         <input
                             type="text"
-                            placeholder="Search companies..."
+                            placeholder="Search projects..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
                         />
                     </div>
 
-                    {/* Company List */}
+                    {/* Project List */}
                     <div className="flex-1 overflow-y-auto p-4">
-                        {filteredCompanies.length === 0 ? (
+                        {filteredProjects.length === 0 ? (
                             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                                No companies found
+                                No projects found
                             </div>
                         ) : (
                             <div className="space-y-2">
-                                {filteredCompanies.map((company) => (
-                                    <motion.button
-                                        key={company.id}
-                                        onClick={() => handleSelect(company)}
-                                        className={`w-full text-left p-4 rounded-lg border transition-all duration-200 ${
-                                            selectedCompany?.id === company.id
-                                                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                                                : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                        }`}
-                                        whileHover={{ scale: 1.01 }}
-                                        whileTap={{ scale: 0.99 }}
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex-1">
-                                                <div className="flex items-center space-x-2">
-                                                    <FiBriefcase className={`w-5 h-5 ${
-                                                        selectedCompany?.id === company.id
-                                                            ? 'text-indigo-600 dark:text-indigo-400'
-                                                            : 'text-gray-400'
-                                                    }`} />
-                                                    <h4 className={`font-medium ${
-                                                        selectedCompany?.id === company.id
-                                                            ? 'text-indigo-600 dark:text-indigo-400'
-                                                            : 'text-gray-900 dark:text-white'
-                                                    }`}>
-                                                        {company.name}
-                                                    </h4>
+                                {filteredProjects.map((project) => {
+                                    const projectId = project.project_id || project.id;
+                                    const isSelected = selectedCompany?.project_id === projectId || selectedCompany?.id === projectId;
+                                    return (
+                                        <motion.button
+                                            key={projectId}
+                                            onClick={() => handleSelect(project)}
+                                            className={`w-full text-left p-4 rounded-lg border transition-all duration-200 ${
+                                                isSelected
+                                                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                                                    : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                            }`}
+                                            whileHover={{ scale: 1.01 }}
+                                            whileTap={{ scale: 0.99 }}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center space-x-2">
+                                                        <FiBriefcase className={`w-5 h-5 ${
+                                                            isSelected
+                                                                ? 'text-indigo-600 dark:text-indigo-400'
+                                                                : 'text-gray-400'
+                                                        }`} />
+                                                        <h4 className={`font-medium ${
+                                                            isSelected
+                                                                ? 'text-indigo-600 dark:text-indigo-400'
+                                                                : 'text-gray-900 dark:text-white'
+                                                        }`}>
+                                                            {project.name}
+                                                        </h4>
+                                                    </div>
+                                                    {project.description && (
+                                                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 ml-7">
+                                                            {project.description}
+                                                        </p>
+                                                    )}
                                                 </div>
-                                                {company.description && (
-                                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 ml-7">
-                                                        {company.description}
-                                                    </p>
+                                                {isSelected && (
+                                                    <FiCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                                                 )}
                                             </div>
-                                            {selectedCompany?.id === company.id && (
-                                                <FiCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                                            )}
-                                        </div>
-                                    </motion.button>
-                                ))}
+                                        </motion.button>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
