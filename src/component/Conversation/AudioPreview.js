@@ -3,7 +3,7 @@ import { FaFileAudio } from 'react-icons/fa';
 import { FiMic, FiPlay, FiPause } from 'react-icons/fi';
 import MediaModal from '../Modals/Conversation/MediaModal';
 
-const AudioPreview = ({ fileInfo, isOwnMessage, isVoiceMessage = false }) => {
+const AudioPreview = ({ fileInfo, isOwnMessage, isVoiceMessage = false, onTimeChange }) => {
     const [showModal, setShowModal] = useState(false);
     const [hasError, setHasError] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -25,8 +25,21 @@ const AudioPreview = ({ fileInfo, isOwnMessage, isVoiceMessage = false }) => {
         const audio = audioRef.current;
         if (!audio) return;
 
-        const updateTime = () => setCurrentTime(audio.currentTime || 0);
-        const updateDuration = () => setDuration(audio.duration || 0);
+        const updateTime = () => {
+            const current = audio.currentTime || 0;
+            const total = audio.duration || 0;
+            setCurrentTime(current);
+            if (onTimeChange) {
+                onTimeChange(current, total);
+            }
+        };
+        const updateDuration = () => {
+            const total = audio.duration || 0;
+            setDuration(total);
+            if (onTimeChange) {
+                onTimeChange(audio.currentTime || 0, total);
+            }
+        };
         const handleEnded = () => {
             setCurrentTime(audio.duration || 0);
             setIsPlaying(false);
@@ -47,15 +60,28 @@ const AudioPreview = ({ fileInfo, isOwnMessage, isVoiceMessage = false }) => {
             audio.removeEventListener('play', handlePlay);
             audio.removeEventListener('pause', handlePause);
         };
-    }, [isVoiceMessage]);
+    }, [isVoiceMessage, onTimeChange]);
 
     useEffect(() => {
         if (isVoiceMessage) return;
         const audio = regularAudioRef.current;
         if (!audio) return;
 
-        const updateTime = () => setRegularCurrentTime(audio.currentTime || 0);
-        const updateDuration = () => setRegularDuration(audio.duration || 0);
+        const updateTime = () => {
+            const current = audio.currentTime || 0;
+            const total = audio.duration || 0;
+            setRegularCurrentTime(current);
+            if (onTimeChange) {
+                onTimeChange(current, total);
+            }
+        };
+        const updateDuration = () => {
+            const total = audio.duration || 0;
+            setRegularDuration(total);
+            if (onTimeChange) {
+                onTimeChange(audio.currentTime || 0, total);
+            }
+        };
         const handleEnded = () => {
             setRegularCurrentTime(audio.duration || 0);
             setRegularIsPlaying(false);
@@ -76,7 +102,7 @@ const AudioPreview = ({ fileInfo, isOwnMessage, isVoiceMessage = false }) => {
             audio.removeEventListener('play', handlePlay);
             audio.removeEventListener('pause', handlePause);
         };
-    }, [isVoiceMessage]);
+    }, [isVoiceMessage, onTimeChange]);
 
     useEffect(() => {
         if (!isVoiceMessage) {
@@ -258,10 +284,10 @@ const AudioPreview = ({ fileInfo, isOwnMessage, isVoiceMessage = false }) => {
                     </div>
 
                     {/* Time Row */}
-                    <div className="flex items-center justify-between text-[11px] text-gray-600 dark:text-gray-400">
+                    {/* <div className="flex items-center justify-between text-[11px] text-gray-600 dark:text-gray-400">
                         <span>{displayTime}</span>
                         <span>{formatTime(duration || currentTime)}</span>
-                    </div>
+                    </div> */}
                 </div>
 
                 {/* Hidden Audio Element */}
@@ -342,10 +368,10 @@ const AudioPreview = ({ fileInfo, isOwnMessage, isVoiceMessage = false }) => {
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-between text-[11px] text-gray-600 dark:text-gray-400">
+                        {/* <div className="flex items-center justify-between text-[11px] text-gray-600 dark:text-gray-400">
                             <span>{regularDisplayTime}</span>
                             <span>{formatTime(regularDuration || regularCurrentTime)}</span>
-                        </div>
+                        </div> */}
                     </div>
                 </div>
             </div>

@@ -21,6 +21,7 @@ import {
   FiCheckCircle,
   FiAlertCircle
 } from 'react-icons/fi';
+import WhatsAppPreview from '../component/TemplateAdd/WhatsAppPreview';
 
 function TemplateAdd() {
   const navigate = useNavigate();
@@ -1099,181 +1100,13 @@ function TemplateAdd() {
               </form>
             </div>
 
-            {/* Preview section */}
-            <div className="bg-white shadow rounded-lg p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">WhatsApp Preview</h3>
+            {/*WhatsApp Preview section */}
+            <WhatsAppPreview
+              formData={formData}
+              bodyVariables={bodyVariables}
+              darkMode={false} // or make it toggleable
+            />
 
-              <div className="bg-gray-100 p-4 rounded-lg">
-                <div className="bg-white rounded-lg shadow-md max-w-xs mx-auto overflow-hidden">
-                  {/* Header */}
-                  {formData.components.header.format !== 'NONE' && (
-                    <div className="border-b border-gray-200">
-                      {formData.components.header.format === 'TEXT' && formData.components.header.text && (
-                        <div className="p-3 bg-indigo-50">
-                          <p className="text-sm font-medium text-indigo-800">
-                            {formData.components.header.text}
-                          </p>
-                        </div>
-                      )}
-
-                      {formData.components.header.example.header_handle &&
-                        formData.components.header.example.header_handle.length > 0 &&
-                        formData.components.header.format !== 'TEXT' && (
-                          <div className="h-48 bg-gray-200 overflow-hidden relative">
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <FiPaperclip className="text-3xl text-gray-600" />
-                            </div>
-                            <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
-                              {formData.components.header.format}
-                            </div>
-                          </div>
-                        )}
-                    </div>
-                  )}
-
-                  {/* Body */}
-                  <div className="p-4">
-                    <div
-                      className="text-sm text-gray-800 whitespace-pre-wrap break-words"
-                      dangerouslySetInnerHTML={{
-                        __html: bodyVariables.length > 0
-                          ? formatTextForPreview(generatePreviewText(formData.components.body.text, bodyVariables))
-                          : formatTextForPreview(formData.components.body.text) || "This is a preview of your template message. The actual content will appear here."
-                      }}
-                    ></div>
-
-                    {/* Buttons preview */}
-                    {formData.components.buttons.buttons.length > 0 && (
-                      <div className="mt-4 space-y-2">
-                        {formData.components.buttons.buttons.map((btn, index) => (
-                          <div key={index} className="text-center">
-                            <div className="inline-block px-4 py-2 bg-gray-100 rounded-lg text-sm font-medium border border-gray-200">
-                              {btn.text || (buttonTypes.find(b => b.type === btn.type)?.label)}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Footer */}
-                  {formData.components.footer.text && (
-                    <div className="p-3 bg-gray-50 border-t border-gray-200">
-                      <p className="text-xs text-gray-500">{formData.components.footer.text}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-4 text-sm text-gray-600">
-                <p className="font-medium">Template Guidelines:</p>
-                <ul className="list-disc pl-5 mt-1 space-y-1">
-                  <li>Template name should be lowercase with underscores</li>
-                  <li>Header is optional but recommended for better engagement</li>
-                  <li>Body must contain the main message content</li>
-                  <li>Footer is limited to 60 characters</li>
-                  <li>You can add up to 3 buttons of different types</li>
-                  <li>Use *text* for bold, _text_ for italics, and ~text~ for strikethrough</li>
-                </ul>
-              </div>
-
-              {/* JSON Preview */}
-              <div className="mt-6">
-                <h4 className="text-md font-medium text-gray-900 mb-2">API Payload Preview</h4>
-                <pre className="bg-gray-800 text-green-400 p-4 rounded-md text-xs overflow-auto max-h-64">
-                  {JSON.stringify({
-                    project_id: "689d783e207f0b0c309fa07c",
-                    template: {
-                      name: formData.name || 'template_name',
-                      category: formData.category || 'CATEGORY',
-                      language: formData.language || 'en',
-                      components: (() => {
-                        const comps = [];
-
-                        // Header component
-                        if (formData.components.header.format !== 'NONE') {
-                          const headerComp = {
-                            type: 'HEADER',
-                            format: formData.components.header.format
-                          };
-
-                          if (formData.components.header.format === 'TEXT') {
-                            headerComp.text = formData.components.header.text;
-                            // No variables allowed in header text for WhatsApp
-                          } else {
-                            headerComp.example = formData.components.header.example;
-                          }
-                          comps.push(headerComp);
-                        }
-
-                        // Body component
-                        if (formData.components.body.text) {
-                          const bodyComp = {
-                            type: 'BODY',
-                            text: formData.components.body.text
-                          };
-
-                          if (bodyVariables.length > 0) {
-                            const bodySamples = bodyVariables.map(v => v.sample || '');
-                            bodyComp.example = {
-                              body_text: [bodySamples]
-                            };
-                          }
-                          comps.push(bodyComp);
-                        }
-
-                        // Footer component
-                        if (formData.components.footer.text) {
-                          comps.push({
-                            type: 'FOOTER',
-                            text: formData.components.footer.text
-                          });
-                        }
-
-                        // Buttons component
-                        if (formData.components.buttons.buttons.length > 0) {
-                          comps.push({
-                            type: 'BUTTONS',
-                            buttons: formData.components.buttons.buttons.map(btn => {
-                              if (btn.type === 'COPY_CODE') {
-                                return {
-                                  type: 'otp',
-                                  otp_type: 'copy_code',
-                                  text: btn.text
-                                };
-                              } else if (btn.type === 'PHONE_NUMBER') {
-                                return {
-                                  type: btn.type,
-                                  text: btn.text,
-                                  phone_number: btn.phone_number
-                                };
-                              } else if (btn.type === 'URL') {
-                                const buttonData = {
-                                  type: btn.type,
-                                  text: btn.text,
-                                  url: btn.url
-                                };
-                                if (btn.example && btn.example.length > 0) {
-                                  buttonData.example = btn.example;
-                                }
-                                return buttonData;
-                              } else {
-                                return {
-                                  type: btn.type,
-                                  text: btn.text
-                                };
-                              }
-                            })
-                          });
-                        }
-
-                        return comps;
-                      })()
-                    }
-                  }, null, 2)}
-                </pre>
-              </div>
-            </div>
           </div>
         </div>
       </div>

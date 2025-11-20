@@ -422,17 +422,22 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                                                     Preview
                                                 </button>
                                             )}
-                                            <button
-                                                onClick={() => handleTemplateSelect(template)}
-                                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                                    darkMode 
-                                                        ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
-                                                        : 'bg-indigo-500 text-white hover:bg-indigo-600'
-                                                }`}
-                                            >
-                                                <FiCheck className="w-4 h-4" />
-                                                Select
-                                            </button>
+                                            {
+                                                onTemplateSelect && (
+                                                    <button
+                                                    onClick={() => handleTemplateSelect(template)}
+                                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                        darkMode 
+                                                            ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
+                                                            : 'bg-indigo-500 text-white hover:bg-indigo-600'
+                                                    }`}
+                                                >
+                                                    <FiCheck className="w-4 h-4" />
+                                                    Select
+                                                </button>
+                                                )
+                                            }
+
                                         </div>
                                     </div>
                                 );

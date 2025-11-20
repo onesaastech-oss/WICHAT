@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
+import Tooltip from '../component/Tooltip';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import { useNavigate } from 'react-router-dom';
 import { contactDbHelper } from './db';
+import { useSelector } from 'react-redux';
 import {
   FiPlus,
   FiDownload,
@@ -48,6 +50,7 @@ function Contact() {
   const [sortColumn, setSortColumn] = useState(null); // 'name', 'email', 'firm_name'
   const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
   const navigate = useNavigate();
+  const permissions = useSelector((state) => state.project.permissions);
 
   // Form state for creating new contact
   const [newContact, setNewContact] = useState({
@@ -125,6 +128,7 @@ function Contact() {
   // 3-Step Process: Load local DB → Sync with API → Refresh local DB
   useEffect(() => {
     if (!tokens?.token || !tokens?.username || !dbInitialized) return;
+    if (permissions && permissions.view_contact === false) return;
 
     const loadAndSyncContacts = async () => {
       try {
@@ -267,7 +271,7 @@ function Contact() {
     };
 
     loadAndSyncContacts();
-  }, [tokens?.token, tokens?.username, tokens?.projects, currentPage, dbInitialized]);
+  }, [tokens?.token, tokens?.username, tokens?.projects, currentPage, dbInitialized, permissions]);
 
   // Validation functions
   const validatePhoneNumber = (phone) => {
@@ -375,6 +379,10 @@ function Contact() {
 
   // Handle create contact
   const handleCreateContact = async () => {
+    if (permissions && permissions.create_contact === false) {
+      alert('You do not have permission to create contacts.');
+      return;
+    }
     if (!tokens?.token || !tokens?.username) return;
 
     // Validate form before submitting
@@ -477,6 +485,10 @@ function Contact() {
 
   // Handle opening edit modal
   const handleOpenEditModal = (contact) => {
+    if (permissions && permissions.edit_contact === false) {
+      alert('You do not have permission to edit contacts.');
+      return;
+    }
     console.log('🔧 Opening edit modal for contact:', contact);
     setEditingContact(contact);
     setEditContact({
@@ -500,6 +512,10 @@ function Contact() {
 
   // Handle update contact
   const handleUpdateContact = async () => {
+    if (permissions && permissions.edit_contact === false) {
+      alert('You do not have permission to edit contacts.');
+      return;
+    }
     if (!tokens?.token || !tokens?.username || !editContact.contact_id) return;
 
     // Validate form before submitting
@@ -770,6 +786,35 @@ function Contact() {
     });
   }
 
+  // If user lacks permission to view contacts, show an access message
+  if (permissions && permissions.view_contact === false) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header
+          mobileMenuOpen={mobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
+          isMinimized={isMinimized}
+          setIsMinimized={setIsMinimized}
+        />
+        <Sidebar
+          mobileMenuOpen={mobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
+          isMinimized={isMinimized}
+          setIsMinimized={setIsMinimized}
+        />
+        <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
+          }`}>
+          <div className="p-4 sm:p-6 md:p-8">
+            <div className="bg-white rounded-lg shadow p-8 text-center">
+              <h2 className="text-lg font-semibold text-gray-900">Access Denied</h2>
+              <p className="mt-2 text-gray-600">You do not have permission to view contacts.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header
@@ -832,13 +877,20 @@ function Contact() {
                   Import from Excel
                 </button>
 
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                <Tooltip
+                  content="Not authorized"
+                  disabled={permissions && permissions.create_contact === false}
+                  position="top"
                 >
-                  <FiPlus className="mr-2 h-4 w-4" />
-                  Create Contact
-                </button>
+                  <button
+                    onClick={() => { if (!permissions || permissions.create_contact) setShowCreateModal(true); }}
+                    disabled={permissions && permissions.create_contact === false}
+                    className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${permissions && permissions.create_contact === false ? 'bg-indigo-400 cursor-not-allowed opacity-60' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                  >
+                    <FiPlus className="mr-2 h-4 w-4" />
+                    Create Contact
+                  </button>
+                </Tooltip>
               </div>
             </div>
           </div>
@@ -981,14 +1033,22 @@ function Contact() {
                                 {contact.firm_name || '-'}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <div className="flex space-x-2">
-                                  <button
-                                    onClick={() => handleOpenEditModal(contact)}
-                                    className="text-indigo-600 hover:text-indigo-900"
-                                    title="Edit contact"
+                                <div className="flex justify-center items-center space-x-2">
+                                  <Tooltip
+                                    content="Not authorized"
+                                    disabled={permissions && permissions.edit_contact === false}
+                                    position="top"
                                   >
-                                    <FiEdit className="h-4 w-4" />
-                                  </button>
+                                    <button
+                                      onClick={() => { if (!permissions || permissions.edit_contact) handleOpenEditModal(contact); }}
+                                      disabled={permissions && permissions.edit_contact === false}
+                                      className={`text-indigo-600 hover:text-indigo-900 ${permissions && permissions.edit_contact === false ? 'opacity-50 cursor-not-allowed hover:text-indigo-600' : ''}`}
+                                      title={permissions && permissions.edit_contact === false ? '' : 'Edit contact'}
+                                    >
+                                      <FiEdit className="h-4 w-4" />
+                                    </button>
+                                  </Tooltip>
+
                                   <button
                                     onClick={() => handleToggleFavorite(contact)}
                                     className="ml-2 p-1 rounded-full hover:bg-gray-100 transition-colors"
@@ -1002,12 +1062,20 @@ function Contact() {
                                     />
                                   </button>
 
-                                  <button className="text-red-600 hover:text-red-900" title="Delete contact">
-                                    <FiTrash2 className="h-4 w-4" />
-                                  </button>
-
-
-
+                                  <Tooltip
+                                    content="Not authorized"
+                                    disabled={permissions && permissions.delete_contact === false}
+                                    position="top"
+                                  >
+                                    <button 
+                                      className={`text-red-600 hover:text-red-900 ${permissions && permissions.delete_contact === false ? 'opacity-50 cursor-not-allowed hover:text-red-600' : ''}`}
+                                      title={permissions && permissions.delete_contact === false ? '' : 'Delete contact'}
+                                      disabled={permissions && permissions.delete_contact === false}
+                                      style={{ display: permissions && permissions.delete_contact === false ? 'inline-block' : (!permissions || permissions.delete_contact) ? 'inline-block' : 'none' }}
+                                    >
+                                      <FiTrash2 className="h-4 w-4" />
+                                    </button>
+                                  </Tooltip>
                                 </div>
                               </td>
                             </tr>

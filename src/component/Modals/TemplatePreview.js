@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { FiX, FiSend, FiClock, FiCheck, FiCheckCircle, FiFileText, FiChevronDown } from 'react-icons/fi';
+import { FiX, FiSend, FiFileText, FiChevronDown } from 'react-icons/fi';
+import { BsCheckAll } from 'react-icons/bs';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { Encrypt } from '../../pages/encryption/payload-encryption';
 
-const TemplatePreview = ({ 
-    isOpen, 
-    onClose, 
-    selectedTemplate, 
-    darkMode = false, 
+const TemplatePreview = ({
+    isOpen,
+    onClose,
+    selectedTemplate,
+    darkMode = false,
     onUseTemplate,
     tokens,
     activeChat,
@@ -22,7 +23,7 @@ const TemplatePreview = ({
     const [isUploading, setIsUploading] = useState(false);
     const [openDropdowns, setOpenDropdowns] = useState({});
 
-    // Helpers for document preview metadata
+    // --- Helpers ---
     const getFileNameFromUrl = (url) => {
         if (!url) return 'document';
         try {
@@ -30,22 +31,20 @@ const TemplatePreview = ({
             const last = pathname.split('/').pop();
             return decodeURIComponent(last || 'document');
         } catch (e) {
-            const stripped = url.split('?')[0];
-            const parts = stripped.split('/');
-            return decodeURIComponent(parts.pop() || 'document');
+            return 'document.pdf';
         }
     };
 
     const getFileExtension = (name) => {
         if (!name) return '';
         const match = name.match(/\.([a-zA-Z0-9]+)$/);
-        return match ? match[1].toLowerCase() : '';
+        return match ? match[1].toLowerCase() : 'FILE';
     };
 
     // Generate dropdown options from user details
     const generateVariableOptions = () => {
         const options = [];
-        
+
         // Basic chat information (always available)
         if (activeChat?.name) {
             options.push({ label: 'Contact Name', value: activeChat.name });
@@ -57,7 +56,7 @@ const TemplatePreview = ({
         // Extended contact details (if available)
         if (contactDetails?.has_contact && contactDetails?.contact) {
             const contact = contactDetails.contact;
-            
+
             if (contact.name && contact.name !== activeChat?.name) {
                 options.push({ label: 'Full Name', value: contact.name });
             }
@@ -87,8 +86,7 @@ const TemplatePreview = ({
 
         return options;
     };
-
-    // Normalize template structures and parse for preview
+    // --- Template Parsing ---
     const parseTemplateContent = (template) => {
         const templateData = template?.template_data || template?.template || {};
         const components = templateData?.components || [];
@@ -99,23 +97,15 @@ const TemplatePreview = ({
         let buttons = [];
 
         const bodyComponent = components.find((comp) => comp.type === 'BODY');
-        if (bodyComponent) {
-            content = bodyComponent.text || '';
-        } else if (templateData.body) {
-            content = templateData.body;
-        }
+        if (bodyComponent) content = bodyComponent.text || '';
+        else if (templateData.body) content = templateData.body;
 
         const footerComponent = components.find((comp) => comp.type === 'FOOTER');
-        if (footerComponent) {
-            footerText = footerComponent.text || '';
-        }
+        if (footerComponent) footerText = footerComponent.text || '';
 
         const buttonsComponent = components.find((comp) => comp.type === 'BUTTONS');
-        if (buttonsComponent && Array.isArray(buttonsComponent.buttons)) {
-            buttons = buttonsComponent.buttons;
-        }
+        if (buttonsComponent && Array.isArray(buttonsComponent.buttons)) buttons = buttonsComponent.buttons;
 
-        // Extract variables from content (e.g., {{1}}, {{2}}, etc.)
         const variableMatches = content.match(/\{\{\d+\}\}/g);
         if (variableMatches) {
             variables = variableMatches.map((match) => {
@@ -124,17 +114,14 @@ const TemplatePreview = ({
             });
         }
 
-        return { content, variables, footerText, buttons, components, templateData };
+        return { content, variables, footerText, buttons, components };
     };
 
     const { content, variables, footerText, buttons, components } = parseTemplateContent(selectedTemplate);
-
-    // Detect header media requirement and preset default link from example if present
     const headerComponent = components?.find((c) => c.type === 'HEADER');
     const headerFormat = headerComponent?.format || 'NONE';
     const requiresHeaderMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
 
-    // Initialize default header media link from example on open/change
     useEffect(() => {
         if (requiresHeaderMedia) {
             const exampleLink = headerComponent?.example?.header_handle?.[0] || '';
@@ -142,153 +129,74 @@ const TemplatePreview = ({
         } else {
             setHeaderMediaUrl('');
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedTemplate?.id]);
+    }, [selectedTemplate?.id, requiresHeaderMedia, headerComponent]);
 
-    // Close dropdowns when clicking outside
+    // Close dropdowns on outside click
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (!event.target.closest('.variable-dropdown')) {
                 setOpenDropdowns({});
             }
         };
-
         document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     if (!selectedTemplate) return null;
 
     const handleVariableChange = (variableNumber, value) => {
-        setVariableValues(prev => ({
-            ...prev,
-            [variableNumber]: value
-        }));
-    };
-
-    const toggleDropdown = (variableNumber) => {
-        setOpenDropdowns(prev => ({
-            ...prev,
-            [variableNumber]: !prev[variableNumber]
-        }));
-    };
-
-    const selectVariableOption = (variableNumber, option) => {
-        handleVariableChange(variableNumber, option.value);
-        setOpenDropdowns(prev => ({
-            ...prev,
-            [variableNumber]: false
-        }));
+        setVariableValues(prev => ({ ...prev, [variableNumber]: value }));
     };
 
     const renderPreviewContent = () => {
         let previewContent = content;
-        
-        // Replace variables with user input or placeholder text
         variables.forEach(variable => {
-            const value = variableValues[variable.number] || `[Variable ${variable.number}]`;
+            const value = variableValues[variable.number] || `{{${variable.number}}}`;
             previewContent = previewContent.replace(variable.placeholder, value);
         });
-
         return previewContent;
     };
 
     const uploadHeaderMedia = async (file) => {
-        if (!file || !tokens?.token || !tokens?.username) return;
+        if (!file || !tokens?.token) return;
         setIsUploading(true);
         try {
             const form = new FormData();
             form.append('file', file);
-            const res = await axios.post(
-                'https://api.w1chat.com/upload/upload-media',
-                form,
-                {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                        'token': tokens.token,
-                        'username': tokens.username
-                    }
-                }
-            );
-            if (res?.data && !res.data.error && res.data.link) {
-                setHeaderMediaUrl(res.data.link);
-            } else {
-                alert('Failed to upload media for header');
-            }
+            const res = await axios.post('https://api.w1chat.com/upload/upload-media', form, {
+                headers: { 'Content-Type': 'multipart/form-data', 'token': tokens.token, 'username': tokens.username }
+            });
+            if (res?.data?.link) setHeaderMediaUrl(res.data.link);
         } catch (e) {
-            console.error('Header media upload failed:', e);
-            alert('Header media upload failed');
+            alert('Upload failed');
         } finally {
             setIsUploading(false);
         }
     };
 
-    // Send template via API
     const sendTemplate = async () => {
-        if (!tokens?.token || !tokens?.username || !activeChat?.number) {
-            console.error('Missing required data for sending template');
-            return;
+        if (variables.length > 0) {
+            const missing = variables.some(v => !((variableValues[v.number] || '').trim()));
+            if (missing) { alert('Please fill variables'); return; }
         }
-
-        // Validate that all variables are provided (mandatory)
-        if (variables && variables.length > 0) {
-            const missing = variables.filter(v => !((variableValues[v.number] || '').trim()));
-            if (missing.length > 0) {
-                alert('Please fill in all required template variables before sending.');
-                return;
-            }
-        }
+        if (requiresHeaderMedia && !headerMediaUrl) { alert('Header media required'); return; }
 
         setSendingTemplate(true);
         try {
-            // Format components according to WhatsApp API specification
             const formattedComponents = [];
-            
-            if (selectedTemplate.template_data?.components) {
-                // Header media parameter if required
-                if (requiresHeaderMedia) {
-                    const mediaType = headerFormat.toLowerCase(); // image | video | document
-                    const mediaLink = headerMediaUrl || headerComponent?.example?.header_handle?.[0] || '';
-                    if (!mediaLink) {
-                        alert('Please provide a media for the header');
-                        setSendingTemplate(false);
-                        return;
-                    }
-                    const mediaParam = { type: mediaType };
-                    mediaParam[mediaType] = { link: mediaLink };
-                    formattedComponents.push({
-                        type: 'header',
-                        parameters: [mediaParam]
-                    });
-                }
 
-                selectedTemplate.template_data.components.forEach(component => {
-                    if (component.type === 'BODY' && component.text) {
-                        // Extract variables from the body text (e.g., {{1}}, {{2}})
-                        const variableMatches = component.text.match(/\{\{\d+\}\}/g);
-                        const parameters = [];
-                        
-                        if (variableMatches) {
-                            // Use user-entered values for variables (mandatory, already validated)
-                            variableMatches.forEach((match) => {
-                                const variableNumber = parseInt(match.match(/\d+/)[0]);
-                                const userValue = (variableValues[variableNumber] || '').trim();
-                                parameters.push({
-                                    type: "text",
-                                    text: userValue
-                                });
-                            });
-                        }
-                        
-                        formattedComponents.push({
-                            type: "body",
-                            parameters: parameters
-                        });
-                    }
-                    // Add other component types (header, footer, buttons) if needed
-                });
+            if (requiresHeaderMedia) {
+                const mediaType = headerFormat.toLowerCase();
+                const mediaParam = { type: mediaType, [mediaType]: { link: headerMediaUrl } };
+                formattedComponents.push({ type: 'header', parameters: [mediaParam] });
+            }
+
+            const bodyParams = [];
+            variables.forEach(v => {
+                bodyParams.push({ type: "text", text: variableValues[v.number] || "" });
+            });
+            if (bodyParams.length > 0) {
+                formattedComponents.push({ type: "body", parameters: bodyParams });
             }
 
             const payload = {
@@ -299,477 +207,320 @@ const TemplatePreview = ({
             };
 
             const { data, key } = Encrypt(payload);
-            const data_pass = JSON.stringify({ data, key });
 
-            console.log('Sending template with payload:', payload);
-
-            // Delegate actual send + optimistic UI to Conversation handler if provided
             if (onSendTemplate) {
                 await onSendTemplate(selectedTemplate, formattedComponents, renderPreviewContent());
                 onClose();
-                if (typeof onCloseAll === 'function') {
-                    onCloseAll();
-                }
+                onCloseAll?.();
             } else {
-                const response = await axios.post(
-                    'https://api.w1chat.com/message/send-template',
-                    data_pass,
-                    {
-                        headers: {
-                            'token': tokens.token,
-                            'username': tokens.username,
-                            'Content-Type': 'application/json'
-                        }
-                    }
+                const response = await axios.post('https://api.w1chat.com/message/send-template',
+                    JSON.stringify({ data, key }),
+                    { headers: { 'token': tokens.token, 'username': tokens.username, 'Content-Type': 'application/json' } }
                 );
-
-                console.log('Send template response:', response.data);
-
-                if (!response?.data?.error) {
-                    console.log('Template sent successfully:', response.data);
-                    if (onUseTemplate) {
-                        onUseTemplate(renderPreviewContent());
-                    }
+                if (!response.data.error) {
+                    onUseTemplate && onUseTemplate(renderPreviewContent());
                     onClose();
-                    if (typeof onCloseAll === 'function') {
-                        onCloseAll();
-                    }
+                    onCloseAll?.();
                 } else {
-                    console.error('API Error:', response?.data?.message);
-                    alert('Failed to send template: ' + (response?.data?.message || 'Unknown error'));
+                    alert(response.data.message);
                 }
             }
         } catch (error) {
-            console.error('Failed to send template:', error);
-            alert('Failed to send template: ' + (error.message || 'Network error'));
+            alert('Error sending template');
         } finally {
             setSendingTemplate(false);
         }
     };
 
-    const handleUseTemplate = () => {
-        sendTemplate();
-    };
-
-    // Determine if send should be disabled due to missing required variables
-    const hasEmptyRequiredVariables = variables && variables.length > 0 && variables.some(v => !((variableValues[v.number] || '').trim()));
-    const isSendDisabled = sendingTemplate || hasEmptyRequiredVariables;
+    const isSendDisabled = sendingTemplate || (variables.length > 0 && variables.some(v => !variableValues[v.number]));
 
     return (
         <AnimatePresence>
             {isOpen && (
                 <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
                 >
                     <motion.div
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.9, opacity: 0 }}
-                        className={`w-full max-w-2xl max-h-[90vh] ${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-2xl flex flex-col`}
+                        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                        className={`w-full max-w-4xl h-[85vh] ${darkMode ? 'bg-[#111b21]' : 'bg-white'} rounded-xl shadow-2xl flex flex-col md:flex-row overflow-hidden`}
                     >
-                        {/* Header */}
-                        <div className={`flex items-center justify-between p-4 sm:p-6 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                            <div>
-                                <h2 className={`text-lg sm:text-xl font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                    Template Preview
-                                </h2>
-                                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-1`}>
-                                    {selectedTemplate.name}
-                                </p>
+                        {/* LEFT PANEL: CONFIGURATION */}
+                        <div className={`flex-1 flex flex-col border-b md:border-b-0 md:border-r ${darkMode ? 'border-gray-700 bg-[#111b21]' : 'border-gray-200 bg-white'} overflow-hidden`}>
+                            <div className={`p-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'} flex justify-between items-center`}>
+                                <div>
+                                    <h2 className={`text-lg font-bold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>Customize Template</h2>
+                                    <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{selectedTemplate.name}</p>
+                                </div>
+                                <button onClick={onClose} className={`p-2 rounded-full ${darkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-600'}`}>
+                                    <FiX className="w-5 h-5" />
+                                </button>
                             </div>
-                            <button
-                                onClick={onClose}
-                                className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-500'}`}
-                            >
-                                <FiX className="w-5 h-5" />
-                            </button>
-                        </div>
 
-                        {/* Content */}
-                        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-                            {/* Template Info */}
-                            <div className={`p-4 rounded-xl border mb-4 ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                                        Category: {selectedTemplate.category}
-                                    </span>
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                        selectedTemplate.status === 'APPROVED' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
-                                        selectedTemplate.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
-                                        'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+                            <div className="flex-1 overflow-y-auto p-5 space-y-6">
+                                {/* Status Badge */}
+                                <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${selectedTemplate.status === 'APPROVED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                                     }`}>
-                                        {selectedTemplate.status}
-                                    </span>
+                                    {selectedTemplate.status}
                                 </div>
-                                <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                    Language: {selectedTemplate.language}
-                                </div>
-                            </div>
 
-                            {/* Header media selector when template requires media */}
-                            {requiresHeaderMedia && (
-                                <div className="mb-4">
-                                    <h3 className={`text-sm font-semibold mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                        Header Media ({headerFormat.toLowerCase()})
-                                    </h3>
-                                    <div className={`p-4 rounded-xl border ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'}`}>
-                                        <div className="flex flex-col sm:flex-row gap-3">
-                                            <input
-                                                type="url"
-                                                placeholder={`Paste ${headerFormat.toLowerCase()} link or upload below`}
-                                                value={headerMediaUrl}
-                                                onChange={(e) => setHeaderMediaUrl(e.target.value)}
-                                                className={`flex-1 px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'}`}
-                                            />
-                                            <label className={`inline-flex items-center justify-center px-4 py-2 rounded-lg cursor-pointer ${isUploading ? 'opacity-60 cursor-not-allowed' : ''} ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-gray-100 hover:bg-gray-200 text-gray-800'}`}>
-                                                {isUploading ? 'Uploading...' : 'Upload'}
+                                {/* Header Media Input */}
+                                {requiresHeaderMedia && (
+                                    <div className="space-y-2">
+                                        <label className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                            Header Media ({headerFormat})
+                                        </label>
+                                        <div className={`p-3 rounded-lg border ${darkMode ? 'bg-[#202c33] border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
+                                            <div className="flex gap-2">
                                                 <input
-                                                    type="file"
-                                                    className="hidden"
-                                                    accept={headerFormat === 'IMAGE' ? 'image/*' : headerFormat === 'VIDEO' ? 'video/*' : '*'}
-                                                    disabled={isUploading}
-                                                    onChange={(e) => {
-                                                        const f = e.target.files?.[0];
-                                                        if (f) uploadHeaderMedia(f);
-                                                    }}
+                                                    type="url"
+                                                    value={headerMediaUrl}
+                                                    onChange={(e) => setHeaderMediaUrl(e.target.value)}
+                                                    placeholder="https://example.com/image.png"
+                                                    className={`flex-1 px-3 py-2 rounded text-sm border focus:ring-2 focus:ring-green-500 outline-none ${darkMode ? 'bg-[#2a3942] border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                                                        }`}
                                                 />
-                                            </label>
-                                        </div>
-                                        {headerMediaUrl && (
-                                            <div className="mt-3 text-xs break-all opacity-80">
-                                                Using: {headerMediaUrl}
+                                                <label className={`px-3 py-2 rounded cursor-pointer text-sm font-medium transition-colors ${isUploading ? 'bg-gray-400' : 'bg-[#00a884] hover:bg-[#008f6f] text-white'
+                                                    }`}>
+                                                    {isUploading ? '...' : 'Upload'}
+                                                    <input type="file" className="hidden" disabled={isUploading} onChange={(e) => uploadHeaderMedia(e.target.files?.[0])} />
+                                                </label>
                                             </div>
-                                        )}
+                                        </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
 
-                            {/* Variable Inputs */}
-                            {variables.length > 0 && (
-                                <div className="mb-4">
-                                    <h3 className={`text-sm font-semibold mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                        Fill Template Variables
-                                    </h3>
-                                    <div className="space-y-3">
+                                {/* Variable Inputs */}
+                                {variables.length > 0 && (
+                                    <div className="space-y-4">
+                                        <h3 className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                            Body Variables
+                                        </h3>
                                         {variables.map((variable) => {
-                                            const variableOptions = generateVariableOptions();
                                             const isDropdownOpen = openDropdowns[variable.number];
-                                            const currentValue = variableValues[variable.number] || '';
-                                            
+
                                             return (
                                                 <div key={variable.number} className="variable-dropdown relative">
-                                                    <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                                                        Variable {variable.number}
-                                                    </label>
-                                                    
-                                                    {/* Input with dropdown button */}
+                                                    <div className="flex justify-between mb-1">
+                                                        <label className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                                            {`{{${variable.number}}}`}
+                                                        </label>
+                                                    </div>
                                                     <div className="relative">
                                                         <input
                                                             type="text"
-                                                            placeholder={`Enter value for variable ${variable.number}`}
-                                                            value={currentValue}
+                                                            value={variableValues[variable.number] || ''}
                                                             onChange={(e) => handleVariableChange(variable.number, e.target.value)}
-                                                            className={`w-full px-3 py-2 pr-10 rounded-lg border transition-colors ${
-                                                                darkMode 
-                                                                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500' 
-                                                                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500'
-                                                            } focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
+                                                            placeholder={`Value for {{${variable.number}}}`}
+                                                            className={`w-full px-3 py-2.5 rounded-md border text-sm focus:border-[#00a884] outline-none ${darkMode
+                                                                    ? 'bg-[#2a3942] border-gray-600 text-white placeholder-gray-500'
+                                                                    : 'bg-white border-gray-300 text-gray-900'
+                                                                }`}
                                                         />
                                                         <button
-                                                            type="button"
-                                                            onClick={() => toggleDropdown(variable.number)}
-                                                            className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded transition-colors ${
-                                                                darkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
-                                                            }`}
+                                                            type="button" // Important to prevent form submission
+                                                            onClick={() => setOpenDropdowns(prev => ({ ...prev, [variable.number]: !prev[variable.number] }))}
+                                                            className="absolute right-2 top-2.5 text-gray-400 hover:text-gray-600 z-10"
                                                         >
-                                                            <FiChevronDown className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                                                            <FiChevronDown className={`transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
                                                         </button>
-                                                    </div>
 
-                                                    {/* Dropdown options */}
-                                                    {isDropdownOpen && (
-                                                        <div className={`absolute top-full left-0 right-0 mt-1 rounded-lg border shadow-lg z-10 max-h-48 overflow-y-auto ${
-                                                            darkMode 
-                                                                ? 'bg-gray-700 border-gray-600' 
-                                                                : 'bg-white border-gray-200'
-                                                        }`}>
-                                                            <div className="py-1">
-                                                                {variableOptions.map((option, index) => (
-                                                                    <button
-                                                                        key={index}
-                                                                        type="button"
-                                                                        onClick={() => selectVariableOption(variable.number, option)}
-                                                                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                                                                            darkMode 
-                                                                                ? 'text-gray-300 hover:bg-gray-600' 
-                                                                                : 'text-gray-700 hover:bg-gray-50'
-                                                                        }`}
-                                                                    >
-                                                                        <div className="flex flex-col">
-                                                                            <span className="font-medium">{option.label}</span>
-                                                                            <span className={`text-xs truncate ${
-                                                                                darkMode ? 'text-gray-400' : 'text-gray-500'
-                                                                            }`}>
-                                                                                {option.value}
-                                                                            </span>
-                                                                        </div>
-                                                                    </button>
-                                                                ))}
+                                                        {/* --- THIS WAS MISSING IN YOUR CODE --- */}
+                                                        {isDropdownOpen && (
+                                                            <div className={`absolute top-full left-0 right-0 mt-1 rounded-lg border shadow-lg z-50 max-h-48 overflow-y-auto ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'
+                                                                }`}>
+                                                                <div className="py-1">
+                                                                    {generateVariableOptions().map((option, index) => (
+                                                                        <button
+                                                                            key={index}
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                handleVariableChange(variable.number, option.value);
+                                                                                setOpenDropdowns(prev => ({ ...prev, [variable.number]: false }));
+                                                                            }}
+                                                                            className={`w-full text-left px-3 py-2 text-sm transition-colors ${darkMode
+                                                                                    ? 'text-gray-300 hover:bg-gray-600'
+                                                                                    : 'text-gray-700 hover:bg-gray-50'
+                                                                                }`}
+                                                                        >
+                                                                            <div className="flex flex-col">
+                                                                                <span className="font-medium">{option.label}</span>
+                                                                                <span className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                                                                    {option.value}
+                                                                                </span>
+                                                                            </div>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    )}
+                                                        )}
+                                                        {/* ------------------------------------- */}
+                                                    </div>
                                                 </div>
                                             );
                                         })}
                                     </div>
-                                </div>
-                            )}
-
-                            {/* Chat Preview */}
-                            <div className="mb-4">
-                                <h3 className={`text-sm font-semibold mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                    Chat Preview
-                                </h3>
-                                <div className={`rounded-xl border overflow-hidden ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}`}>
-                                    {/* Chat Header */}
-                                    <div className={`flex items-center gap-3 p-3 border-b ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
-                                        <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
-                                            <span className="text-white text-sm font-semibold">W</span>
-                                        </div>
-                                        <div className="flex-1">
-                                            <div className={`font-semibold text-sm ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                                WhatsApp Business
-                                            </div>
-                                            <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                                Template Message
-                                            </div>
-                                        </div>
-                                        <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                            <FiClock className="w-3 h-3 inline mr-1" />
-                                            Now
-                                        </div>
-                                    </div>
-
-                                    {/* Chat Messages */}
-                                    <div className="p-4 space-y-3 min-h-[200px] max-h-[300px] overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
-                                        {/* Previous message context */}
-                                        {/* <div className="flex justify-start">
-                                            <div className="flex items-end gap-2 max-w-[80%]">
-                                                <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
-                                                    <span className="text-gray-600 text-xs">C</span>
-                                                </div>
-                                                <div className={`px-3 py-2 rounded-2xl rounded-bl-md ${darkMode ? 'bg-gray-600' : 'bg-gray-100'}`}>
-                                                    <div className={`text-sm ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                                        Hi! I'd like to know more about your services.
-                                                    </div>
-                                                    <div className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                                        10:30 AM
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div> */}
-
-                                        {/* Template message */}
-                                        <div className="flex justify-end">
-                                            <div className="flex items-end gap-2 max-w-[90%]">
-                                                <div className={`px-3 py-2 rounded-2xl w-56 rounded-br-md bg-green-500 relative shadow-sm border border-green-400`}>
-                                                    {requiresHeaderMedia && headerMediaUrl && (() => {
-                                                        const url = headerMediaUrl;
-                                                        const isImageUrl = /\.(png|jpe?g|webp|gif)$/i.test(url);
-                                                        const isVideoUrl = /\.(mp4|webm|ogg|mov)$/i.test(url);
-                                                        const name = getFileNameFromUrl(url);
-                                                        const ext = getFileExtension(name);
-                                                        const isPdf = ext === 'pdf' || /\.pdf($|\?)/i.test(url);
-
-                                                        // If template says IMAGE or the URL clearly is an image
-                                                        if (headerFormat === 'IMAGE' || isImageUrl) {
-                                                            return (
-                                                                <div className="mb-2 bg-white rounded-lg overflow-hidden w-full">
-                                                                    <img src={url} alt={name} className="w-full h-32 object-cover" />
-                                                                </div>
-                                                            );
-                                                        }
-
-                                                        // If template says VIDEO or URL is video, render lightweight inline video
-                                                        if (headerFormat === 'VIDEO' || isVideoUrl) {
-                                                            return (
-                                                                <div className="mb-2 bg-white rounded-lg overflow-hidden w-full">
-                                                                    <video src={url} className="w-full h-32 object-cover" muted playsInline loop />
-                                                                </div>
-                                                            );
-                                                        }
-
-                                                        // DOCUMENT handling
-                                                        if (headerFormat === 'DOCUMENT') {
-                                                            // Some users attach images as documents; show image if URL is image
-                                                            if (isImageUrl) {
-                                                                return (
-                                                                    <div className="mb-2 bg-white rounded-lg overflow-hidden w-full">
-                                                                        <img src={url} alt={name} className="w-full h-32 object-cover" />
-                                                                    </div>
-                                                                );
-                                                            }
-
-                                                            // Try to inline-preview PDFs; fallback to icon card if embed fails/blocked
-                                                            if (isPdf) {
-                                                                return (
-                                                                    <div className="mb-2 bg-white rounded-lg overflow-hidden border border-gray-200 w-full">
-                                                                        <div className="w-full h-32 bg-gray-50 overflow-hidden relative">
-                                                                            <iframe 
-                                                                                src={`${url}#toolbar=0&navpanes=0&scrollbar=0&page=1&view=FitH&zoom=page-width`} 
-                                                                                title={name} 
-                                                                                className="w-full h-full border-0 pointer-events-none"
-                                                                                style={{ 
-                                                                                    minWidth: '100%',
-                                                                                    minHeight: '100%',
-                                                                                    objectFit: 'cover'
-                                                                                }}
-                                                                            />
-                                                                        </div>
-                                                                        <div className="flex items-center p-2 border-t border-gray-200">
-                                                                            <div className="flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center bg-red-100 text-red-600">
-                                                                                <FiFileText className="w-4 h-4" />
-                                                                            </div>
-                                                                            <div className="ml-2 min-w-0 flex-1">
-                                                                                <div className="text-xs font-medium text-gray-900 truncate" title={name}>{name}</div>
-                                                                                <div className="text-[10px] text-gray-500 uppercase">PDF document</div>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            }
-
-                                                            // Generic document card fallback
-                                                            return (
-                                                                <div className="mb-2 bg-white rounded-lg overflow-hidden border border-gray-200">
-                                                                    <div className="flex items-center p-3 w-56">
-                                                                        <div className={`flex-shrink-0 w-10 h-12 rounded-md flex items-center justify-center ${isPdf ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
-                                                                            <FiFileText className="w-6 h-6" />
-                                                                        </div>
-                                                                        <div className="ml-3 min-w-0">
-                                                                            <div className="text-sm font-medium text-gray-900 truncate" title={name}>{name}</div>
-                                                                            <div className="text-xs text-gray-500 uppercase">{ext || 'file'} document</div>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        }
-
-                                                        // Fallback placeholder (should rarely hit)
-                                                        return (
-                                                            <div className="mb-2 bg-white rounded-lg overflow-hidden w-full">
-                                                                <div className="w-full h-32 bg-gray-200 flex items-center justify-center">
-                                                                    <span className="text-xs text-gray-600">{headerFormat.toLowerCase()} header</span>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                    <div className="text-sm text-white leading-relaxed whitespace-pre-wrap">
-                                                        {renderPreviewContent()}
-                                                    </div>
-                                                    {footerText ? (
-                                                        <div className="text-xs text-green-50/80 mt-2 whitespace-pre-wrap">
-                                                            {footerText}
-                                                        </div>
-                                                    ) : null}
-                                                    {buttons && buttons.length > 0 ? (
-                                                        <div className="flex flex-wrap gap-2 mt-3">
-                                                            {buttons.map((btn, idx) => {
-                                                                const type = btn.type || '';
-                                                                const text = btn.text || 'Button';
-                                                                const isUrl = type === 'URL';
-                                                                const isPhone = type === 'PHONE_NUMBER';
-                                                                const pillBase = 'px-3 py-1 rounded-full text-xs font-medium border bg-white/10 text-white border-white/30 hover:bg-white/20';
-                                                                return (
-                                                                    <a
-                                                                        key={idx}
-                                                                        href={isUrl ? (btn.url || '#') : isPhone ? `tel:${btn.phone_number || ''}` : undefined}
-                                                                        target={isUrl ? '_blank' : undefined}
-                                                                        rel={isUrl ? 'noreferrer' : undefined}
-                                                                        className={pillBase}
-                                                                        onClick={(e) => { if (!isUrl && !isPhone) e.preventDefault(); }}
-                                                                    >
-                                                                        {text}
-                                                                    </a>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    ) : null}
-                                                    <div className="flex items-center justify-end gap-1 mt-1">
-                                                        <div className="text-xs text-green-100">
-                                                            10:32 AM
-                                                        </div>
-                                                        <div className="flex items-center">
-                                                            <FiCheckCircle className="w-3 h-3 text-green-200" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center shadow-sm">
-                                                    <span className="text-white text-xs font-semibold">Y</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Typing indicator */}
-                                        <div className="flex justify-start">
-                                            <div className="flex items-end gap-2">
-                                                <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
-                                                    <span className="text-gray-600 text-xs">C</span>
-                                                </div>
-                                                <div className={`px-3 py-2 rounded-2xl rounded-bl-md ${darkMode ? 'bg-gray-600' : 'bg-gray-100'}`}>
-                                                    <div className="flex items-center gap-1">
-                                                        <div className="flex space-x-1">
-                                                            <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce"></div>
-                                                            <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                                                            <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                )}
                             </div>
-                        </div>
 
-                        {/* Footer */}
-                        <div className={`flex items-center justify-between gap-3 p-4 sm:p-6 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={onClose}
-                                    className={`px-4 py-2 rounded-lg transition-colors ${
-                                        darkMode 
-                                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                    }`}
-                                >
+                            {/* Footer Buttons */}
+                            <div className={`p-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'} flex justify-end gap-3`}>
+                                <button onClick={onClose} className={`px-4 py-2 rounded-md text-sm font-medium ${darkMode ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-600 hover:bg-gray-100'}`}>
                                     Cancel
                                 </button>
                                 <button
-                                    onClick={handleUseTemplate}
+                                    onClick={sendTemplate}
                                     disabled={isSendDisabled}
-                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                                        isSendDisabled
-                                            ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                                            : 'bg-green-500 hover:bg-green-600 text-white'
-                                    }`}
+                                    className={`flex items-center gap-2 px-6 py-2 rounded-md text-sm font-medium text-white transition-all ${isSendDisabled ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#00a884] hover:bg-[#008f6f] shadow-sm'
+                                        }`}
                                 >
-                                    {sendingTemplate ? (
-                                        <>
-                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                            Sending...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <FiSend className="w-4 h-4" />
-                                            Send Template
-                                        </>
-                                    )}
+                                    {sendingTemplate ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <FiSend />}
+                                    Send Template
                                 </button>
+                            </div>
+                        </div>
+
+                        {/* RIGHT PANEL: PREVIEW */}
+                        <div className={`w-full md:w-[400px] flex flex-col ${darkMode ? 'bg-[#0b141a]' : 'bg-[#efeae2]'} relative`}>
+                            {/* Background */}
+                            <div className="absolute inset-0 opacity-[0.06] pointer-events-none" style={{
+                                backgroundImage: `url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")`,
+                                backgroundRepeat: 'repeat'
+                            }}></div>
+
+                            {/* Header */}
+                            <div className={`relative z-10 flex items-center gap-3 px-4 py-3 ${darkMode ? 'bg-[#202c33] text-white' : 'bg-[#008069] text-white'} shadow-sm`}>
+                                <div className="w-10 h-10 rounded-full bg-gray-300 overflow-hidden">
+                                    <div className="w-full h-full flex items-center justify-center bg-white/20 text-lg font-medium">
+                                        {activeChat?.name?.[0] || 'C'}
+                                    </div>
+                                </div>
+                                <div className="flex-1">
+                                    <div className="font-semibold text-sm truncate">{activeChat?.name || activeChat?.number || 'Contact'}</div>
+                                    <div className="text-xs opacity-80">online</div>
+                                </div>
+                            </div>
+
+                            {/* Chat Area */}
+                            <div className="flex-1 overflow-y-auto p-4 relative z-10 flex flex-col">
+                                <div className="flex justify-center mb-4">
+                                    <span className={`text-xs px-3 py-1.5 rounded-lg shadow-sm ${darkMode ? 'bg-[#182229] text-gray-300' : 'bg-white text-gray-600'}`}>
+                                        Today
+                                    </span>
+                                </div>
+
+                                <div className="flex justify-end w-full">
+                                    {/* MESSAGE BUBBLE CONTAINER (No Padding Here to allow full width elements) */}
+                                    <div className={`
+                                        relative max-w-[300px] sm:max-w-[320px] rounded-lg shadow-sm flex flex-col
+                                        ${darkMode ? 'bg-[#005c4b]' : 'bg-[#d9fdd3]'}
+                                    `}>
+                                        {/* Tail */}
+                                        <span className={`absolute top-0 -right-[8px] w-[8px] h-[13px] overflow-hidden`}>
+                                            <svg viewBox="0 0 8 13" width="8" height="13" className={`w-full h-full fill-current ${darkMode ? 'text-[#005c4b]' : 'text-[#d9fdd3]'}`}>
+                                                <path opacity="0.13" d="M5.188 1H0v11.193l6.467-8.625C7.526 2.156 6.958 1 5.188 1z"></path>
+                                                <path d="M5.188 0H0v11.193l6.467-8.625C7.526 1.156 6.958 0 5.188 0z"></path>
+                                            </svg>
+                                        </span>
+
+                                        {/* 1. HEADER MEDIA (Full Width) */}
+                                        {requiresHeaderMedia && headerMediaUrl && (
+                                            <div className="p-1 pb-0">
+                                                {(() => {
+                                                    const url = headerMediaUrl;
+                                                    const isPdf = url.toLowerCase().includes('.pdf') || headerFormat === 'DOCUMENT';
+                                                    const isVideo = headerFormat === 'VIDEO';
+
+                                                    if (!isPdf) {
+                                                        return (
+                                                            <div className="w-full h-40 sm:h-48 bg-black/10 rounded-lg overflow-hidden relative">
+                                                                {isVideo ? (
+                                                                    <video src={url} className="w-full h-full object-cover" controls={false} />
+                                                                ) : (
+                                                                    <img src={url} alt="Header" className="w-full h-full object-cover" />
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    const fileName = getFileNameFromUrl(url);
+                                                    const ext = getFileExtension(fileName).toUpperCase();
+                                                    return (
+                                                        <div className={`rounded-lg overflow-hidden flex items-center h-20 ${darkMode ? 'bg-[#233039]' : 'bg-[#f5fcf4]'} relative`}>
+                                                            <div className="w-14 h-full flex items-center justify-center">
+                                                                <FiFileText className={`w-8 h-8 ${darkMode ? 'text-red-400' : 'text-red-500'}`} />
+                                                            </div>
+                                                            <div className="flex-1 pr-3 overflow-hidden">
+                                                                <div className={`text-sm font-medium truncate ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                                                                    {fileName}
+                                                                </div>
+                                                                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                                                    {ext} • 1 page
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+                                        )}
+
+                                        {/* 2. CONTENT WRAPPER (Applies Padding for Text Only) */}
+                                        <div className="px-2 pt-2 pb-3">
+                                            {/* Body Text */}
+                                            <div className={`text-[14.2px] leading-[19px] whitespace-pre-wrap ${darkMode ? 'text-white' : 'text-[#111b21]'}`}>
+                                                {renderPreviewContent()}
+
+                                                {/* Metadata float right inside text */}
+                                                <span className="float-right flex items-center gap-1 mt-1 ml-2 relative top-1.5">
+                                                    <span className={`text-[11px] ${darkMode ? 'text-gray-400' : 'text-[#667781]'}`}>
+                                                        {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                                    </span>
+                                                    <BsCheckAll className={`text-[16px] ${darkMode ? 'text-[#53bdeb]' : 'text-[#53bdeb]'}`} />
+                                                </span>
+                                            </div>
+
+                                            {/* Footer Text */}
+                                            {footerText && (
+                                                <div className={`text-[13px] mt-1 opacity-60 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                                                    {footerText}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* 3. BUTTONS (FULL WIDTH - Outside padding wrapper) */}
+                                        {buttons && buttons.length > 0 && (
+                                            <div className={`w-full flex flex-col rounded-b-lg overflow-hidden border-t ${darkMode ? 'border-white/10 bg-[#202c33]/30' : 'border-[#0000000d] bg-[#f0f2f5]/30'}`}>
+                                                {buttons.map((btn, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        className={`
+                                                            w-full py-3 px-4 text-center 
+                                                            text-[#00a5f4] text-[15px] font-medium 
+                                                            cursor-pointer transition-colors
+                                                            hover:bg-black/5 dark:hover:bg-white/5
+                                                            flex items-center justify-center gap-2
+                                                            ${idx !== 0 ? `border-t ${darkMode ? 'border-white/10' : 'border-[#0000000d]'}` : ''}
+                                                        `}
+                                                    >
+                                                        {btn.type === 'URL' && <span className="text-xs">↗</span>}
+                                                        {btn.type === 'PHONE_NUMBER' && <span className="text-xs">📞</span>}
+                                                        {btn.text}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Fake Input Area */}
+                            <div className={`p-3 flex items-center gap-3 relative z-10 ${darkMode ? 'bg-[#202c33]' : 'bg-[#f0f2f5]'}`}>
+                                <div className={`p-2 rounded-full ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>+</div>
+                                <div className={`flex-1 py-2 px-4 rounded-lg ${darkMode ? 'bg-[#2a3942] text-gray-300' : 'bg-white text-gray-500'} text-sm`}>
+                                    Type a message
+                                </div>
+                                <div className={`p-2 rounded-full ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>🎙️</div>
                             </div>
                         </div>
                     </motion.div>

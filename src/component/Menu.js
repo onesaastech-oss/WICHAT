@@ -29,6 +29,8 @@ import {
   FiGitBranch
 } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchProjectInfo } from '../store/projectSlice';
 import SwitchProjectModal from './Modals/SwitchProjectModal';
 
 export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized }) => {
@@ -608,9 +610,11 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
 
 export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized }) => {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-  const [walletBalance, setWalletBalance] = useState(120.50); // 💰 example static balance
   const [switchProjectModalOpen, setSwitchProjectModalOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
+  const dispatch = useDispatch();
+  const walletBalance = useSelector((state) => state.project.walletBalance);
+  const projectInfoStatus = useSelector((state) => state.project.status);
 
   const toggleSidebar = () => {
     setIsMinimized(!isMinimized);
@@ -636,6 +640,13 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
     { title: 'Settings', icon: <FiSettings className="mr-2" size={16} />, path: '#' },
     { title: 'Help', icon: <FiHelpCircle className="mr-2" size={16} />, path: '#' },
   ];
+
+  useEffect(() => {
+    // Fetch wallet balance and other project info on mount
+    if (projectInfoStatus === 'idle') {
+      dispatch(fetchProjectInfo());
+    }
+  }, [dispatch, projectInfoStatus]);
 
   return (
     <header className="fixed top-0 inset-x-0 bg-white shadow-sm z-50 border-b">
@@ -678,7 +689,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
 
           <div className="flex items-center bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-md font-semibold">
             <FiCreditCard className="mr-1.5" size={16} />
-            <span className="mr-2">₹{walletBalance.toFixed(2)}</span>
+            <span className="mr-2">₹{Number(walletBalance).toFixed(2)}</span>
             <button
               // onClick={handleRefill} // your refill handler
               className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"

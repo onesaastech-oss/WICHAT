@@ -287,6 +287,29 @@ function LiveChat() {
         }
     };
 
+    const handleContactUpdate = async (chatNumber, contactName) => {
+        try {
+            console.log('🔄 handleContactUpdate called:', { chatNumber, contactName });
+            // Refresh the chat list to show updated contact name
+            if (dbAvailable) {
+                const updatedChats = await dbHelper.getChats();
+                console.log('✅ Updated chats fetched from DB after contact update:', updatedChats.length);
+                // Create a new array reference to trigger React re-render
+                setChats([...updatedChats]);
+                
+                // Also update activeChat if it matches the updated contact
+                if (activeChat?.number === chatNumber) {
+                    const updatedActiveChat = updatedChats.find(chat => chat.number === chatNumber);
+                    if (updatedActiveChat) {
+                        setActiveChat(updatedActiveChat);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error updating chat list after contact update:', error);
+        }
+    };
+
     if (!isInitialized) {
         return (
             <motion.div
@@ -409,6 +432,7 @@ function LiveChat() {
                                     refresh={activeChat.refresh}
                                     socketMessage={messages}
                                     onMessageStatusUpdate={handleMessageStatusUpdate}
+                                    onContactUpdate={handleContactUpdate}
                                 />
                             </motion.div>
                         ) : (

@@ -399,7 +399,7 @@ const DateSeparator = ({ displayDate, dateId }) => {
 };
 
 // Template Message Renderer Component
-const TemplateMessageRenderer = ({ msg, darkMode, renderFilePreview, isOwnMessage }) => {
+const TemplateMessageRenderer = ({ msg, darkMode, renderFilePreview, isOwnMessage, onAudioTimeChange }) => {
     const template = msg.template || {};
     const components = template.components || [];
     const componentList = Array.isArray(msg.component) ? msg.component : [];
@@ -443,13 +443,16 @@ const TemplateMessageRenderer = ({ msg, darkMode, renderFilePreview, isOwnMessag
             {/* Header Media */}
             {hasHeaderMedia && msg.media_url && (
                 <div className="mb-2">
-                    {renderFilePreview({
-                        ...msg,
-                        message_type: headerFormat.toLowerCase() === 'document' ? 'document' :
-                            headerFormat.toLowerCase() === 'video' ? 'video' :
-                                headerFormat.toLowerCase() === 'image' ? 'image' : 'document',
-                        send_by: isOwnMessage ? 'You' : (msg.send_by || msg.send_by_name || '')
-                    })}
+                    {renderFilePreview(
+                        {
+                            ...msg,
+                            message_type: headerFormat.toLowerCase() === 'document' ? 'document' :
+                                headerFormat.toLowerCase() === 'video' ? 'video' :
+                                    headerFormat.toLowerCase() === 'image' ? 'image' : 'document',
+                            send_by: isOwnMessage ? 'You' : (msg.send_by || msg.send_by_name || '')
+                        },
+                        { onAudioTimeChange }
+                    )}
                 </div>
             )}
 
@@ -520,6 +523,19 @@ const TemplateMessageRenderer = ({ msg, darkMode, renderFilePreview, isOwnMessag
 // Message Item Component with Info Button
 const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime, messageKey, highlightedMessageId }) => {
     const [showInfoModal, setShowInfoModal] = useState(false);
+    const [audioTime, setAudioTime] = useState({ currentTime: 0, duration: 0 });
+
+    const formatAudioDuration = (seconds) => {
+        if (!seconds || isNaN(seconds)) return '';
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const handleAudioTimeChange = (current, duration) => {
+        setAudioTime({ currentTime: current, duration });
+    };
+
     const isHighlighted = highlightedMessageId === messageKey;
     const bubbleHighlightClass = isHighlighted
         ? (msg.type === 'out'
@@ -550,12 +566,13 @@ const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime,
                                     darkMode={darkMode}
                                     renderFilePreview={renderFilePreview}
                                     isOwnMessage={msg.type === 'out'}
+                                    onAudioTimeChange={handleAudioTimeChange}
                                 />
                             ) : msg.message_type === 'text' ? (
                                 <p className="whitespace-pre-wrap break-words text-sm sm:text-base">{msg.message}</p>
                             ) : (
                                 <div className="space-y-2">
-                                    {renderFilePreview(msg)}
+                                    {renderFilePreview(msg, { onAudioTimeChange: handleAudioTimeChange })}
                                     {msg.message && msg.message.trim() && (
                                         <p className="whitespace-pre-wrap break-words text-sm sm:text-base">
                                             {msg.message}
@@ -563,33 +580,50 @@ const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime,
                                     )}
                                 </div>
                             )}
-                            <div className={`flex items-center space-x-1 sm:space-x-2 mt-1 sm:mt-2 ${msg.type === 'out' ? 'justify-end' : 'justify-start'}`}>
 
 
-                                <span className="text-xs opacity-75">
-                                    {formatTime(msg.timestamp || msg.create_date)}
-                                </span>
 
-                                <MessageStatusIndicator
-                                    status={msg.status || 'pending'}
-                                    isOwnMessage={msg.type === 'out'}
-                                    darkMode={darkMode}
-                                    failedReason={msg.failed_reason}
-                                />
 
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setShowInfoModal(true);
-                                    }}
-                                    className={`top-2 bg-gray-200 ${msg.type === 'out' ? 'left-2' : 'right-2'} 
+
+                            <div className={`flex items-center space-x-1 sm:space-x-2 mt-1 sm:mt-2 justify-between`}>
+                                <div className='left'>
+                                    {msg.message_type === 'audio' && (
+                                        <span className="text-xs opacity-75">
+                                            {(() => {
+                                                const seconds = audioTime.currentTime > 0
+                                                    ? audioTime.currentTime
+                                                    : audioTime.duration;
+                                                return seconds ? formatAudioDuration(seconds) : '';
+                                            })()}
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className='right flex justify-center items-center space-x-1 sm:space-x-2 mt-1 sm:mt-2'>
+                                    <span className="text-xs opacity-75">
+                                        {formatTime(msg.timestamp || msg.create_date)}
+                                    </span>
+
+                                    <MessageStatusIndicator
+                                        status={msg.status || 'pending'}
+                                        isOwnMessage={msg.type === 'out'}
+                                        darkMode={darkMode}
+                                        failedReason={msg.failed_reason}
+                                    />
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShowInfoModal(true);
+                                        }}
+                                        className={`top-2 bg-gray-200 ${msg.type === 'out' ? 'left-2' : 'right-2'} 
                                      group-hover:opacity-100 transition-opacity duration-200
                                     p-1 rounded-full hover:bg-black hover:bg-opacity-10 dark:hover:bg-white dark:hover:bg-opacity-10
                                     focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1`}
-                                    title="View message details"
-                                >
-                                    <FiInfo className="w-2.5 h-2.5 text-gray-700 dark:text-gray-400" />
-                                </button>
+                                        title="View message details"
+                                    >
+                                        <FiInfo className="w-2.5 h-2.5 text-gray-700 dark:text-gray-400" />
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Info Button */}
@@ -610,8 +644,11 @@ const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime,
 };
 
 // Main Conversation Component
-function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socketMessage = null, onMessageStatusUpdate }) {
+function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socketMessage = null, onMessageStatusUpdate, onContactUpdate }) {
     const [messageInput, setMessageInput] = useState('');
+    const [isAllowedToSendMessage, setIsAllowedToSendMessage] = useState(null);
+    const [assignmentInfo, setAssignmentInfo] = useState(null);
+    const [hasAcknowledgedUnassigned, setHasAcknowledgedUnassigned] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showMediaModal, setShowMediaModal] = useState(false);
     const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -645,6 +682,16 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         language_code: '',
         country: ''
     });
+
+    useEffect(() => {
+        setIsAllowedToSendMessage(null);
+        setAssignmentInfo(null);
+        setHasAcknowledgedUnassigned(false);
+    }, [activeChat?.number]);
+
+    const isChatUnassigned = assignmentInfo?.assigned === false;
+    const needsUnassignedPrompt = isChatUnassigned && !hasAcknowledgedUnassigned;
+    const isComposerBlocked = isAllowedToSendMessage === false;
 
     // Voice recording states
     const [isRecording, setIsRecording] = useState(false);
@@ -738,7 +785,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
     const handleContactMenuClick = useCallback(async () => {
         console.log(1);
-        
+
         setShowHeaderMenu(false);
         if (!activeChat?.number) {
             setContactError('Active chat information is unavailable.');
@@ -747,14 +794,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
 
         console.log(2);
-        
+
 
         setShowContactModal(true);
         setContactError('');
         setContactLoading(true);
 
         console.log(3);
-        
+
 
         setContactForm((prev) => ({
             ...prev,
@@ -763,13 +810,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }));
 
         console.log(4);
-        
+
 
         try {
             const ready = await ensureContactDb();
 
             console.log(5);
-            
+
             if (!ready) {
                 setContactError('Unable to access local contact storage.');
                 return;
@@ -784,7 +831,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 if (tokens?.token && tokens?.username) {
                     try {
                         const payload = {
-                            project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                            project_id: tokens.projects?.[0]?.project_id || '',
                             number: activeChat.number
                         };
                         const { data, key } = Encrypt(payload);
@@ -814,7 +861,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             let existing = await contactDbHelper.getContactByNumber(activeChat.number);
 
             console.log(6);
-            
+
             setExistingContactId(existing?.contact_id || null);
             setContactForm({
                 name: currentContactDetails?.name || existing?.name || activeChat.name || '',
@@ -871,7 +918,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
 
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                project_id: tokens.projects?.[0]?.project_id || '',
                 number: trimmedNumber,
                 name: trimmedName,
                 email: contactForm.email?.trim() || '',
@@ -934,6 +981,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     } catch (updateError) {
                         console.warn('Failed to sync chat name with contact name:', updateError);
                     }
+                }
+
+                // Notify parent component to refresh chat list
+                if (onContactUpdate && trimmedName) {
+                    onContactUpdate(trimmedNumber, trimmedName);
                 }
 
                 setShowContactModal(false);
@@ -1359,6 +1411,30 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }, 50);
     };
 
+    const updateSendPermission = useCallback((assigningInfo) => {
+        setAssignmentInfo(assigningInfo || null);
+        console.log(assigningInfo);
+
+
+        if (!assigningInfo) {
+            setIsAllowedToSendMessage(true);
+            return;
+        }
+
+        const hasAssignmentMeta =
+            typeof assigningInfo.assigned !== 'undefined' ||
+            typeof assigningInfo.assigned_to_me !== 'undefined';
+
+        if (!hasAssignmentMeta) {
+            setIsAllowedToSendMessage(true);
+            return;
+        }
+
+        const canSend = assigningInfo.assigned === false || assigningInfo.assigned_to_me === true;
+
+        setIsAllowedToSendMessage(canSend);
+    }, []);
+
     const syncWithAPI = async (isLoadingPrevious = false) => {
         if (!activeChat || (isLoadingPrevious ? loadingPrevious : loadingHistory)) return;
 
@@ -1391,6 +1467,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             );
 
             if (!response.data.error && response.data.data) {
+                updateSendPermission(response.data.assigning);
                 // Extract last_id from response
                 const apiLastId = response.data.last_id;
                 // console.log('API Response:', {
@@ -1676,7 +1753,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
     };
 
-    const renderFilePreview = (message) => {
+    const renderFilePreview = (message, options = {}) => {
+        const { onAudioTimeChange } = options;
         const fileInfo = {
             serverUrl: message.media_url,
             name: message.media_name || 'File',
@@ -1707,6 +1785,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         fileInfo={fileInfo}
                         isOwnMessage={message.send_by === 'You'}
                         isVoiceMessage={message.is_voice || false}
+                        onTimeChange={onAudioTimeChange}
                     />
                 );
             case 'document':
@@ -1746,19 +1825,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
     };
 
-    // Handle template selection
-    const handleTemplateSelect = (template) => {
-        // Extract template content and set it as message input
-        if (template.template_data?.body) {
-            setMessageInput(template.template_data.body);
-        } else if (template.template_data?.components) {
-            // Handle structured templates
-            const textComponents = template.template_data.components.filter(comp => comp.type === 'BODY');
-            if (textComponents.length > 0) {
-                setMessageInput(textComponents[0].text || '');
-            }
-        }
-    };
+
 
     // Handle template preview
     const handleTemplatePreview = (template) => {
@@ -2198,7 +2265,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                             create_date: tempMessage.create_date,
                             type: 'out',
                             message_type: fileType,
-                        message: tempMessage.message,
+                            message: tempMessage.message,
                             status: 'pending',
                             unique_id: tempMessageId,
                             last_id: Date.now(),
@@ -2854,87 +2921,118 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 )}
 
                 {/* Input Area */}
-                <div className="p-3 sm:p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-800 w-full">
-                    <div className="flex items-center space-x-2 sm:space-x-3">
-                        <button
-                            onClick={() => setShowMediaModal(true)}
-                            className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                        >
-                            <FiPaperclip className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
 
-                        <div className="flex-1 flex items-center px-3 sm:px-4 py-2 sm:py-3 rounded-full bg-gray-100 dark:bg-gray-700 border border-transparent focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 dark:focus-within:ring-blue-800 transition-all relative">
-                            <button
-                                ref={emojiButtonRef}
-                                onMouseDown={handleEmojiButtonMouseDown}
-                                onClick={handleEmojiButtonClick}
-                                aria-label="Toggle emoji picker"
-                                className="mr-2 sm:mr-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                            >
-                                <FiSmile className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </button>
-                            <input
-                                type="text"
-                                autoFocus
-                                placeholder="Type a message..."
-                                className="flex-1 bg-transparent focus:outline-none placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white text-sm sm:text-base"
-                                value={messageInput}
-                                ref={messageInputRef}
-                                onChange={(e) => {
-                                    setMessageInput(e.target.value);
-                                    updateSelectionFromInput();
-                                }}
-                                onClick={updateSelectionFromInput}
-                                onKeyUp={updateSelectionFromInput}
-                                onSelect={updateSelectionFromInput}
-                                onKeyPress={handleKeyPress}
-                                disabled={isUploading || loadingHistory}
-                            />
-                            <EmojiPickerPopover
-                                open={showEmojiPicker}
-                                onEmojiClick={(emojiData) => handleEmojiSelect(emojiData.emoji)}
-                                onClose={() => {
-                                    setShowEmojiPicker(false);
-                                    restoreMessageInputFocus();
-                                }}
-                                anchorRef={emojiButtonRef}
-                                darkMode={darkMode}
-                                className="m-auto"
-                            />
-                            <button 
-                                onClick={handleMicClick}
-                                className={`ml-2 sm:ml-3 transition-colors ${
-                                    isRecording 
-                                        ? 'text-red-500 hover:text-red-600 animate-pulse' 
-                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                                }`}
-                            >
-                                <FiMic className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setShowTemplateModal(true);
-                                    // Auto-fetch contact details if not already available
-                                    if (!contactDetails && activeChat?.number && tokens?.token) {
-                                        fetchContactDetails(activeChat.number);
-                                    }
-                                }}
-                                className="Templates ml-2 sm:ml-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                            >
-                                <FiLayers className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </button>
+                <div className="p-3 sm:p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-800 w-full">
+                    <div className="relative">
+                        <div className={`${(isComposerBlocked || needsUnassignedPrompt) ? 'opacity-0 pointer-events-none select-none' : ''}`}>
+                            <div className="flex items-center space-x-2 sm:space-x-3">
+                                <button
+                                    onClick={() => setShowMediaModal(true)}
+                                    className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                >
+                                    <FiPaperclip className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </button>
+
+                                <div className="flex-1 flex items-center px-3 sm:px-4 py-2 sm:py-3 rounded-full bg-gray-100 dark:bg-gray-700 border border-transparent focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 dark:focus-within:ring-blue-800 transition-all relative">
+                                    <button
+                                        ref={emojiButtonRef}
+                                        onMouseDown={handleEmojiButtonMouseDown}
+                                        onClick={handleEmojiButtonClick}
+                                        aria-label="Toggle emoji picker"
+                                        className="mr-2 sm:mr-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                                    >
+                                        <FiSmile className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </button>
+                                    <input
+                                        type="text"
+                                        autoFocus
+                                        placeholder="Type a message..."
+                                        className="flex-1 bg-transparent focus:outline-none placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white text-sm sm:text-base"
+                                        value={messageInput}
+                                        ref={messageInputRef}
+                                        onChange={(e) => {
+                                            setMessageInput(e.target.value);
+                                            updateSelectionFromInput();
+                                        }}
+                                        onClick={updateSelectionFromInput}
+                                        onKeyUp={updateSelectionFromInput}
+                                        onSelect={updateSelectionFromInput}
+                                        onKeyPress={handleKeyPress}
+                                        disabled={isUploading || loadingHistory}
+                                    />
+                                    <EmojiPickerPopover
+                                        open={showEmojiPicker}
+                                        onEmojiClick={(emojiData) => handleEmojiSelect(emojiData.emoji)}
+                                        onClose={() => {
+                                            setShowEmojiPicker(false);
+                                            restoreMessageInputFocus();
+                                        }}
+                                        anchorRef={emojiButtonRef}
+                                        darkMode={darkMode}
+                                        className="m-auto"
+                                    />
+                                    <button
+                                        onClick={handleMicClick}
+                                        className={`ml-2 sm:ml-3 transition-colors ${isRecording
+                                            ? 'text-red-500 hover:text-red-600 animate-pulse'
+                                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                            }`}
+                                    >
+                                        <FiMic className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowTemplateModal(true);
+                                            // Auto-fetch contact details if not already available
+                                            if (!contactDetails && activeChat?.number && tokens?.token) {
+                                                fetchContactDetails(activeChat.number);
+                                            }
+                                        }}
+                                        className="Templates ml-2 sm:ml-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                                    >
+                                        <FiLayers className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </button>
+                                </div>
+
+                                <button
+                                    onClick={handleSendMessage}
+                                    disabled={(!messageInput.trim() && !selectedFile) || isUploading || loadingHistory}
+                                    className={`flex-shrink-0 flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full transition-all duration-200 ${(messageInput.trim() || selectedFile) && !isUploading && !loadingHistory
+                                        ? 'bg-green-500 text-white hover:bg-green-600 shadow-lg hover:shadow-xl transform hover:scale-105'
+                                        : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                        }`}
+                                >
+                                    <LuSendHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </button>
+                            </div>
                         </div>
 
-                        <button
-                            onClick={handleSendMessage}
-                            disabled={(!messageInput.trim() && !selectedFile) || isUploading || loadingHistory}
-                            className={`flex-shrink-0 flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full transition-all duration-200 ${(messageInput.trim() || selectedFile) && !isUploading && !loadingHistory
-                                ? 'bg-green-500 text-white hover:bg-green-600 shadow-lg hover:shadow-xl transform hover:scale-105'
-                                : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                }`}
-                        >
-                            <LuSendHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
+                        {isComposerBlocked && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center space-y-1 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-3xl">
+                                <div className="flex items-center justify-center text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    <FiAlertCircle className="w-5 h-5 mr-2 text-amber-500" />
+                                    <span>{assignmentInfo.assigned_user.name} is already assigned for this chat</span>
+                                </div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    Ask the current owner or admin to reassign it to you before sending messages.
+                                </p>
+                            </div>
+                        )}
+
+                        {needsUnassignedPrompt && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center space-y-1 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-3xl">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    No one has assigned this chat.
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setHasAcknowledgedUnassigned(true)}
+                                    className="px-3 py-1 rounded-full bg-green-500 text-white text-xs font-medium hover:bg-green-600 transition-colors"
+                                >
+                                    Continue
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -2968,7 +3066,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     isOpen={showTemplateModal}
                     onClose={() => setShowTemplateModal(false)}
                     tokens={tokens}
-                    onTemplateSelect={handleTemplateSelect}
                     onTemplatePreview={handleTemplatePreview}
                     darkMode={darkMode}
                     activeChat={activeChat}
@@ -3148,7 +3245,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                             onClick={handleContactMenuClick}
                                             className="flex items-center space-x-3 px-4 py-2.5 text-left text-sm text-white transition hover:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-700 bg-green-600 w-3/5 m-auto rounded-lg justify-center"
                                         >
-                                           <span className='font-bold'>Update Contact</span>
+                                            <span className='font-bold'>Update Contact</span>
                                         </button>
                                     </div>
                                 ) : (

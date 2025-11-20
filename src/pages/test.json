@@ -1,0 +1,761 @@
+{
+    "data": [
+        {
+            "message_id": "c67iyypxxhx0qmwfbknx5c699i6cyp1763526171990",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAERgSOTgxMTE1RTMxQUMwMzI0MDIzAA==",
+            "create_date": "2025-11-19T04:22:51.000Z",
+            "type": "out",
+            "message_type": "text",
+            "message": "😀😃",
+            "is_template": false,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "read",
+            "id": 1391,
+            "send_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            }
+        },
+        {
+            "message_id": "l0qphihrb9495dv6w0gtcv6yioti6v1763462125501",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAERgSRDdGQjcxQzFCQUNGMDM4NjM5AA==",
+            "create_date": "2025-11-18T10:35:25.000Z",
+            "type": "out",
+            "message_type": "text",
+            "message": "Ki ",
+            "is_template": false,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "read",
+            "id": 1383,
+            "send_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            }
+        },
+        {
+            "message_id": "0zsm98r9y7yacp1jlbwv7nq2aoij8n1763461522286",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAEhggQUM4MzhFQTBFMDlBNzdGMEFCN0M4MjZCRDk1MUZDQjUA",
+            "create_date": "2025-11-18T10:25:22.000Z",
+            "type": "in",
+            "message_type": "text",
+            "message": "Okey",
+            "is_template": false,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "received",
+            "id": 1382,
+            "is_read": true,
+            "read_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            }
+        },
+        {
+            "message_id": "ek6kopr2mib1kzefmf24p1wsg3yyza1763461254507",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAERgSNDhGOTFBRjgyNDExMDM4MTRCAA==",
+            "create_date": "2025-11-18T10:20:54.000Z",
+            "type": "out",
+            "message_type": "template",
+            "message": null,
+            "is_template": true,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "read",
+            "id": 1381,
+            "send_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            },
+            "template": {
+                "name": "task_create",
+                "category": "MARKETING",
+                "language": "en",
+                "components": [
+                    {
+                        "type": "HEADER",
+                        "format": "TEXT",
+                        "text": "Task Create "
+                    },
+                    {
+                        "type": "BODY",
+                        "text": "Dear {{1}},\nYour Task for GST Registration has been Created Successfully!",
+                        "example": {
+                            "body_text": [
+                                [
+                                    "Mubarak Ali"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "type": "FOOTER",
+                        "text": "www.bmtaxopc.com"
+                    },
+                    {
+                        "type": "BUTTONS",
+                        "buttons": [
+                            {
+                                "type": "PHONE_NUMBER",
+                                "text": "Call Us",
+                                "phone_number": "917002695990"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "component": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {
+                            "type": "text",
+                            "text": "Sourav Devs"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "message_id": "sh8mtyq67nq9rcharuwefluhofkafa1763460027310",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAEhggQUM5RTUyRjdBQzNBMjFDQjg3NTQ2NjFFOTlCOTIzQzQA",
+            "create_date": "2025-11-18T10:00:27.000Z",
+            "type": "in",
+            "message_type": "text",
+            "message": "Ok",
+            "is_template": false,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "received",
+            "id": 1380,
+            "is_read": true,
+            "read_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            }
+        },
+        {
+            "message_id": "6ks9nizup1m2t6wxuvaoduack55a2g1763459953857",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAERgSNzJCQzZDQjdCMUY1MjFENkZFAA==",
+            "create_date": "2025-11-18T09:59:13.000Z",
+            "type": "out",
+            "message_type": "template",
+            "message": null,
+            "is_template": true,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "read",
+            "id": 1379,
+            "send_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            },
+            "template": {
+                "name": "task_create",
+                "category": "MARKETING",
+                "language": "en",
+                "components": [
+                    {
+                        "type": "HEADER",
+                        "format": "TEXT",
+                        "text": "Task Create "
+                    },
+                    {
+                        "type": "BODY",
+                        "text": "Dear {{1}},\nYour Task for GST Registration has been Created Successfully!",
+                        "example": {
+                            "body_text": [
+                                [
+                                    "Mubarak Ali"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "type": "FOOTER",
+                        "text": "www.bmtaxopc.com"
+                    },
+                    {
+                        "type": "BUTTONS",
+                        "buttons": [
+                            {
+                                "type": "PHONE_NUMBER",
+                                "text": "Call Us",
+                                "phone_number": "917002695990"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "component": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {
+                            "type": "text",
+                            "text": "Sourav Devs"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "message_id": "7m1qtwbhzf7wvpr7roi4kvbmrr6p811763458270498",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAERgSN0Y4QjE3REVFNkY2RkMwRkJCAA==",
+            "create_date": "2025-11-18T09:31:10.000Z",
+            "type": "out",
+            "message_type": "template",
+            "message": null,
+            "is_template": true,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "read",
+            "id": 1378,
+            "send_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            },
+            "template": {
+                "name": "image_test",
+                "category": "MARKETING",
+                "language": "en",
+                "components": [
+                    {
+                        "type": "HEADER",
+                        "format": "IMAGE",
+                        "example": {
+                            "header_handle": [
+                                "https://api.w1chat.com/upload/325yy88r0sqp8p2ggi6wj2ktp3xt5u1761716795593.jpeg"
+                            ]
+                        }
+                    },
+                    {
+                        "type": "BODY",
+                        "text": "This is our new logo, please share your feedback."
+                    },
+                    {
+                        "type": "FOOTER",
+                        "text": "thank you"
+                    },
+                    {
+                        "type": "BUTTONS",
+                        "buttons": [
+                            {
+                                "type": "QUICK_REPLY",
+                                "text": "Color should be change"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "component": [
+                {
+                    "type": "header",
+                    "parameters": [
+                        {
+                            "type": "image",
+                            "image": {
+                                "link": "https://api.w1chat.com/upload/325yy88r0sqp8p2ggi6wj2ktp3xt5u1761716795593.jpeg"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "type": "body",
+                    "parameters": []
+                }
+            ]
+        },
+        {
+            "message_id": "ilp7gs2tymjoogvfuqi87xjxwgo1a41763458231238",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAERgSRDE3RjZDRkQyODQ1NDBDQzk2AA==",
+            "create_date": "2025-11-18T09:30:31.000Z",
+            "type": "out",
+            "message_type": "text",
+            "message": "hi\\",
+            "is_template": false,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "read",
+            "id": 1377,
+            "send_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            }
+        },
+        {
+            "message_id": "yihe822amh415uz68eg22qauegd5gz1763457849443",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAERgSNUM0MDlBRTNBRkY5NjVGMkJFAA==",
+            "create_date": "2025-11-18T09:24:09.000Z",
+            "type": "out",
+            "message_type": "template",
+            "message": null,
+            "is_template": true,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "read",
+            "id": 1376,
+            "send_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            },
+            "template": {
+                "name": "payment_reminder",
+                "category": "UTILITY",
+                "language": "en",
+                "components": [
+                    {
+                        "type": "HEADER",
+                        "format": "IMAGE",
+                        "example": {
+                            "header_handle": [
+                                "https://api.w1chat.com/upload/zm6pea2qbuj45011oeoxjgfyw2yuo51761752949267.jpg"
+                            ]
+                        }
+                    },
+                    {
+                        "type": "BODY",
+                        "text": "Dear {{1}},\nKindly Clear your due of Rs. {{2}} to Bmtax.",
+                        "example": {
+                            "body_text": [
+                                [
+                                    "Mubarak",
+                                    "123"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "type": "FOOTER",
+                        "text": "www.bmtax.in"
+                    },
+                    {
+                        "type": "BUTTONS",
+                        "buttons": [
+                            {
+                                "type": "PHONE_NUMBER",
+                                "text": "Call Us",
+                                "phone_number": "917002695990"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "component": [
+                {
+                    "type": "header",
+                    "parameters": [
+                        {
+                            "type": "image",
+                            "image": {
+                                "link": "https://api.w1chat.com/upload/zm6pea2qbuj45011oeoxjgfyw2yuo51761752949267.jpg"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "type": "body",
+                    "parameters": [
+                        {
+                            "type": "text",
+                            "text": "Sourav Devs"
+                        },
+                        {
+                            "type": "text",
+                            "text": "6000"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "message_id": "1uojvx341iz6evpbd61rpoggk1f9y01763457793604",
+            "wamid": null,
+            "create_date": "2025-11-18T09:23:13.000Z",
+            "type": "out",
+            "message_type": "template",
+            "message": null,
+            "is_template": true,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "pending",
+            "id": 1375,
+            "send_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            },
+            "template": {
+                "name": "payment_reminder",
+                "category": "UTILITY",
+                "language": "en",
+                "components": [
+                    {
+                        "type": "HEADER",
+                        "format": "IMAGE",
+                        "example": {
+                            "header_handle": [
+                                "https://api.w1chat.com/upload/zm6pea2qbuj45011oeoxjgfyw2yuo51761752949267.jpg"
+                            ]
+                        }
+                    },
+                    {
+                        "type": "BODY",
+                        "text": "Dear {{1}},\nKindly Clear your due of Rs. {{2}} to Bmtax.",
+                        "example": {
+                            "body_text": [
+                                [
+                                    "Mubarak",
+                                    "123"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "type": "FOOTER",
+                        "text": "www.bmtax.in"
+                    },
+                    {
+                        "type": "BUTTONS",
+                        "buttons": [
+                            {
+                                "type": "PHONE_NUMBER",
+                                "text": "Call Us",
+                                "phone_number": "917002695990"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "component": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {
+                            "type": "text",
+                            "text": "Mubarak"
+                        },
+                        {
+                            "type": "text",
+                            "text": "123"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "message_id": "2sfcdxgjb0spqrbphobg0jxnlcbjqs1763456601490",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAERgSNjg3MkEyNUE0NUJDRTNEN0REAA==",
+            "create_date": "2025-11-18T09:03:21.000Z",
+            "type": "out",
+            "message_type": "template",
+            "message": null,
+            "is_template": true,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "read",
+            "id": 1374,
+            "send_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            },
+            "template": {
+                "name": "ui_update",
+                "category": "MARKETING",
+                "language": "en",
+                "components": [
+                    {
+                        "type": "BODY",
+                        "text": "New ui has been updated in our onesaas version {{1}}  has released",
+                        "example": {
+                            "body_text": [
+                                [
+                                    "onesaas"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "type": "FOOTER",
+                        "text": "test"
+                    }
+                ]
+            },
+            "component": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {
+                            "type": "text",
+                            "text": "onesaas"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "message_id": "z1cf7rgvja0699pyc6bixeg5ohfivg1763442900691",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAERgSRERBRTgyMUI2ODFEMDgxMjEwAA==",
+            "create_date": "2025-11-18T05:15:00.000Z",
+            "type": "out",
+            "message_type": "text",
+            "message": "Uuhh",
+            "is_template": false,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "read",
+            "id": 1367,
+            "send_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            }
+        },
+        {
+            "message_id": "zrcjqtnhymo7zl3wuzpencypp142xk1763440500350",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAEhggQUMxNUY5OUEyNDAzQkQxRENFNjUwMUEyNkI4RjY0QkIA",
+            "create_date": "2025-11-18T04:35:00.000Z",
+            "type": "in",
+            "message_type": "text",
+            "message": "Good morning sir",
+            "is_template": false,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "received",
+            "id": 1366,
+            "is_read": true,
+            "read_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            }
+        },
+        {
+            "message_id": "xewjotkhzz4qsl6ug6o99sbfp4k6xp1763440490952",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAERgSRTRBN0M3QjU2RTVDMDQ2RkMyAA==",
+            "create_date": "2025-11-18T04:34:50.000Z",
+            "type": "out",
+            "message_type": "text",
+            "message": "Good morning ",
+            "is_template": false,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "read",
+            "id": 1365,
+            "send_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            }
+        },
+        {
+            "message_id": "wkyivupubk583gcxpg4pjestkerffz1763394603866",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAEhgWM0VCMDg1MjAwQzI3RTZFNjE0MzUxRgA=",
+            "create_date": "2025-11-17T15:50:03.000Z",
+            "type": "in",
+            "message_type": "text",
+            "message": "Okey",
+            "is_template": false,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "received",
+            "id": 1364,
+            "is_read": true,
+            "read_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            }
+        },
+        {
+            "message_id": "cpo6ecn14s723g4ra42q8yx26odg9v1763394503683",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAEhgWM0VCMEEwRDBCNzlFRDdDMEJBRTlBOAA=",
+            "create_date": "2025-11-17T15:48:23.000Z",
+            "type": "in",
+            "message_type": "text",
+            "message": "Okey",
+            "is_template": false,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "received",
+            "id": 1363,
+            "is_read": true,
+            "read_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            }
+        },
+        {
+            "message_id": "61wl8mytd3djwxdr0xlq4r4blf95ux1763394162230",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAEhgWM0VCMDBBRTYyMzU2MjIyOTIzOThENQA=",
+            "create_date": "2025-11-17T15:42:42.000Z",
+            "type": "in",
+            "message_type": "text",
+            "message": "Na",
+            "is_template": false,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "received",
+            "id": 1362,
+            "is_read": true,
+            "read_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            }
+        },
+        {
+            "message_id": "xterrinhwven8is2vm6tt4611pg1cg1763394128846",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAERgSRDgxNDkzQkJFREJFQjFFQjM5AA==",
+            "create_date": "2025-11-17T15:42:08.000Z",
+            "type": "out",
+            "message_type": "text",
+            "message": "ok",
+            "is_template": false,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "read",
+            "id": 1361,
+            "send_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            }
+        },
+        {
+            "message_id": "pa28auk4uureo3xa2tbw0czhbadyb91763368262919",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAEhggQUM2RTgyMEY1MjdBQjY1NkUzRTcwODEwREQ3RDZEQ0UA",
+            "create_date": "2025-11-17T08:31:05.000Z",
+            "type": "in",
+            "message_type": "audio",
+            "message": null,
+            "is_template": false,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "received",
+            "id": 1359,
+            "is_read": true,
+            "read_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            },
+            "media_url": "https://api.w1chat.com/chat-media/689d783e207f0b0c309fa07c/917364076458/audio/a8lo3dsfjujuhmw1763368265299.mp3",
+            "media_name": "audio",
+            "is_voice": false
+        },
+        {
+            "message_id": "9upeq0unn1whqxv5xko8932rtjxl6a1763368245300",
+            "wamid": "wamid.HBgMOTE3MzY0MDc2NDU4FQIAEhggQUM0NkM5QjJCNDI4OTMyNDFDMzJCRjJDRTEwNkQ0QzQA",
+            "create_date": "2025-11-17T08:30:47.000Z",
+            "type": "in",
+            "message_type": "audio",
+            "message": null,
+            "is_template": false,
+            "is_forwarded": false,
+            "is_reply": false,
+            "status": "received",
+            "id": 1358,
+            "is_read": true,
+            "read_by": {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "917364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "status": true
+            },
+            "media_url": "https://api.w1chat.com/chat-media/689d783e207f0b0c309fa07c/917364076458/audio/9ultz827vmxgb6g1763368247088.opus",
+            "media_name": "audio",
+            "is_voice": true
+        }
+    ],
+    "last_id": 1358,
+    "count": 20,
+    "assigning": {
+        "assigned": true,
+        "assigned_to_me": false,
+        "assigned_user": {
+            "name": "SOURAV PREMIUM",
+            "mobile": "7047468741",
+            "email": "souravpremium2022@gmail.com",
+            "status": true,
+            "username": "wsfrterd235434654563"
+        },
+        "users": [
+            {
+                "username": "o70w2vk8h0rcqfxn6z2cajm699628d1756210944324",
+                "name": "Mubarak",
+                "mobile": "7002695990",
+                "email": "onesaastech@gmail.com",
+                "type": "agent",
+                "is_me": false
+            },
+            {
+                "username": "7364076458",
+                "name": "Sourav Adhikary",
+                "mobile": "7364076458",
+                "email": "souravadhikary1916@gmail.com",
+                "type": "admin",
+                "is_me": true
+            },
+            {
+                "username": "wsfrterd235434654563",
+                "name": "SOURAV PREMIUM",
+                "mobile": "7047468741",
+                "email": "souravpremium2022@gmail.com",
+                "type": "agent",
+                "is_me": false
+            }
+        ]
+    }
+}

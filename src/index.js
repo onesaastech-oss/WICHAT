@@ -17,6 +17,8 @@ import MyPlan from './pages/MyPlan';
 import Blank from './pages/Blank';
 import PermissionsList from './pages/PermissionsList';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import { Provider } from 'react-redux';
+import store from './store';
 import CreateCampaign from './pages/Campaign/CreateCampaign';
 import Transactions from './pages/Transactions';
 import Projects from './pages/Projects';
@@ -33,71 +35,73 @@ const GOOGLE_CLIENT_ID = "124604231994-dtnflivbu049428d1cg9ngfuhgq38efs.apps.goo
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
-  <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/dasboard" element={<Dashboard />} />
-        {/* Protected routes that require project */}
-        <Route path="/live-chat" element={
-          <ProtectedRoute requiresProject={true}>
-            <LiveChat />
-          </ProtectedRoute>
-        } />
-        <Route path="/live-chat/:phone" element={
-          <ProtectedRoute requiresProject={true}>
-            <LiveChat />
-          </ProtectedRoute>
-        } />
-        <Route path="/template" element={
-          <ProtectedRoute requiresProject={true}>
-            <Template />
-          </ProtectedRoute>
-        } />
-        <Route path="/template-add" element={
-          <ProtectedRoute requiresProject={true}>
-            <TemplateAdd />
-          </ProtectedRoute>
-        } />
-        <Route path="/template-edit/:templateId" element={
-          <ProtectedRoute requiresProject={true}>
-            <TemplateEdit />
-          </ProtectedRoute>
-        } />
-        <Route path="/campaigns" element={
-          <ProtectedRoute requiresProject={true}>
-            <CampaignList />
-          </ProtectedRoute>
-        } />
-        <Route path="/campaign/:campaignId" element={
-          <ProtectedRoute requiresProject={true}>
-            <CampaignDetails />
-          </ProtectedRoute>
-        } />
-        <Route path="/create-campaign" element={
-          <ProtectedRoute requiresProject={true}>
-            <CreateCampaign />
-          </ProtectedRoute>
-        } />
-        {/* Regular protected routes */}
-        <Route path="/contact" element={<Contact />} />
-        <Route path="/contact-group" element={<ContactGroup />} />
-        <Route path="/contact-group-list" element={<ContactGroupList />} />
-        <Route path="/agent-management" element={<AgentManagement />} />
-        <Route path="/my-plan" element={<MyPlan />} />
-        <Route path="/permission-list" element={<PermissionsList />} />
-        <Route path="/blank" element={<Blank />} />
-        <Route path="/projects" element={<Projects />} />
-        {/* Login related page */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/transactions" element={<Transactions />} />
-        <Route path="/auto-reply" element={<AutoReply />} />
-        <Route path="/flow" element={<Flow />} />
-        <Route path="/my-profile" element={<MyProfile />} />
-        {/* Add more routes as needed */}
-        <Route path="*" element={<Error_404 />} />
-      </Routes>
-    </BrowserRouter>
-  </GoogleOAuthProvider>
+  <Provider store={store}>
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/dasboard" element={<Dashboard />} />
+          {/* Protected routes that require project */}
+          <Route path="/live-chat" element={
+            <ProtectedRoute requiresProject={true}>
+              <LiveChat />
+            </ProtectedRoute>
+          } />
+          <Route path="/live-chat/:phone" element={
+            <ProtectedRoute requiresProject={true}>
+              <LiveChat />
+            </ProtectedRoute>
+          } />
+          <Route path="/template" element={
+            <ProtectedRoute requiresProject={true}>
+              <Template />
+            </ProtectedRoute>
+          } />
+          <Route path="/template-add" element={
+            <ProtectedRoute requiresProject={true}>
+              <TemplateAdd />
+            </ProtectedRoute>
+          } />
+          <Route path="/template-edit/:templateId" element={
+            <ProtectedRoute requiresProject={true}>
+              <TemplateEdit />
+            </ProtectedRoute>
+          } />
+          <Route path="/campaigns" element={
+            <ProtectedRoute requiresProject={true}>
+              <CampaignList />
+            </ProtectedRoute>
+          } />
+          <Route path="/campaign/:campaignId" element={
+            <ProtectedRoute requiresProject={true}>
+              <CampaignDetails />
+            </ProtectedRoute>
+          } />
+          <Route path="/create-campaign" element={
+            <ProtectedRoute requiresProject={true}>
+              <CreateCampaign />
+            </ProtectedRoute>
+          } />
+          {/* Regular protected routes */}
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/contact-group" element={<ContactGroup />} />
+          <Route path="/contact-group-list" element={<ContactGroupList />} />
+          <Route path="/agent-management" element={<AgentManagement />} />
+          <Route path="/my-plan" element={<MyPlan />} />
+          <Route path="/permission-list" element={<PermissionsList />} />
+          <Route path="/blank" element={<Blank />} />
+          <Route path="/projects" element={<Projects />} />
+          {/* Login related page */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/transactions" element={<Transactions />} />
+          <Route path="/auto-reply" element={<AutoReply />} />
+          <Route path="/flow" element={<Flow />} />
+          <Route path="/my-profile" element={<MyProfile />} />
+          {/* Add more routes as needed */}
+          <Route path="*" element={<Error_404 />} />
+        </Routes>
+      </BrowserRouter>
+    </GoogleOAuthProvider>
+  </Provider>
 );
