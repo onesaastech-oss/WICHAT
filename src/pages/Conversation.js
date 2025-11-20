@@ -57,6 +57,7 @@ import AudioPreview from '../component/Conversation/AudioPreview';
 import LocationPreview from '../component/Conversation/LocationPreview';
 import ContactPreview from '../component/Conversation/ContactPreview';
 import { SearchChatModal } from '../component/Modals/Conversation/SearchChatModal';
+import TemplateMessageRenderer from '../component/Conversation/TemplateMessageRender';
 
 const escapeRegExp = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -399,126 +400,126 @@ const DateSeparator = ({ displayDate, dateId }) => {
 };
 
 // Template Message Renderer Component
-const TemplateMessageRenderer = ({ msg, darkMode, renderFilePreview, isOwnMessage, onAudioTimeChange }) => {
-    const template = msg.template || {};
-    const components = template.components || [];
-    const componentList = Array.isArray(msg.component) ? msg.component : [];
+// const TemplateMessageRenderer = ({ msg, darkMode, renderFilePreview, isOwnMessage, onAudioTimeChange }) => {
+//     const template = msg.template || {};
+//     const components = template.components || [];
+//     const componentList = Array.isArray(msg.component) ? msg.component : [];
 
-    // Extract components
-    const headerComponent = components.find(c => c.type === 'HEADER');
-    const componentHeader = componentList.find(c => c.type?.toLowerCase() === 'header');
-    const bodyComponent = components.find(c => c.type === 'BODY');
-    const footerComponent = components.find(c => c.type === 'FOOTER');
-    const buttonsComponent = components.find(c => c.type === 'BUTTONS');
+//     // Extract components
+//     const headerComponent = components.find(c => c.type === 'HEADER');
+//     const componentHeader = componentList.find(c => c.type?.toLowerCase() === 'header');
+//     const bodyComponent = components.find(c => c.type === 'BODY');
+//     const footerComponent = components.find(c => c.type === 'FOOTER');
+//     const buttonsComponent = components.find(c => c.type === 'BUTTONS');
 
-    // Get header media info
-    const headerParamType = componentHeader?.parameters?.[0]?.type?.toUpperCase();
-    const headerFormat = headerComponent?.format || headerParamType || 'NONE';
-    const hasHeaderMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
+//     // Get header media info
+//     const headerParamType = componentHeader?.parameters?.[0]?.type?.toUpperCase();
+//     const headerFormat = headerComponent?.format || headerParamType || 'NONE';
+//     const hasHeaderMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
 
-    // Get body text (already resolved message with variables replaced)
-    const bodyText = msg.message || bodyComponent?.text || '';
+//     // Get body text (already resolved message with variables replaced)
+//     const bodyText = msg.message || bodyComponent?.text || '';
 
-    // Get footer text
-    const footerText = footerComponent?.text || '';
+//     // Get footer text
+//     const footerText = footerComponent?.text || '';
 
-    // Get buttons
-    const buttons = buttonsComponent?.buttons || [];
+//     // Get buttons
+//     const buttons = buttonsComponent?.buttons || [];
 
-    // Determine text colors based on message type (outgoing has white text on green bg)
-    const textColorClass = isOwnMessage
-        ? 'text-gray-800'
-        : (darkMode ? 'text-white' : 'text-gray-900');
-    const footerColorClass = isOwnMessage
-        ? 'text-gray-800'
-        : (darkMode ? 'text-gray-300' : 'text-gray-600');
-    const buttonClass = isOwnMessage
-        ? 'bg-[#D9FDD3] text-gray-800 border border-gray-600 hover:bg-white/30'
-        : (darkMode
-            ? 'bg-white/20 text-white border border-white/30 hover:bg-white/30'
-            : 'bg-white text-gray-800 border border-gray-200 hover:bg-gray-50');
+//     // Determine text colors based on message type (outgoing has white text on green bg)
+//     const textColorClass = isOwnMessage
+//         ? 'text-gray-800'
+//         : (darkMode ? 'text-white' : 'text-gray-900');
+//     const footerColorClass = isOwnMessage
+//         ? 'text-gray-800'
+//         : (darkMode ? 'text-gray-300' : 'text-gray-600');
+//     const buttonClass = isOwnMessage
+//         ? 'bg-[#D9FDD3] text-gray-800 border border-gray-600 hover:bg-white/30'
+//         : (darkMode
+//             ? 'bg-white/20 text-white border border-white/30 hover:bg-white/30'
+//             : 'bg-white text-gray-800 border border-gray-200 hover:bg-gray-50');
 
-    return (
-        <div className="space-y-2">
-            {/* Header Media */}
-            {hasHeaderMedia && msg.media_url && (
-                <div className="mb-2">
-                    {renderFilePreview(
-                        {
-                            ...msg,
-                            message_type: headerFormat.toLowerCase() === 'document' ? 'document' :
-                                headerFormat.toLowerCase() === 'video' ? 'video' :
-                                    headerFormat.toLowerCase() === 'image' ? 'image' : 'document',
-                            send_by: isOwnMessage ? 'You' : (msg.send_by || msg.send_by_name || '')
-                        },
-                        { onAudioTimeChange }
-                    )}
-                </div>
-            )}
+//     return (
+//         <div className="space-y-2">
+//             {/* Header Media */}
+//             {hasHeaderMedia && msg.media_url && (
+//                 <div className="mb-2">
+//                     {renderFilePreview(
+//                         {
+//                             ...msg,
+//                             message_type: headerFormat.toLowerCase() === 'document' ? 'document' :
+//                                 headerFormat.toLowerCase() === 'video' ? 'video' :
+//                                     headerFormat.toLowerCase() === 'image' ? 'image' : 'document',
+//                             send_by: isOwnMessage ? 'You' : (msg.send_by || msg.send_by_name || '')
+//                         },
+//                         { onAudioTimeChange }
+//                     )}
+//                 </div>
+//             )}
 
-            {/* Body Text */}
-            {bodyText && (
-                <div className={`text-sm sm:text-base whitespace-pre-wrap break-words ${textColorClass}`}>
-                    {bodyText}
-                </div>
-            )}
+//             {/* Body Text */}
+//             {bodyText && (
+//                 <div className={`text-sm sm:text-base whitespace-pre-wrap break-words ${textColorClass}`}>
+//                     {bodyText}
+//                 </div>
+//             )}
 
-            {/* Footer */}
-            {footerText && (
-                <div className={`text-xs mt-2 ${footerColorClass}`}>
-                    {footerText}
-                </div>
-            )}
+//             {/* Footer */}
+//             {footerText && (
+//                 <div className={`text-xs mt-2 ${footerColorClass}`}>
+//                     {footerText}
+//                 </div>
+//             )}
 
-            {/* Buttons */}
-            {buttons && buttons.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-3">
-                    {buttons.map((btn, idx) => {
-                        const isUrl = btn.type === 'URL';
-                        const isPhone = btn.type === 'PHONE_NUMBER';
-                        const buttonText = btn.text || 'Button';
+//             {/* Buttons */}
+//             {buttons && buttons.length > 0 && (
+//                 <div className="flex flex-wrap gap-2 mt-3">
+//                     {buttons.map((btn, idx) => {
+//                         const isUrl = btn.type === 'URL';
+//                         const isPhone = btn.type === 'PHONE_NUMBER';
+//                         const buttonText = btn.text || 'Button';
 
-                        if (isUrl) {
-                            return (
-                                <a
-                                    key={idx}
-                                    href={btn.url || '#'}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${buttonClass}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    {buttonText}
-                                </a>
-                            );
-                        } else if (isPhone) {
-                            return (
-                                <a
-                                    key={idx}
-                                    href={`tel:${btn.phone_number || ''}`}
-                                    className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${buttonClass}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    {buttonText}
-                                </a>
-                            );
-                        } else {
-                            return (
-                                <button
-                                    key={idx}
-                                    className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${buttonClass}`}
-                                    disabled
-                                >
-                                    {buttonText}
-                                </button>
-                            );
-                        }
-                    })}
-                </div>
-            )}
-        </div>
-    );
-};
+//                         if (isUrl) {
+//                             return (
+//                                 <a
+//                                     key={idx}
+//                                     href={btn.url || '#'}
+//                                     target="_blank"
+//                                     rel="noopener noreferrer"
+//                                     className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${buttonClass}`}
+//                                     onClick={(e) => e.stopPropagation()}
+//                                 >
+//                                     {buttonText}
+//                                 </a>
+//                             );
+//                         } else if (isPhone) {
+//                             return (
+//                                 <a
+//                                     key={idx}
+//                                     href={`tel:${btn.phone_number || ''}`}
+//                                     className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${buttonClass}`}
+//                                     onClick={(e) => e.stopPropagation()}
+//                                 >
+//                                     {buttonText}
+//                                 </a>
+//                             );
+//                         } else {
+//                             return (
+//                                 <button
+//                                     key={idx}
+//                                     className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${buttonClass}`}
+//                                     disabled
+//                                 >
+//                                     {buttonText}
+//                                 </button>
+//                             );
+//                         }
+//                     })}
+//                 </div>
+//             )}
+//         </div>
+//     );
+// };
 
 // Message Item Component with Info Button
 const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime, messageKey, highlightedMessageId }) => {
@@ -1322,51 +1323,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     }, [hasMoreMessages, loadingPrevious]);
 
 
-
-
-    // Additional scroll update for media loading
-    // useEffect(() => {
-    //     if (messagesContainerRef.current) {
-    //         // Use ResizeObserver to detect when container size changes due to image loads
-    //         const resizeObserver = new ResizeObserver(() => {
-    //             // Check if we're near the bottom, and if so, scroll to bottom
-    //             if (messagesContainerRef.current) {
-    //                 const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-    //                 const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
-
-    //                 if (isNearBottom) {
-    //                     // setTimeout(() => scrollToBottomImmediate(), 100);
-    //                 }
-    //             }
-    //         });
-
-    //         // Also use MutationObserver for DOM changes
-    //         const mutationObserver = new MutationObserver(() => {
-    //             if (messagesContainerRef.current) {
-    //                 const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-    //                 const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
-
-    //                 if (isNearBottom) {
-    //                   //  setTimeout(() => scrollToBottomImmediate(), 100);
-    //                 }
-    //             }
-    //         });
-
-    //         resizeObserver.observe(messagesContainerRef.current);
-    //         mutationObserver.observe(messagesContainerRef.current, {
-    //             childList: true,
-    //             subtree: true,
-    //             attributes: true,
-    //             attributeFilter: ['style', 'class']
-    //         });
-
-    //         return () => {
-    //             resizeObserver.disconnect();
-    //             mutationObserver.disconnect();
-    //         };
-    //     }
-    // }, [messages]);
-
     const scrollToBottom = () => {
         // Use setTimeout to ensure DOM is updated
         setTimeout(() => {
@@ -2133,7 +2089,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
     };
 
-    // Note: Recording completion is now handled in the recorder.onstop event
 
     // Cleanup on unmount
     useEffect(() => {

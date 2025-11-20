@@ -1,6 +1,83 @@
 import { io } from "socket.io-client";
 import { dbHelper } from './db';
 
+const normalizeSocketMessagePayload = (message = {}) => {
+    const isTemplate = message.message_type === 'template' || message.is_template;
+    let resolvedMessage = message.message || '';
+
+    if (isTemplate && (!resolvedMessage || resolvedMessage.length === 0)) {
+        let bodyText = '';
+        if (Array.isArray(message.template?.components)) {
+            const bodyComp = message.template.components.find(
+                (c) => (c.type || '').toUpperCase() === 'BODY'
+            );
+            bodyText = bodyComp?.text || '';
+        } else if (message.template?.body) {
+            bodyText = message.template.body;
+        }
+
+        const params =
+            (message.component || []).find(
+                (c) => (c.type || '').toLowerCase() === 'body'
+            )?.parameters || [];
+
+        const matches = bodyText.match(/\{\{\d+\}\}/g) || [];
+        resolvedMessage =
+            matches.reduce((acc, placeholder, idx) => {
+                const val = params[idx]?.text || `Variable ${idx + 1}`;
+                return acc.replace(placeholder, val);
+            }, bodyText) || bodyText || '';
+    }
+
+    let headerMediaUrl = message.media_url || '';
+    let headerMediaName = message.media_name || '';
+    let derivedMessageType = message.message_type || '';
+
+    if (isTemplate && Array.isArray(message.component)) {
+        const headerComp = message.component.find(
+            (c) => (c.type || '').toLowerCase() === 'header'
+        );
+        const headerParam = headerComp?.parameters?.[0];
+
+        if (headerParam?.type === 'image' && headerParam.image?.link) {
+            headerMediaUrl = headerParam.image.link;
+            derivedMessageType = 'image';
+            headerMediaName = headerMediaUrl.split('/').pop() || 'Image';
+        } else if (headerParam?.type === 'video' && headerParam.video?.link) {
+            headerMediaUrl = headerParam.video.link;
+            derivedMessageType = 'video';
+            headerMediaName = headerMediaUrl.split('/').pop() || 'Video';
+        } else if (
+            headerParam?.type === 'document' &&
+            headerParam.document?.link
+        ) {
+            headerMediaUrl = headerParam.document.link;
+            derivedMessageType = 'document';
+            headerMediaName = headerMediaUrl.split('/').pop() || 'Document';
+        }
+    }
+
+    if (isTemplate && headerMediaUrl && !derivedMessageType) {
+        const lower = headerMediaUrl.toLowerCase();
+        if (/(\.jpg|\.jpeg|\.png|\.gif|\.webp)$/.test(lower)) {
+            derivedMessageType = 'image';
+        } else if (/(\.mp4|\.mov|\.avi|\.webm)$/.test(lower)) {
+            derivedMessageType = 'video';
+        } else if (/(\.mp3|\.wav|\.ogg|\.m4a)$/.test(lower)) {
+            derivedMessageType = 'audio';
+        } else {
+            derivedMessageType = 'document';
+        }
+    }
+
+    return {
+        resolvedMessage,
+        headerMediaUrl,
+        headerMediaName,
+        derivedMessageType,
+    };
+};
+
 class SocketManager {
     constructor() {
         this.socket = null;
@@ -70,6 +147,13 @@ class SocketManager {
                 return;
             }
 
+            const {
+                resolvedMessage,
+                headerMediaUrl,
+                headerMediaName,
+                derivedMessageType,
+            } = normalizeSocketMessagePayload(messageData.message || {});
+
             // Check if this is a message sent by the current user (outgoing message)
             const isOutgoingMessage = messageData.message.type === 'out' || 
                                     messageData.message.send_by?.username || 
@@ -90,8 +174,8 @@ class SocketManager {
                     wamid: messageData.message.wamid || '',
                     create_date: messageData.message.create_date || '',
                     type: messageData.message.type || '',
-                    message_type: messageData.message.message_type || '',
-                    message: messageData.message.message || '',
+                    message_type: derivedMessageType || messageData.message.message_type || '',
+                    message: resolvedMessage,
                     is_template: messageData.message.is_template || false,
                     is_forwarded: messageData.message.is_forwarded || false,
                     is_reply: messageData.message.is_reply || false,
@@ -109,8 +193,8 @@ class SocketManager {
                     read_by_email: messageData.message.read_by?.email || '',
                     read_by_status: messageData.message.read_by?.status || false,
                     failed_reason: messageData.message.failed_reason || '',
-                    media_url: messageData.message.media_url || '',
-                    media_name: messageData.message.media_name || '',
+                    media_url: headerMediaUrl || messageData.message.media_url || '',
+                    media_name: headerMediaName || messageData.message.media_name || '',
                     is_voice: messageData.message.is_voice || false,
                     address: messageData.message.address || '',
                     latitude: messageData.message.latitude || '',
@@ -126,30 +210,12 @@ class SocketManager {
             }
 
             // New Message
-            // If template message has null body, attempt to render readable text from template + component
-            let resolvedMessage = messageData.message.message || '';
-            if ((messageData.message.message_type === 'template' || messageData.message.is_template) && (!resolvedMessage || resolvedMessage.length === 0)) {
-                let bodyText = '';
-                if (messageData.message.template?.components) {
-                    const bodyComp = messageData.message.template.components.find(c => c.type === 'BODY');
-                    bodyText = bodyComp?.text || '';
-                } else if (messageData.message.template?.body) {
-                    bodyText = messageData.message.template.body;
-                }
-                const params = (messageData.message.component || []).find(c => (c.type || '').toLowerCase() === 'body')?.parameters || [];
-                const matches = bodyText.match(/\{\{\d+\}\}/g) || [];
-                resolvedMessage = matches.reduce((acc, ph, idx) => {
-                    const val = params[idx]?.text || `Variable ${idx + 1}`;
-                    return acc.replace(ph, val);
-                }, bodyText) || '';
-            }
-
             const messageList = [{
                 message_id: messageData.message.message_id || '',
                 wamid: messageData.message.wamid || '',
                 create_date: messageData.message.create_date || '',
                 type: messageData.message.type || '',
-                message_type: messageData.message.message_type || '',
+                message_type: derivedMessageType || messageData.message.message_type || '',
                 message: resolvedMessage,
                 is_template: messageData.message.is_template || false,
                 is_forwarded: messageData.message.is_forwarded || false,
@@ -175,8 +241,8 @@ class SocketManager {
                 read_by_status: messageData.message.read_by?.status || false,
 
                 failed_reason: messageData.message.failed_reason || '',
-                media_url: messageData.message.media_url || '',
-                media_name: messageData.message.media_name || '',
+                media_url: headerMediaUrl || messageData.message.media_url || '',
+                media_name: headerMediaName || messageData.message.media_name || '',
                 is_voice: messageData.message.is_voice || false,
                 address: messageData.message.address || '',
                 latitude: messageData.message.latitude || '',
@@ -185,7 +251,9 @@ class SocketManager {
                 reply_wamid: messageData.message.reply_wamid || '',
                 timestamp: messageData.message.timestamp || '',
                 retryCount: messageData.message.retryCount || '',
-                chat_number: messageData.contact.number
+                chat_number: messageData.contact.number,
+                template: messageData.message.template || null,
+                component: messageData.message.component || null
             }]
 
             // New Chat
@@ -196,8 +264,8 @@ class SocketManager {
                 wamid: messageData.message.wamid || '',
                 create_date: messageData.message.create_date || '',
                 type: messageData.message.type || '',
-                message_type: messageData.message.message_type || '',
-                message: messageData.message.message || '',
+                message_type: derivedMessageType || messageData.message.message_type || '',
+                message: resolvedMessage,
                 status: messageData.message.status || '',
                 unique_id: messageData.message.message_id || '',
                 last_id: messageData.message.id || '',
