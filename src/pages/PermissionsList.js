@@ -91,7 +91,7 @@ function PermissionsList() {
         setLoading(true);
         try {
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || "",
+                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
             };
 
             const { data, key } = Encrypt(payload);
@@ -157,7 +157,7 @@ function PermissionsList() {
 
         try {
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || "",
+                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
                 name: createFormData.name,
                 remark: createFormData.remark
             };
@@ -223,7 +223,7 @@ function PermissionsList() {
 
         try {
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || "",
+                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
                 permission_id: editingPermission.permission_id,
                 name: editFormData.name,
                 remark: editFormData.remark
@@ -340,7 +340,7 @@ function PermissionsList() {
         try {
             // Convert permissionSettings to the API format
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || "",
+                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
                 permission_id: selectedPermission.permission_id,
             };
 

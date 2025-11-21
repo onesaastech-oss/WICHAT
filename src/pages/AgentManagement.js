@@ -226,7 +226,7 @@ function AgentManagement() {
     const fetchPermissions = async () => {
         try {
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || "",
+                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
             };
 
             const { data, key } = Encrypt(payload);
@@ -272,7 +272,7 @@ function AgentManagement() {
         setLoading(true);
         try {
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || "",
+                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
             };
 
             const { data, key } = Encrypt(payload);
@@ -312,7 +312,7 @@ function AgentManagement() {
     const fetchAgentByEmail = async (email) => {
         try {
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || "",
+                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
                 email: email
             };
 
@@ -351,7 +351,7 @@ function AgentManagement() {
     const fetchAgentByMappingId = async (mappingId) => {
         try {
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || "",
+                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
                 mapping_id: mappingId
             };
 
@@ -443,7 +443,7 @@ function AgentManagement() {
 
         try {
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || "",
+                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
                 mapping_id: currentAgent?.mapping_id,
             };
 
@@ -558,7 +558,7 @@ function AgentManagement() {
 
         try {
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || "",
+                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
                 mapping_id: currentAgent?.mapping_id,
                 permission_id: selectedPermission
             };
@@ -657,7 +657,7 @@ function AgentManagement() {
         try {
 
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || "",
+                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
                 email: newAgent?.email,
                 permission_id: newAgent?.permission_id,
             };

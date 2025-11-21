@@ -153,7 +153,7 @@ function TemplateEdit() {
             const { Encrypt } = await import('./encryption/payload-encryption');
 
             const payload = {
-              project_id: tokens.projects?.[0]?.project_id || "",
+              project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
               template_id: templateId
             };
 

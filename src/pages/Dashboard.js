@@ -125,7 +125,7 @@ function Dashboard() {
                 setError(null);
 
                 const payload = {
-                    project_id: tokens.projects?.[0]?.project_id || '',
+                    project_id: tokens.selected_project_id,
                 };
 
                 const { data, key } = Encrypt(payload);

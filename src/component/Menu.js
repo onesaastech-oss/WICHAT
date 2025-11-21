@@ -31,6 +31,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchProjectInfo } from '../store/projectSlice';
+import { setSelectedProjectId, setAuthData } from '../store/authSlice';
 import SwitchProjectModal from './Modals/SwitchProjectModal';
 
 export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized }) => {
@@ -628,11 +629,34 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
   }
 
   const handleSelectCompany = (company) => {
+    if (!company) return;
+
     setSelectedCompany(company);
-    // You can add additional logic here, such as updating the app context or making an API call
-    console.log('Selected company:', company);
-    // Example: Update localStorage or context
-    // localStorage.setItem('selectedCompany', JSON.stringify(company));
+
+    try {
+      const stored = localStorage.getItem('userData');
+      const parsed = stored ? JSON.parse(stored) : {};
+      const selectedId = company.project_id || company.id || null;
+
+      const updatedUserData = {
+        ...parsed,
+        selected_project_id: selectedId
+      };
+
+      // Persist selection for non-Redux code
+      localStorage.setItem('userData', JSON.stringify(updatedUserData));
+
+      // Sync Redux auth state
+      if (selectedId) {
+        dispatch(setSelectedProjectId(selectedId));
+      }
+      dispatch(setAuthData(updatedUserData));
+    } catch (error) {
+      console.error('Failed to update selected project', error);
+    }
+
+    // Full page refresh so all screens pick up the new project
+    window.location.reload();
   }
 
   const profileItems = [
