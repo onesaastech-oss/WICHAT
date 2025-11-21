@@ -23,7 +23,7 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
         setLoading(true);
         try {
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+                project_id: tokens.projects?.[0]?.project_id || "",
                 status: statusFilter,
                 last_id: resetData ? 0 : lastId
             };
@@ -124,7 +124,7 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
             }
 
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+                project_id: tokens.projects?.[0]?.project_id || "",
                 number: activeChat.number,
                 template_id: template.id,
                 component: formattedComponents

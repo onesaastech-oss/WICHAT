@@ -1402,7 +1402,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
         try {
             const messagePayload = {
-                project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                project_id: tokens.projects?.[0]?.project_id || '',
                 number: activeChat.number,
                 last_id: isLoadingPrevious ? lastId : "0"
             };
@@ -1686,7 +1686,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const markAsRead = async (number) => {
         try {
             const messagePayload = {
-                project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                project_id: tokens.projects?.[0]?.project_id || '',
                 number: number
             };
 
@@ -1851,7 +1851,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
         try {
             const messagePayload = {
-                project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                project_id: tokens.projects?.[0]?.project_id || '',
                 message: text,
                 number: activeChat.number
             };
@@ -2165,7 +2165,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const formData = new FormData();
             const fallbackFileName = selectedFile.file?.name || selectedFile.displayName || `attachment_${Date.now()}`;
             formData.append('file', selectedFile.file, fallbackFileName);
-            formData.append('project_id', tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c');
+            formData.append('project_id', tokens.projects?.[0]?.project_id || '');
 
             const uploadResponse = await axios.post(
                 `https://api.w1chat.com/upload/upload-media`,
@@ -2490,7 +2490,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
             // Send template via API
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                project_id: tokens.projects?.[0]?.project_id || '',
                 number: activeChat.number,
                 template_id: template.id,
                 component: formattedComponents

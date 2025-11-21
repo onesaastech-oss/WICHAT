@@ -112,7 +112,7 @@ function Contact() {
             setTokens(parsed);
 
             // Initialize contact database with project ID
-            const projectId = parsed.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c';
+            const projectId = parsed.projects?.[0]?.project_id || '';
             const dbInitSuccess = await contactDbHelper.init(projectId);
             setDbInitialized(dbInitSuccess);
           }
@@ -168,7 +168,7 @@ function Contact() {
         setSyncing(true);
 
         const payload = {
-          project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          project_id: tokens.projects?.[0]?.project_id || '',
           page_no: currentPage,
           query: ''
         };
@@ -392,7 +392,7 @@ function Contact() {
 
     try {
       const payload = {
-        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        project_id: tokens.projects?.[0]?.project_id || '',
         ...newContact
       };
 
@@ -525,7 +525,7 @@ function Contact() {
 
     try {
       const payload = {
-        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        project_id: tokens.projects?.[0]?.project_id || '',
         contact_id: editContact.contact_id,
         number: editContact.number,
         name: editContact.name,
@@ -632,7 +632,7 @@ function Contact() {
 
     try {
       const payload = {
-        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        project_id: tokens.projects?.[0]?.project_id || '',
         number: contact.mobile,
         action: action
       };

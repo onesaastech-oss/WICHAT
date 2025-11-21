@@ -81,7 +81,7 @@ function ContactGroupList() {
         console.log('🌐 Loading group contacts from API...');
 
         const payload = {
-          project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          project_id: tokens.projects?.[0]?.project_id || '',
           group_id: getGroupId(),
           last_id: 0
         };
@@ -152,7 +152,7 @@ function ContactGroupList() {
       console.log('🌐 Loading all contacts for selection...');
 
       const payload = {
-        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        project_id: tokens.projects?.[0]?.project_id || '',
         page_no: 1,
         query: ''
       };
@@ -207,7 +207,7 @@ function ContactGroupList() {
 
     try {
       const payload = {
-        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        project_id: tokens.projects?.[0]?.project_id || '',
         group_id: getGroupId(),
         contact_id: contactId
       };
@@ -232,7 +232,7 @@ function ContactGroupList() {
       if (!response?.data?.error) {
         // Refresh group contacts list
         const refreshPayload = {
-          project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          project_id: tokens.projects?.[0]?.project_id || '',
           group_id: getGroupId(),
           last_id: 0
         };
@@ -289,7 +289,7 @@ function ContactGroupList() {
 
     try {
       const payload = {
-        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        project_id: tokens.projects?.[0]?.project_id || '',
         unique_id: removingContact.unique_id
       };
 
@@ -317,7 +317,7 @@ function ContactGroupList() {
 
         // Refresh group contacts list
         const refreshPayload = {
-          project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          project_id: tokens.projects?.[0]?.project_id || '',
           group_id: getGroupId(),
           last_id: 0
         };

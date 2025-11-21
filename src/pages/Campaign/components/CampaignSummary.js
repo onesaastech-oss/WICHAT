@@ -190,7 +190,7 @@ export default function CampaignSummary({
           phone: phoneNumbers,
           name: campaignName,
           template_id: selectedTemplate.id,
-          project_id: tokens?.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          project_id: tokens?.projects?.[0]?.project_id || '',
           component: formattedComponents
         };
 
@@ -361,7 +361,7 @@ export default function CampaignSummary({
           group_id: groupId,
           name: campaignName,
           template_id: selectedTemplate.id,
-          project_id: tokens?.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          project_id: tokens?.projects?.[0]?.project_id || '',
           component: formattedComponents
         };
 
@@ -539,7 +539,7 @@ export default function CampaignSummary({
           end_row: endRow,
           name: campaignName,
           template_id: selectedTemplate.id,
-          project_id: tokens?.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          project_id: tokens?.projects?.[0]?.project_id || '',
           component: formattedComponents
         };
 

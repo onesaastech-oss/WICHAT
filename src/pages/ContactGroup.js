@@ -98,7 +98,7 @@ function ContactGroup() {
         console.log('🌐 Loading groups from API...');
 
         const payload = {
-          project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          project_id: tokens.projects?.[0]?.project_id || '',
           last_id: 0
         };
 
@@ -213,7 +213,7 @@ function ContactGroup() {
 
     try {
       const payload = {
-        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        project_id: tokens.projects?.[0]?.project_id || '',
         name: newGroup.name,
         remark: newGroup.remark
       };
@@ -247,7 +247,7 @@ function ContactGroup() {
 
         // Refresh groups list
         const refreshPayload = {
-          project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          project_id: tokens.projects?.[0]?.project_id || '',
           last_id: 0
         };
 
@@ -320,7 +320,7 @@ function ContactGroup() {
 
     try {
       const payload = {
-        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        project_id: tokens.projects?.[0]?.project_id || '',
         group_id: editGroup.group_id,
         name: editGroup.name,
         remark: editGroup.remark
@@ -359,7 +359,7 @@ function ContactGroup() {
 
         // Refresh groups list
         const refreshPayload = {
-          project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          project_id: tokens.projects?.[0]?.project_id || '',
           last_id: 0
         };
 
@@ -411,7 +411,7 @@ function ContactGroup() {
 
     try {
       const payload = {
-        project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+        project_id: tokens.projects?.[0]?.project_id || '',
         group_id: deletingGroup.id
       };
 
@@ -439,7 +439,7 @@ function ContactGroup() {
 
         // Refresh groups list
         const refreshPayload = {
-          project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+          project_id: tokens.projects?.[0]?.project_id || '',
           last_id: 0
         };
 

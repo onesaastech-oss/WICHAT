@@ -140,7 +140,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
 
         try {
             const messagePayload = {
-                project_id: tokens.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c',
+                project_id: tokens.projects?.[0]?.project_id || '',
                 last_id: "0"
             };
 

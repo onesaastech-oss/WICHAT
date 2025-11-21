@@ -7,9 +7,13 @@ import toast, { Toaster } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
+import { useDispatch } from 'react-redux';
+import { setAuthData, setSelectedProjectId } from '../store/authSlice';
+import { loginUser } from '../api/auth';
 
 const Login = () => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -22,6 +26,11 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showGlobalError, setShowGlobalError] = useState(false);
+
+  // Project selection modal state
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [projects, setProjects] = useState([]);
+  const [selectedProjectIdLocal, setSelectedProjectIdLocal] = useState('');
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -64,57 +73,103 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (validateForm()) {
-      setIsLoading(true);
+    if (!validateForm()) return;
 
-      const payload = {
+    setIsLoading(true);
+    try {
+      const data = await loginUser({
         email: formData.username,
         password: formData.password
-      };
-
-      const { data, key } = Encrypt(payload);
-
-      let data_pass = JSON.stringify({
-        "data": data,
-        "key": key
       });
 
-      let config = {
-        method: 'post',
-        maxBodyLength: Infinity,
-        url: 'https://api.w1chat.com/account/login',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        data: data_pass
+      if (data.error === false) {
+        // Persist full user payload (including projects) for backward compatibility
+        const projects = Array.isArray(data.projects) ? data.projects : [];
+
+        // Base object to store (without selected project for now)
+        let userDataToStore = {
+          ...data,
+          selected_project_id: null
+        };
+
+        // If no projects at all, just store and redirect to projects page
+        if (projects.length === 0) {
+          localStorage.setItem('userData', JSON.stringify(userDataToStore));
+          dispatch(setAuthData(userDataToStore));
+          toast.success('Login successful, but no projects found.');
+          setTimeout(() => {
+            navigate('/projects');
+          }, 800);
+          return;
+        }
+
+        // If there is exactly one project, auto-select it and redirect
+        if (projects.length === 1) {
+          const onlyProjectId = projects[0]?.project_id || null;
+          userDataToStore = {
+            ...userDataToStore,
+            selected_project_id: onlyProjectId
+          };
+
+          localStorage.setItem('userData', JSON.stringify(userDataToStore));
+          dispatch(setAuthData(userDataToStore));
+          if (onlyProjectId) {
+            dispatch(setSelectedProjectId(onlyProjectId));
+          }
+
+          toast.loading('Redirecting...');
+          setTimeout(() => {
+            navigate('/'); // Navigate to Home directly
+          }, 1500);
+          return;
+        }
+
+        // More than one project → open in-page modal for selection
+        localStorage.setItem('userData', JSON.stringify(userDataToStore));
+        dispatch(setAuthData(userDataToStore));
+        setProjects(projects);
+        setSelectedProjectIdLocal(projects[0]?.project_id || '');
+        setShowProjectModal(true);
+        toast.success('Login successful. Please choose a project.');
+      } else {
+        throw new Error(data.error || 'Something went wrong');
+      }
+    } catch (error) {
+      setErrors((prev) => ({
+        ...prev,
+        global: error.message || 'An error occurred during login'
+      }));
+      setShowGlobalError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleProjectConfirm = () => {
+    if (!selectedProjectIdLocal) return;
+
+    try {
+      const stored = localStorage.getItem('userData');
+      const parsed = stored ? JSON.parse(stored) : {};
+      const updated = {
+        ...parsed,
+        selected_project_id: selectedProjectIdLocal
       };
 
-      axios.request(config)
-        .then((response) => {
-          const data = response.data;
+      localStorage.setItem('userData', JSON.stringify(updated));
 
-          if (data.error === false) {
-            // store safely in localStorage
-            localStorage.setItem("userData", JSON.stringify(data));
-            toast.loading('Redirecting...');
-            setTimeout(() => {
-              navigate("/"); // Navigate to Home
-            }, 1500);
-          } else {
-            throw new Error(data.error || "Something went wrong");
-          }
-        })
-        .catch((error) => {
-          setErrors((prev) => ({
-            ...prev,
-            global: error.message || "An error occurred during login"
-          }));
-          setShowGlobalError(true);
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
+      // Keep Redux auth state in sync
+      dispatch(setSelectedProjectId(selectedProjectIdLocal));
+      dispatch(setAuthData(updated));
+    } catch (error) {
+      console.error('Failed to set selected project', error);
     }
+
+    setShowProjectModal(false);
+    toast.loading('Redirecting...');
+    setTimeout(() => {
+      navigate('/');
+    }, 800);
   };
 
   // Handle Google Login Success
@@ -418,6 +473,70 @@ const Login = () => {
         </div>
       </motion.div>
       <Toaster />
+
+      {/* Project selection modal after successful login */}
+      <AnimatePresence>
+        {showProjectModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 px-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: 'spring', duration: 0.35 }}
+              className="w-full max-w-md bg-white rounded-xl shadow-2xl p-6"
+            >
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                Choose your project
+              </h2>
+              <p className="text-sm text-gray-600 mb-4">
+                You have access to multiple projects. Please select one to continue.
+              </p>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Project
+                </label>
+                <select
+                  value={selectedProjectIdLocal}
+                  onChange={(e) => setSelectedProjectIdLocal(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {projects.map((project) => (
+                    <option key={project.project_id} value={project.project_id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowProjectModal(false)}
+                  className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleProjectConfirm}
+                  disabled={!selectedProjectIdLocal}
+                  className={`px-4 py-2 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                    !selectedProjectIdLocal ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
+                >
+                  Continue
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

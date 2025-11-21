@@ -200,7 +200,7 @@ const TemplatePreview = ({
             }
 
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+                project_id: tokens.projects?.[0]?.project_id || "",
                 number: activeChat.number,
                 template_id: selectedTemplate.id,
                 component: formattedComponents

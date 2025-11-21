@@ -19,7 +19,7 @@ export default function ContactsSelector({
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const projectId = tokens?.projects?.[0]?.project_id || '689d783e207f0b0c309fa07c';
+  const projectId = tokens?.projects?.[0]?.project_id || '';
 
   const updateSelectedContactDetails = useCallback(
     (selectedIds, map) => {

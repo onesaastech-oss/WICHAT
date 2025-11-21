@@ -69,8 +69,11 @@ function Template() {
 
     setLoading(true);
     try {
+      const selectedProjectId =
+      tokens.selected_project_id ||tokens.projects?.[0]?.project_id;
+
       const payload = {
-        project_id: tokens.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+        project_id: selectedProjectId,
         status: statusFilter,
         last_id: resetData ? 0 : lastId
       };

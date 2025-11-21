@@ -531,7 +531,7 @@ function TemplateAdd() {
 
       // Prepare payload with project_id (matching working API pattern)
       const payload = {
-        project_id: userData.projects?.[0]?.project_id || "689d783e207f0b0c309fa07c",
+        project_id: userData.projects?.[0]?.project_id || "",
         template: {
           name: formData.name,
           category: formData.category,

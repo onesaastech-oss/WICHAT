@@ -13,7 +13,12 @@ export const fetchProjectInfo = createAsyncThunk(
 
       const token = parsed?.token;
       const username = parsed?.username;
-      const projectId = maybeProjectId || parsed?.projects?.[0]?.project_id || '';
+      const selectedProjectId = parsed?.selected_project_id;
+      const projectId =
+        maybeProjectId ||
+        selectedProjectId ||
+        parsed?.projects?.[0]?.project_id ||
+        '';
 
       if (!token || !username) {
         return rejectWithValue('Missing auth tokens');

@@ -14,8 +14,12 @@ import {
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import moment from 'moment';
+import { useDispatch } from 'react-redux';
+import { setSelectedProjectId } from '../store/authSlice';
+import toast from 'react-hot-toast';
 
 const Projects = () => {
+  const dispatch = useDispatch();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(() => {
     const saved = localStorage.getItem('sidebarMinimized');
@@ -38,7 +42,12 @@ const Projects = () => {
   };
 
   const userData = getUserData();
-  const hasUserProjects = userData && userData.project_count > 0;
+  const userProjects = Array.isArray(userData?.projects) ? userData.projects : [];
+  const hasUserProjects = userData && userProjects.length > 0;
+
+  const [selectedUserProjectId, setSelectedUserProjectId] = useState(
+    userData?.selected_project_id || (userProjects[0]?.project_id || '')
+  );
 
   // Dummy projects data
   const [projects, setProjects] = useState([
@@ -283,6 +292,61 @@ const Projects = () => {
               />
             </div>
           </div>
+
+          {/* Project selection for logged-in user (from API) */}
+          {userProjects.length > 0 && (
+            <div className="mb-6 bg-white rounded-xl shadow p-4 border border-indigo-100">
+              <h2 className="text-lg font-semibold text-gray-900 mb-3">
+                Select Active Project
+              </h2>
+              {userProjects.length === 1 ? (
+                <p className="text-sm text-gray-700">
+                  You are currently using project{' '}
+                  <span className="font-medium">{userProjects[0].name}</span>.
+                </p>
+              ) : (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <select
+                    value={selectedUserProjectId}
+                    onChange={(e) => setSelectedUserProjectId(e.target.value)}
+                    className="w-full sm:w-72 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {userProjects.map((project) => (
+                      <option key={project.project_id} value={project.project_id}>
+                        {project.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!selectedUserProjectId) return;
+
+                      // Persist in Redux
+                      dispatch(setSelectedProjectId(selectedUserProjectId));
+
+                      // Persist in localStorage for non-Redux code
+                      try {
+                        const existing = getUserData() || {};
+                        const updated = {
+                          ...existing,
+                          selected_project_id: selectedUserProjectId
+                        };
+                        localStorage.setItem('userData', JSON.stringify(updated));
+                      } catch (error) {
+                        console.error('Failed to update selected project in localStorage', error);
+                      }
+
+                      toast.success('Active project updated');
+                    }}
+                    className="inline-flex items-center justify-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                  >
+                    Set as Active
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Projects Grid */}
           {filteredProjects.length === 0 ? (

@@ -690,7 +690,7 @@
                 "email": "souravadhikary1916@gmail.com",
                 "status": true
             },
-            "media_url": "https://api.w1chat.com/chat-media/689d783e207f0b0c309fa07c/917364076458/audio/a8lo3dsfjujuhmw1763368265299.mp3",
+            "media_url": "https://api.w1chat.com/chat-media//917364076458/audio/a8lo3dsfjujuhmw1763368265299.mp3",
             "media_name": "audio",
             "is_voice": false
         },
@@ -714,7 +714,7 @@
                 "email": "souravadhikary1916@gmail.com",
                 "status": true
             },
-            "media_url": "https://api.w1chat.com/chat-media/689d783e207f0b0c309fa07c/917364076458/audio/9ultz827vmxgb6g1763368247088.opus",
+            "media_url": "https://api.w1chat.com/chat-media//917364076458/audio/9ultz827vmxgb6g1763368247088.opus",
             "media_name": "audio",
             "is_voice": true
         }
