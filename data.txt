@@ -72,3 +72,4 @@ server
     access_log  /www/wwwlogs/topupmania.com.log;
     error_log  /www/wwwlogs/topupmania.com.error.log;
 }
+test
