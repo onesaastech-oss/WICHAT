@@ -17,6 +17,7 @@ import moment from 'moment';
 import { useDispatch } from 'react-redux';
 import { setSelectedProjectId } from '../store/authSlice';
 import toast from 'react-hot-toast';
+import { fetchUserProfile } from '../api/auth';
 
 const Projects = () => {
   const dispatch = useDispatch();
@@ -29,19 +30,10 @@ const Projects = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [showActionsMenu, setShowActionsMenu] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState(null);
+  const [projects, setProjects] = useState([]);
 
-  // Get user data from localStorage
-  const getUserData = () => {
-    try {
-      const userData = localStorage.getItem('userData');
-      return userData ? JSON.parse(userData) : null;
-    } catch (error) {
-      console.error('Error parsing userData from localStorage:', error);
-      return null;
-    }
-  };
-
-  const userData = getUserData();
   const userProjects = Array.isArray(userData?.projects) ? userData.projects : [];
   const hasUserProjects = userData && userProjects.length > 0;
 
@@ -49,69 +41,78 @@ const Projects = () => {
     userData?.selected_project_id || (userProjects[0]?.project_id || '')
   );
 
-  // Dummy projects data
-  const [projects, setProjects] = useState([
-    {
-      id: 1,
-      name: 'Acme Corporation',
-      description: 'Technology Solutions Provider',
-      status: 'Active',
-      members: 12,
-      createdAt: '2024-01-15T10:30:00',
-      updatedAt: '2024-01-20T14:20:00'
-    },
-    {
-      id: 2,
-      name: 'Global Industries',
-      description: 'Manufacturing & Trade Company',
-      status: 'Active',
-      members: 8,
-      createdAt: '2024-01-10T09:15:00',
-      updatedAt: '2024-01-18T11:45:00'
-    },
-    {
-      id: 3,
-      name: 'Digital Ventures',
-      description: 'Software Development Agency',
-      status: 'Active',
-      members: 15,
-      createdAt: '2024-01-08T14:20:00',
-      updatedAt: '2024-01-19T16:30:00'
-    },
-    {
-      id: 4,
-      name: 'TechStart Inc.',
-      description: 'Startup Accelerator Program',
-      status: 'Inactive',
-      members: 5,
-      createdAt: '2023-12-20T08:00:00',
-      updatedAt: '2024-01-05T10:15:00'
-    },
-    {
-      id: 5,
-      name: 'Enterprise Solutions',
-      description: 'Business Consulting Services',
-      status: 'Active',
-      members: 20,
-      createdAt: '2023-12-15T11:30:00',
-      updatedAt: '2024-01-22T09:20:00'
-    },
-    {
-      id: 6,
-      name: 'Cloud Services Ltd',
-      description: 'Cloud Infrastructure Provider',
-      status: 'Active',
-      members: 10,
-      createdAt: '2024-01-12T13:45:00',
-      updatedAt: '2024-01-21T15:10:00'
-    }
-  ]);
-
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     status: 'Active'
   });
+
+  // Fetch user profile data on component mount
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        setLoading(true);
+        const response = await fetchUserProfile();
+        
+        if (response.success && response.data) {
+          const profileData = response.data;
+          setUserData(profileData);
+          
+          // Update localStorage with fresh data
+          localStorage.setItem('userData', JSON.stringify(profileData));
+          
+          // Set projects from API response
+          if (Array.isArray(profileData.projects)) {
+            setProjects(profileData.projects.map(project => ({
+              id: project.project_id,
+              name: project.name,
+              description: project.description || 'No description',
+              status: project.status || 'Active',
+              members: project.members || 0,
+              createdAt: project.created_at || new Date().toISOString(),
+              updatedAt: project.updated_at || new Date().toISOString()
+            })));
+          }
+          
+          // Set selected project
+          if (profileData.selected_project_id) {
+            setSelectedUserProjectId(profileData.selected_project_id);
+          } else if (profileData.projects && profileData.projects.length > 0) {
+            setSelectedUserProjectId(profileData.projects[0].project_id);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+        toast.error('Failed to load projects');
+        
+        // Fallback to localStorage if API fails
+        try {
+          const localData = localStorage.getItem('userData');
+          if (localData) {
+            const parsedData = JSON.parse(localData);
+            setUserData(parsedData);
+            if (Array.isArray(parsedData.projects)) {
+              setProjects(parsedData.projects.map(project => ({
+                id: project.project_id,
+                name: project.name,
+                description: project.description || 'No description',
+                status: project.status || 'Active',
+                members: project.members || 0,
+                createdAt: project.created_at || new Date().toISOString(),
+                updatedAt: project.updated_at || new Date().toISOString()
+              })));
+            }
+          }
+        } catch (localError) {
+          console.error('Error loading from localStorage:', localError);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUserProfile();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -157,15 +158,19 @@ const Projects = () => {
 
   const handleDeleteProject = (projectId) => {
     if (window.confirm('Are you sure you want to delete this project?')) {
+      // TODO: Implement API call to delete project
       setProjects(projects.filter(p => p.id !== projectId));
       setShowActionsMenu(null);
+      toast.success('Project deleted successfully');
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // TODO: Implement API calls for create/update project
+    // For now, just update local state
     if (editingProject) {
-      // Update existing project
       setProjects(projects.map(p => 
         p.id === editingProject.id 
           ? { 
@@ -175,8 +180,8 @@ const Projects = () => {
             }
           : p
       ));
+      toast.success('Project updated successfully');
     } else {
-      // Create new project
       const newProject = {
         id: projects.length > 0 ? Math.max(...projects.map(p => p.id)) + 1 : 1,
         ...formData,
@@ -185,7 +190,9 @@ const Projects = () => {
         updatedAt: new Date().toISOString()
       };
       setProjects([...projects, newProject]);
+      toast.success('Project created successfully');
     }
+    
     setShowCreateModal(false);
     setFormData({ name: '', description: '', status: 'Active' });
     setEditingProject(null);
@@ -248,6 +255,16 @@ const Projects = () => {
               <span>Create Project</span>
             </button>
           </div>
+
+          {/* Loading State */}
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
+          )}
+
+          {!loading && (
+            <>
 
           {/* No Projects Warning */}
           {!hasUserProjects && (
@@ -327,12 +344,12 @@ const Projects = () => {
 
                       // Persist in localStorage for non-Redux code
                       try {
-                        const existing = getUserData() || {};
                         const updated = {
-                          ...existing,
+                          ...userData,
                           selected_project_id: selectedUserProjectId
                         };
                         localStorage.setItem('userData', JSON.stringify(updated));
+                        setUserData(updated);
                       } catch (error) {
                         console.error('Failed to update selected project in localStorage', error);
                       }
@@ -467,6 +484,8 @@ const Projects = () => {
                 </p>
               </div>
             </div>
+          )}
+          </>
           )}
         </div>
       </div>

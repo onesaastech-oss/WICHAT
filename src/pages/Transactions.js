@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
-import { FiDownload, FiSearch, FiFilter, FiChevronDown, FiChevronUp, FiFileText, FiCalendar, FiDollarSign } from 'react-icons/fi';
+import { FiDownload, FiSearch, FiFilter, FiChevronDown, FiChevronUp, FiFileText, FiCalendar, FiDollarSign, FiRefreshCw } from 'react-icons/fi';
 import moment from 'moment';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import axios from 'axios';
+import { Encrypt } from './encryption/payload-encryption';
 
 const Transactions = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -17,6 +19,13 @@ const Transactions = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [tokens, setTokens] = useState(null);
+  const [lastId, setLastId] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
     localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -33,117 +42,119 @@ const Transactions = () => {
     };
   }, [mobileMenuOpen]);
 
-  // Dummy transaction data
-  const [transactions] = useState([
-    {
-      id: 'TXN-2024-001',
-      date: '2024-01-15T10:30:00',
-      type: 'Credit',
-      description: 'Plan Subscription - Business Plan',
-      amount: 99.00,
-      status: 'Completed',
-      paymentMethod: 'Credit Card',
-      invoiceNumber: 'INV-2024-001'
-    },
-    {
-      id: 'TXN-2024-002',
-      date: '2024-01-10T14:20:00',
-      type: 'Debit',
-      description: 'API Usage Charges',
-      amount: 45.50,
-      status: 'Completed',
-      paymentMethod: 'Wallet',
-      invoiceNumber: 'INV-2024-002'
-    },
-    {
-      id: 'TXN-2024-003',
-      date: '2024-01-08T09:15:00',
-      type: 'Credit',
-      description: 'Top-up Balance',
-      amount: 200.00,
-      status: 'Completed',
-      paymentMethod: 'Bank Transfer',
-      invoiceNumber: 'INV-2024-003'
-    },
-    {
-      id: 'TXN-2024-004',
-      date: '2024-01-05T16:45:00',
-      type: 'Debit',
-      description: 'Campaign Charges - Summer Sale',
-      amount: 150.75,
-      status: 'Completed',
-      paymentMethod: 'Wallet',
-      invoiceNumber: 'INV-2024-004'
-    },
-    {
-      id: 'TXN-2024-005',
-      date: '2024-01-03T11:00:00',
-      type: 'Credit',
-      description: 'Refund - Failed Campaign',
-      amount: 75.25,
-      status: 'Completed',
-      paymentMethod: 'Original Payment Method',
-      invoiceNumber: 'INV-2024-005'
-    },
-    {
-      id: 'TXN-2024-006',
-      date: '2024-01-01T08:30:00',
-      type: 'Debit',
-      description: 'Monthly Subscription Renewal',
-      amount: 99.00,
-      status: 'Pending',
-      paymentMethod: 'Credit Card',
-      invoiceNumber: 'INV-2024-006'
-    },
-    {
-      id: 'TXN-2024-007',
-      date: '2023-12-28T13:20:00',
-      type: 'Debit',
-      description: 'Template Approval Fees',
-      amount: 25.00,
-      status: 'Completed',
-      paymentMethod: 'Wallet',
-      invoiceNumber: 'INV-2024-007'
-    },
-    {
-      id: 'TXN-2024-008',
-      date: '2023-12-25T10:00:00',
-      type: 'Credit',
-      description: 'Holiday Bonus Credit',
-      amount: 50.00,
-      status: 'Completed',
-      paymentMethod: 'System Credit',
-      invoiceNumber: 'INV-2024-008'
-    },
-    {
-      id: 'TXN-2024-009',
-      date: '2023-12-20T15:30:00',
-      type: 'Debit',
-      description: 'API Usage Charges',
-      amount: 32.50,
-      status: 'Failed',
-      paymentMethod: 'Credit Card',
-      invoiceNumber: 'INV-2024-009'
-    },
-    {
-      id: 'TXN-2024-010',
-      date: '2023-12-18T09:45:00',
-      type: 'Credit',
-      description: 'Top-up Balance',
-      amount: 100.00,
-      status: 'Completed',
-      paymentMethod: 'PayPal',
-      invoiceNumber: 'INV-2024-010'
+  // Load auth tokens
+  useEffect(() => {
+    const loadTokens = async () => {
+      try {
+        const sessionData = localStorage.getItem('userData');
+        if (sessionData) {
+          const parsed = JSON.parse(sessionData);
+          if (parsed && typeof parsed === 'object') {
+            setTokens(parsed);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load tokens:', e);
+        setError('Failed to load authentication data');
+      }
+    };
+
+    loadTokens();
+  }, []);
+
+  // Fetch transactions from API
+  const fetchTransactions = async (resetData = false) => {
+    if (!tokens?.token || !tokens?.username) return;
+
+    try {
+      setLoading(true);
+      setError('');
+
+      const projectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
+      if (!projectId) {
+        setError('No project selected');
+        return;
+      }
+
+      const payload = {
+        project_id: projectId,
+        last_id: resetData ? 0 : lastId
+      };
+
+      console.log('📤 Fetching transactions:', payload);
+
+      const { data, key } = Encrypt(payload);
+      const data_pass = JSON.stringify({ data, key });
+
+      const response = await axios.post(
+        'https://api.w1chat.com/project/transaction-history',
+        data_pass,
+        {
+          headers: {
+            'token': tokens.token,
+            'username': tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('📥 Transaction response:', response.data);
+
+      if (response?.data?.error) {
+        setError(response?.data?.message || 'Failed to fetch transactions');
+        return;
+      }
+
+      const responseData = response.data;
+      const newTransactions = responseData.data || [];
+      
+      if (resetData) {
+        setTransactions(newTransactions);
+      } else {
+        setTransactions(prev => [...prev, ...newTransactions]);
+      }
+      
+      setLastId(responseData.last_id || 0);
+      setTotalCount(responseData.count || 0);
+      setHasMore(newTransactions.length > 0);
+
+    } catch (error) {
+      console.error('Failed to fetch transactions:', error);
+      setError('Failed to fetch transactions. Please try again.');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  // Load transactions when tokens are available
+  useEffect(() => {
+    if (tokens?.token && tokens?.username) {
+      fetchTransactions(true);
+    }
+  }, [tokens]);
+
+  // Transform API data to match component expectations
+  const transformedTransactions = transactions.map(transaction => ({
+    id: transaction.transaction_id,
+    date: transaction.create_date,
+    type: transaction.type ? 'Credit' : 'Debit',
+    description: transaction.transaction_type,
+    amount: parseFloat(transaction.amount),
+    status: 'Completed', // API doesn't provide status, assuming completed
+    paymentMethod: transaction.transaction_type,
+    invoiceNumber: transaction.transaction_id,
+    remark: transaction.remark,
+    create_by: transaction.create_by
+  }));
 
   // Filter and sort transactions
-  const filteredTransactions = transactions
+  const filteredTransactions = transformedTransactions
     .filter(transaction => {
       const matchesSearch = 
         transaction.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         transaction.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase());
+        transaction.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (transaction.remark && transaction.remark.toLowerCase().includes(searchTerm.toLowerCase()));
       
       const matchesStatus = filterStatus === 'all' || transaction.status.toLowerCase() === filterStatus.toLowerCase();
       const matchesType = filterType === 'all' || transaction.type.toLowerCase() === filterType.toLowerCase();
@@ -175,7 +186,7 @@ const Transactions = () => {
     // Company/Service Info
     doc.setFontSize(20);
     doc.setTextColor(79, 70, 229); // indigo-600
-    doc.text('1Chat Dummy invoice', 20, 20);
+    doc.text('1Chat Transaction Receipt', 20, 20);
     
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
@@ -185,31 +196,34 @@ const Transactions = () => {
     // Invoice Title
     doc.setFontSize(16);
     doc.setTextColor(0, 0, 0);
-    doc.text('INVOICE', 20, 50);
+    doc.text('TRANSACTION RECEIPT', 20, 50);
     
-    // Invoice Details
+    // Transaction Details
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
-    doc.text('Invoice Number:', 20, 60);
-    doc.text('Transaction ID:', 20, 66);
-    doc.text('Date:', 20, 72);
+    doc.text('Transaction ID:', 20, 60);
+    doc.text('Date:', 20, 66);
+    doc.text('Type:', 20, 72);
     doc.text('Status:', 20, 78);
     
     doc.setTextColor(0, 0, 0);
     doc.setFont(undefined, 'bold');
-    doc.text(transaction.invoiceNumber, 70, 60);
-    doc.text(transaction.id, 70, 66);
-    doc.text(moment(transaction.date).format('MMMM DD, YYYY'), 70, 72);
+    doc.text(transaction.id, 70, 60);
+    doc.text(moment(transaction.date).format('MMMM DD, YYYY HH:mm'), 70, 66);
+    doc.text(transaction.type, 70, 72);
     doc.text(transaction.status, 70, 78);
     
-    // Bill To Section
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text('Bill To:', 140, 60);
-    doc.setTextColor(0, 0, 0);
-    doc.setFont(undefined, 'normal');
-    doc.text('Bmtax', 140, 66);
-    doc.text('bmtax@example.com', 140, 72);
+    // Bill To Section (if create_by exists)
+    if (transaction.create_by) {
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text('Created By:', 140, 60);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont(undefined, 'normal');
+      doc.text(transaction.create_by.username || 'N/A', 140, 66);
+      doc.text(transaction.create_by.email || 'N/A', 140, 72);
+      doc.text(transaction.create_by.mobile || 'N/A', 140, 78);
+    }
     
     // Line
     doc.setDrawColor(200, 200, 200);
@@ -220,14 +234,14 @@ const Transactions = () => {
       [
         'Description',
         'Type',
-        'Payment Method',
-        'Amount'
+        'Amount',
+        'Remark'
       ],
       [
         transaction.description,
         transaction.type,
-        transaction.paymentMethod,
-        `$${transaction.amount.toFixed(2)}`
+        `$${transaction.amount.toFixed(2)}`,
+        transaction.remark || 'N/A'
       ]
     ];
     
@@ -246,10 +260,10 @@ const Transactions = () => {
         cellPadding: 5
       },
       columnStyles: {
-        0: { cellWidth: 80 },
+        0: { cellWidth: 60 },
         1: { cellWidth: 30 },
-        2: { cellWidth: 40 },
-        3: { cellWidth: 30, halign: 'right' }
+        2: { cellWidth: 40, halign: 'right' },
+        3: { cellWidth: 60 }
       }
     });
     
@@ -265,10 +279,10 @@ const Transactions = () => {
     doc.setFont(undefined, 'normal');
     doc.setTextColor(150, 150, 150);
     doc.text('Thank you for your business!', 20, 280);
-    doc.text('This is a computer-generated invoice.', 20, 285);
+    doc.text('This is a computer-generated receipt.', 20, 285);
     
     // Save the PDF
-    doc.save(`Invoice-${transaction.invoiceNumber}.pdf`);
+    doc.save(`Transaction-${transaction.id}.pdf`);
   };
 
   const handleSort = (field) => {
@@ -293,6 +307,12 @@ const Transactions = () => {
     }
   };
 
+  const getTransactionTypeDisplay = (transactionType) => {
+    return transactionType.split(' ').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  };
+
   const getTypeColor = (type) => {
     return type === 'Credit' 
       ? 'text-green-600 font-semibold' 
@@ -302,6 +322,21 @@ const Transactions = () => {
   const totalAmount = filteredTransactions.reduce((sum, t) => {
     return sum + (t.type === 'Credit' ? t.amount : -t.amount);
   }, 0);
+
+  // Refresh transactions
+  const handleRefresh = () => {
+    if (tokens?.token && tokens?.username) {
+      setLastId(0);
+      fetchTransactions(true);
+    }
+  };
+
+  // Load more transactions
+  const loadMoreTransactions = () => {
+    if (hasMore && !loading && tokens?.token && tokens?.username) {
+      fetchTransactions(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -323,17 +358,33 @@ const Transactions = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
           {/* Header Section */}
           <div className="mb-6">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Transaction History</h1>
-            <p className="text-gray-600">View and download invoices for all your transactions</p>
+            <div className="flex justify-between items-center mb-2">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Transaction History</h1>
+              <button
+                onClick={handleRefresh}
+                disabled={loading}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <FiRefreshCw className={loading ? 'animate-spin' : ''} size={16} />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
+            </div>
+            <p className="text-gray-600">View and download receipts for all your transactions</p>
+            {error && (
+              <div className="mt-2 p-3 bg-red-100 border border-red-300 text-red-700 rounded-lg">
+                {error}
+              </div>
+            )}
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          {!loading && !error && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-white rounded-xl shadow p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Total Transactions</p>
-                  <p className="text-2xl font-bold text-gray-900">{filteredTransactions.length}</p>
+                  <p className="text-2xl font-bold text-gray-900">{totalCount || filteredTransactions.length}</p>
                 </div>
                 <div className="bg-indigo-100 rounded-lg p-3">
                   <FiFileText className="text-indigo-600" size={24} />
@@ -369,9 +420,11 @@ const Transactions = () => {
               </div>
             </div>
           </div>
+          )}
 
           {/* Search and Filter Section */}
-          <div className="bg-white rounded-xl shadow p-4 md:p-6 mb-6">
+          {!loading && !error && (
+            <div className="bg-white rounded-xl shadow p-4 md:p-6 mb-6">
             <div className="flex flex-col md:flex-row gap-4">
               {/* Search */}
               <div className="flex-1 relative">
@@ -449,10 +502,41 @@ const Transactions = () => {
                 </div>
               </div>
             )}
-          </div>
+            </div>
+          )}
+
+          {/* Loading State */}
+          {loading && (
+            <div className="bg-white rounded-xl shadow p-8">
+              <div className="flex items-center justify-center">
+                <FiRefreshCw className="animate-spin mr-2" size={20} />
+                <span>Loading transactions...</span>
+              </div>
+            </div>
+          )}
+
+          {/* Error State */}
+          {error && !loading && (
+            <div className="bg-white rounded-xl shadow p-8">
+              <div className="text-center">
+                <div className="text-red-500 mb-4">
+                  <FiFileText size={48} className="mx-auto" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Unable to Load Transactions</h3>
+                <p className="text-gray-600 mb-4">{error}</p>
+                <button
+                  onClick={handleRefresh}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                  Try Again
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Transactions Table */}
-          <div className="bg-white rounded-xl shadow overflow-hidden">
+          {!loading && !error && (
+            <div className="bg-white rounded-xl shadow overflow-hidden">
             {/* Desktop Table */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
@@ -489,7 +573,7 @@ const Transactions = () => {
                       Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Invoice
+                      Receipt
                     </th>
                   </tr>
                 </thead>
@@ -516,8 +600,13 @@ const Transactions = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{transaction.description}</div>
-                          <div className="text-xs text-gray-500">{transaction.paymentMethod}</div>
+                          <div className="text-sm text-gray-900">{getTransactionTypeDisplay(transaction.description)}</div>
+                          {transaction.remark && (
+                            <div className="text-xs text-gray-500">{transaction.remark}</div>
+                          )}
+                          {transaction.create_by && (
+                            <div className="text-xs text-blue-600">By: {transaction.create_by.username}</div>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={getTypeColor(transaction.type)}>
@@ -540,7 +629,7 @@ const Transactions = () => {
                             className="flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
                           >
                             <FiDownload size={16} />
-                            <span>Download</span>
+                            <span>Receipt</span>
                           </button>
                         </td>
                       </tr>
@@ -573,31 +662,50 @@ const Transactions = () => {
                         {transaction.type === 'Credit' ? '+' : '-'}${transaction.amount.toFixed(2)}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-700 mb-2">{transaction.description}</p>
+                    <p className="text-sm text-gray-700 mb-2">{getTransactionTypeDisplay(transaction.description)}</p>
+                    {transaction.remark && (
+                      <p className="text-xs text-gray-500 mb-2">{transaction.remark}</p>
+                    )}
                     <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-3">
                       <span>{moment(transaction.date).format('MMM DD, YYYY hh:mm A')}</span>
                       <span>•</span>
-                      <span>{transaction.paymentMethod}</span>
-                      <span>•</span>
                       <span className={getTypeColor(transaction.type)}>{transaction.type}</span>
+                      {transaction.create_by && (
+                        <>
+                          <span>•</span>
+                          <span>By: {transaction.create_by.username}</span>
+                        </>
+                      )}
                     </div>
                     <button
                       onClick={() => generatePDF(transaction)}
                       className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
                     >
                       <FiDownload size={16} />
-                      <span>Download Invoice</span>
+                      <span>Download Receipt</span>
                     </button>
                   </div>
                 ))
               )}
             </div>
-          </div>
+            </div>
+          )}
 
-          {/* Pagination Info */}
-          {filteredTransactions.length > 0 && (
-            <div className="mt-4 text-sm text-gray-600 text-center">
-              Showing {filteredTransactions.length} of {transactions.length} transactions
+          {/* Pagination Info and Load More */}
+          {!loading && !error && filteredTransactions.length > 0 && (
+            <div className="mt-4 text-center">
+              <div className="text-sm text-gray-600 mb-4">
+                Showing {filteredTransactions.length} of {totalCount || transactions.length} transactions
+              </div>
+              {hasMore && (
+                <button
+                  onClick={loadMoreTransactions}
+                  disabled={loading}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {loading ? 'Loading...' : 'Load More'}
+                </button>
+              )}
             </div>
           )}
         </div>

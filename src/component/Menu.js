@@ -715,7 +715,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
             <FiCreditCard className="mr-1.5" size={16} />
             <span className="mr-2">₹{Number(walletBalance).toFixed(2)}</span>
             <button
-              // onClick={handleRefill} // your refill handler
+              onClick={() => navigate('/wallet-recharge')}
               className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
               title="Add Money"
             >
