@@ -21,7 +21,8 @@ import { MdQrCodeScanner } from 'react-icons/md';
 import { Header, Sidebar } from '../component/Menu';
 import toast from 'react-hot-toast';
 import { fetchProjectInfo } from '../store/projectSlice';
-import { createPaymentOrder, verifyPayment, validatePromoCode } from '../api/auth';
+import { createPaymentOrder, validatePromoCode } from '../api/auth';
+import { SiGooglepay, SiPhonepe, SiPaytm } from 'react-icons/si';
 
 const WalletRecharge = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -34,10 +35,26 @@ const WalletRecharge = () => {
   const [promoApplied, setPromoApplied] = useState(false);
   const [discount, setDiscount] = useState(0);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [showUpiApps, setShowUpiApps] = useState(false);
+  const [qrIntent, setQrIntent] = useState(null);
   
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const walletBalance = useSelector((state) => state.project.walletBalance);
+
+  // Get project_id from localStorage
+  const getProjectId = () => {
+    try {
+      const userData = localStorage.getItem('userData');
+      if (userData) {
+        const parsed = JSON.parse(userData);
+        return parsed.selected_project_id || null;
+      }
+    } catch (error) {
+      console.error('Error getting project_id:', error);
+    }
+    return null;
+  };
 
   // Track window resize
   useEffect(() => {
@@ -178,7 +195,7 @@ const WalletRecharge = () => {
     setDiscount(0);
   };
 
-  // Initialize Razorpay payment
+  // Initialize payment
   const initializePayment = async () => {
     const amount = getActiveAmount();
     
@@ -192,116 +209,99 @@ const WalletRecharge = () => {
       return;
     }
 
+    const project_id = getProjectId();
+    if (!project_id) {
+      toast.error('Please select a project first');
+      return;
+    }
+
     setProcessing(true);
 
     try {
+      // Get current URL for redirect
+      const redirect_url = 'https://wichat-sigma.vercel.app' + '/payment-status';
+
       // Create payment order via API
-      const orderResponse = await createPaymentOrder({
+      const response = await createPaymentOrder({
+        project_id,
         amount: getPayableAmount(),
-        currency: 'INR',
-        payment_method: selectedPaymentMethod
+        redirect_url
       });
 
-      if (!orderResponse.success || !orderResponse.data) {
-        throw new Error('Failed to create payment order');
+      if (response.error) {
+        throw new Error(response.msg || 'Failed to create payment order');
       }
 
-      const order = orderResponse.data;
+      // Store payment details in sessionStorage for verification later
+      sessionStorage.setItem('pending_payment', JSON.stringify({
+        payment_id: response.payment_id,
+        order_id: response.order_id,
+        amount: getActiveAmount(),
+        bonus: getBonus(),
+        discount: promoApplied ? discount : 0
+      }));
 
-      // Razorpay integration
-      const options = {
-        key: order.razorpay_key || process.env.REACT_APP_RAZORPAY_KEY || 'rzp_test_XXXXXXXXXXXXXXX',
-        amount: getPayableAmount() * 100, // Amount in paise
-        currency: 'INR',
-        name: 'WICHAT',
-        description: 'Wallet Recharge',
-        image: '/logo192.png',
-        order_id: order.order_id || order.id, // Use the order_id from backend
-        handler: function (response) {
-          handlePaymentSuccess(response);
-        },
-        prefill: {
-          name: 'User Name',
-          email: 'user@example.com',
-          contact: '9999999999'
-        },
-        notes: {
-          amount: amount,
-          bonus: getBonus(),
-          discount: promoApplied ? discount : 0
-        },
-        theme: {
-          color: '#4F46E5'
-        },
-        method: {
-          upi: selectedPaymentMethod === 'upi',
-          card: selectedPaymentMethod === 'card',
-          netbanking: selectedPaymentMethod === 'netbanking',
-          wallet: selectedPaymentMethod === 'wallet'
-        }
-      };
-
-      // Load Razorpay script dynamically
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.async = true;
-      script.onload = () => {
-        const razorpay = new window.Razorpay(options);
-        razorpay.on('payment.failed', function (response) {
-          handlePaymentFailure(response.error);
-        });
-        razorpay.open();
+      // Handle UPI payment method - show UPI apps
+      if (selectedPaymentMethod === 'upi' && response.qrIntent) {
+        setQrIntent(response.qrIntent);
+        setShowUpiApps(true);
         setProcessing(false);
-      };
-      script.onerror = () => {
-        toast.error('Failed to load payment gateway');
-        setProcessing(false);
-      };
-      document.body.appendChild(script);
+      } else {
+        // For other payment methods, redirect to payment URL
+        window.location.href = response.paymentUrl;
+      }
 
     } catch (error) {
       console.error('Payment initialization error:', error);
-      toast.error('Failed to initialize payment');
+      toast.error(error.message || 'Failed to initialize payment');
       setProcessing(false);
     }
   };
 
-  const handlePaymentSuccess = async (response) => {
-    try {
-      // Verify payment with backend
-      const verifyResponse = await verifyPayment({
-        razorpay_payment_id: response.razorpay_payment_id,
-        razorpay_order_id: response.razorpay_order_id,
-        razorpay_signature: response.razorpay_signature,
-        amount: getActiveAmount(),
-        bonus: getBonus(),
-        discount: promoApplied ? discount : 0
-      });
+  // Open UPI app
+  const openUpiApp = (appName) => {
+    if (!qrIntent) return;
+    
+    const upiLink = qrIntent[appName] || qrIntent.defaultUpi;
+    
+    // Try to open the UPI app
+    window.location.href = upiLink;
+    
+    // After a delay, show a message
+    setTimeout(() => {
+      toast.success('Opening payment app...');
+    }, 500);
+  };
 
-      if (!verifyResponse.success) {
-        throw new Error('Payment verification failed');
-      }
-
+  // Check for payment callback on page load
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get('status');
+    
+    if (paymentStatus === 'success') {
       toast.success('Payment successful! Wallet updated.');
+      
+      // Clear pending payment
+      sessionStorage.removeItem('pending_payment');
       
       // Refresh wallet balance
       dispatch(fetchProjectInfo());
       
-      // Redirect to transactions page after 2 seconds
+      // Clean URL and redirect after delay
       setTimeout(() => {
+        window.history.replaceState({}, '', '/wallet-recharge');
         navigate('/transactions');
       }, 2000);
-    } catch (error) {
-      console.error('Payment verification error:', error);
-      toast.error('Payment verification failed. Please contact support.');
+    } else if (paymentStatus === 'failed') {
+      toast.error('Payment failed. Please try again.');
+      
+      // Clear pending payment
+      sessionStorage.removeItem('pending_payment');
+      
+      // Clean URL
+      window.history.replaceState({}, '', '/wallet-recharge');
     }
-  };
-
-  const handlePaymentFailure = (error) => {
-    console.error('Payment failed:', error);
-    toast.error(error.description || 'Payment failed. Please try again.');
-    setProcessing(false);
-  };
+  }, [dispatch, navigate]);
 
   return (
     <div className="min-h-screen bg-gray-50 overflow-x-hidden">
@@ -547,6 +547,126 @@ const WalletRecharge = () => {
           </div>
         </div>
       </div>
+
+      {/* UPI Apps Modal */}
+      <AnimatePresence>
+        {showUpiApps && qrIntent && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowUpiApps(false)}
+            >
+              <motion.div
+                className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Select UPI App</h2>
+                  <button
+                    onClick={() => setShowUpiApps(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <FiX size={24} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  {/* Google Pay */}
+                  <motion.button
+                    onClick={() => openUpiApp('gpay')}
+                    className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
+                      <SiGooglepay className="text-blue-600" size={32} />
+                    </div>
+                    <span className="font-semibold text-gray-900">Google Pay</span>
+                  </motion.button>
+
+                  {/* PhonePe */}
+                  <motion.button
+                    onClick={() => openUpiApp('phonepe')}
+                    className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
+                      <SiPhonepe className="text-purple-600" size={32} />
+                    </div>
+                    <span className="font-semibold text-gray-900">PhonePe</span>
+                  </motion.button>
+
+                  {/* Paytm */}
+                  <motion.button
+                    onClick={() => openUpiApp('paytm')}
+                    className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
+                      <SiPaytm className="text-blue-500" size={32} />
+                    </div>
+                    <span className="font-semibold text-gray-900">Paytm</span>
+                  </motion.button>
+
+                  {/* BHIM */}
+                  <motion.button
+                    onClick={() => openUpiApp('bhim')}
+                    className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
+                      <MdQrCodeScanner className="text-orange-600" size={32} />
+                    </div>
+                    <span className="font-semibold text-gray-900">BHIM UPI</span>
+                  </motion.button>
+
+                  {/* Amazon Pay */}
+                  <motion.button
+                    onClick={() => openUpiApp('amazonpay')}
+                    className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
+                      <BsWallet2 className="text-orange-500" size={28} />
+                    </div>
+                    <span className="font-semibold text-gray-900">Amazon Pay</span>
+                  </motion.button>
+
+                  {/* Other UPI */}
+                  <motion.button
+                    onClick={() => openUpiApp('defaultUpi')}
+                    className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
+                      <FiSmartphone className="text-indigo-600" size={28} />
+                    </div>
+                    <span className="font-semibold text-gray-900">Other UPI</span>
+                  </motion.button>
+                </div>
+
+                <div className="bg-blue-50 rounded-xl p-4">
+                  <p className="text-sm text-blue-900 text-center">
+                    <FiShield className="inline mr-2" />
+                    Select your preferred UPI app to complete the payment
+                  </p>
+                </div>
+              </motion.div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

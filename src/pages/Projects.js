@@ -310,8 +310,30 @@ const Projects = () => {
             </div>
           </div>
 
+                    {/* Stats Summary */}
+          {filteredProjects.length > 0 && (
+            <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white rounded-xl shadow p-4">
+                <p className="text-sm text-gray-600 mb-1">Total Projects</p>
+                <p className="text-2xl font-bold text-gray-900">{filteredProjects.length}</p>
+              </div>
+              <div className="bg-white rounded-xl shadow p-4">
+                <p className="text-sm text-gray-600 mb-1">Active Projects</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {filteredProjects.filter(p => p.status === 'Active').length}
+                </p>
+              </div>
+              <div className="bg-white rounded-xl shadow p-4">
+                <p className="text-sm text-gray-600 mb-1">Total Members</p>
+                <p className="text-2xl font-bold text-indigo-600">
+                  {filteredProjects.reduce((sum, p) => sum + p.members, 0)}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Project selection for logged-in user (from API) */}
-          {userProjects.length > 0 && (
+          {/* {userProjects.length > 0 && (
             <div className="mb-6 bg-white rounded-xl shadow p-4 border border-indigo-100">
               <h2 className="text-lg font-semibold text-gray-900 mb-3">
                 Select Active Project
@@ -363,7 +385,7 @@ const Projects = () => {
                 </div>
               )}
             </div>
-          )}
+          )} */}
 
           {/* Projects Grid */}
           {filteredProjects.length === 0 ? (
@@ -464,27 +486,7 @@ const Projects = () => {
             </div>
           )}
 
-          {/* Stats Summary */}
-          {filteredProjects.length > 0 && (
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white rounded-xl shadow p-4">
-                <p className="text-sm text-gray-600 mb-1">Total Projects</p>
-                <p className="text-2xl font-bold text-gray-900">{filteredProjects.length}</p>
-              </div>
-              <div className="bg-white rounded-xl shadow p-4">
-                <p className="text-sm text-gray-600 mb-1">Active Projects</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {filteredProjects.filter(p => p.status === 'Active').length}
-                </p>
-              </div>
-              <div className="bg-white rounded-xl shadow p-4">
-                <p className="text-sm text-gray-600 mb-1">Total Members</p>
-                <p className="text-2xl font-bold text-indigo-600">
-                  {filteredProjects.reduce((sum, p) => sum + p.members, 0)}
-                </p>
-              </div>
-            </div>
-          )}
+
           </>
           )}
         </div>

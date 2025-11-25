@@ -44,24 +44,35 @@ export const fetchUserProfile = async () => {
 };
 
 // Create payment order
-export const createPaymentOrder = async ({ amount, currency = 'INR', payment_method }) => {
+export const createPaymentOrder = async ({ project_id, amount, redirect_url }) => {
   const token = localStorage.getItem('token');
   
   const payload = {
+    project_id,
     amount,
-    currency,
-    payment_method
+    redirect_url
   };
+
+  console.log(payload);
+  
+
+  // Encrypt the payload
+  const { data, key } = Encrypt(payload);
+
+  const data_pass = JSON.stringify({
+    data,
+    key
+  });
 
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/payment/create-order',
+    url: 'https://api.w1chat.com/project/wallet-topup',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
     },
-    data: JSON.stringify(payload)
+    data: data_pass
   };
 
   const response = await axios.request(config);
@@ -88,6 +99,14 @@ export const verifyPayment = async ({
     discount
   };
 
+  // Encrypt the payload
+  const { data, key } = Encrypt(payload);
+
+  const data_pass = JSON.stringify({
+    data,
+    key
+  });
+
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
@@ -96,7 +115,7 @@ export const verifyPayment = async ({
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
     },
-    data: JSON.stringify(payload)
+    data: data_pass
   };
 
   const response = await axios.request(config);
