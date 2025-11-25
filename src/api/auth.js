@@ -45,15 +45,22 @@ export const fetchUserProfile = async () => {
 
 // Create payment order
 export const createPaymentOrder = async ({ project_id, amount, redirect_url }) => {
-  const token = localStorage.getItem('token');
+  // Load auth tokens from localStorage to match existing API requirements
+  const stored =
+    typeof window !== 'undefined' ? localStorage.getItem('userData') : null;
+  const parsed = stored ? JSON.parse(stored) : null;
+  const token = parsed?.token;
+  const username = parsed?.username;
+
+  if (!token || !username) {
+    throw new Error('Session expired');
+  }
   
   const payload = {
     project_id,
     amount,
     redirect_url
   };
-
-  console.log(payload);
   
 
   // Encrypt the payload
@@ -70,7 +77,8 @@ export const createPaymentOrder = async ({ project_id, amount, redirect_url }) =
     url: 'https://api.w1chat.com/project/wallet-topup',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
+      'token': token,
+      'username': username
     },
     data: data_pass
   };

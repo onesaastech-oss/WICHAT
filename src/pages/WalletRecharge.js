@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
@@ -7,14 +7,14 @@ import {
   FiDollarSign,
   FiCheck,
   FiX,
-  FiArrowLeft,
   FiShield,
   FiLock,
   FiSmartphone,
   FiChevronRight,
   FiZap,
   FiGift,
-  FiRefreshCw
+  FiRefreshCw,
+  FiCopy
 } from 'react-icons/fi';
 import { BsBank2, BsWallet2 } from 'react-icons/bs';
 import { MdQrCodeScanner } from 'react-icons/md';
@@ -22,7 +22,8 @@ import { Header, Sidebar } from '../component/Menu';
 import toast from 'react-hot-toast';
 import { fetchProjectInfo } from '../store/projectSlice';
 import { createPaymentOrder, validatePromoCode } from '../api/auth';
-import { SiGooglepay, SiPhonepe, SiPaytm } from 'react-icons/si';
+import { SiGooglepay, SiPhonepe, SiPaytm, SiAmazonpay } from 'react-icons/si';
+import QRCode from 'react-qr-code';
 
 const WalletRecharge = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -36,11 +37,18 @@ const WalletRecharge = () => {
   const [discount, setDiscount] = useState(0);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [showUpiApps, setShowUpiApps] = useState(false);
-  const [qrIntent, setQrIntent] = useState(null);
+  const [showQrPopup, setShowQrPopup] = useState(false);
+  const [paymentDetails, setPaymentDetails] = useState(null);
   
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const walletBalance = useSelector((state) => state.project.walletBalance);
+  const projectInfo = useSelector((state) => state.project.info);
+  const projectCharges =
+    projectInfo?.project?.charges ||
+    projectInfo?.charges ||
+    projectInfo?.data?.charges ||
+    null;
 
   // Get project_id from localStorage
   const getProjectId = () => {
@@ -66,6 +74,18 @@ const WalletRecharge = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  useEffect(() => {
+    setPaymentDetails(null);
+    setShowUpiApps(false);
+    setShowQrPopup(false);
+  }, [selectedAmount, customAmount, selectedPaymentMethod]);
+
+  useEffect(() => {
+    if (!projectInfo) {
+      dispatch(fetchProjectInfo());
+    }
+  }, [dispatch, projectInfo]);
+
   // Predefined amount options
   const amountOptions = [
     { value: 100, label: '₹100', bonus: 0 },
@@ -80,9 +100,9 @@ const WalletRecharge = () => {
   const paymentMethods = [
     {
       id: 'upi',
-      name: 'UPI',
+      name: 'UPI & QR',
       icon: <MdQrCodeScanner className="text-indigo-600" size={28} />,
-      description: 'PhonePe, Google Pay, Paytm',
+      description: 'Pay via UPI apps or QR code',
       recommended: true
     },
     {
@@ -108,6 +128,44 @@ const WalletRecharge = () => {
     }
   ];
 
+  const upiAppOptions = [
+    {
+      key: 'gpay',
+      label: 'Google Pay',
+      icon: <SiGooglepay className="text-blue-600" size={28} />
+    },
+    {
+      key: 'phonepe',
+      label: 'PhonePe',
+      icon: <SiPhonepe className="text-purple-600" size={28} />
+    },
+    {
+      key: 'paytm',
+      label: 'Paytm',
+      icon: <SiPaytm className="text-blue-500" size={28} />
+    },
+    {
+      key: 'bhim',
+      label: 'BHIM UPI',
+      icon: <MdQrCodeScanner className="text-orange-500" size={28} />
+    },
+    {
+      key: 'amazonpay',
+      label: 'Amazon Pay',
+      icon: <SiAmazonpay className="text-yellow-600" size={28} />
+    },
+    {
+      key: 'navi',
+      label: 'Navi',
+      icon: <BsWallet2 className="text-indigo-600" size={26} />
+    },
+    {
+      key: 'defaultUpi',
+      label: 'Other UPI Apps',
+      icon: <FiSmartphone className="text-indigo-600" size={26} />
+    }
+  ];
+
   const getActiveAmount = () => {
     if (customAmount && !isNaN(parseFloat(customAmount))) {
       return parseFloat(customAmount);
@@ -115,28 +173,13 @@ const WalletRecharge = () => {
     return selectedAmount;
   };
 
-  const getBonus = () => {
-    const amount = getActiveAmount();
-    if (!amount) return 0;
-    
-    const option = amountOptions.find(opt => opt.value === amount);
-    if (option) return option.bonus;
-    
-    // Calculate bonus for custom amounts
-    if (amount >= 10000) return Math.floor(amount * 0.15);
-    if (amount >= 5000) return Math.floor(amount * 0.12);
-    if (amount >= 2000) return Math.floor(amount * 0.10);
-    if (amount >= 1000) return Math.floor(amount * 0.075);
-    if (amount >= 500) return Math.floor(amount * 0.05);
-    return 0;
-  };
+
 
   const getTotalAmount = () => {
     const amount = getActiveAmount();
     if (!amount) return 0;
-    const bonus = getBonus();
     const discountAmount = promoApplied ? (amount * discount / 100) : 0;
-    return amount + bonus - discountAmount;
+    return amount  - discountAmount;
   };
 
   const getPayableAmount = () => {
@@ -145,6 +188,40 @@ const WalletRecharge = () => {
     const discountAmount = promoApplied ? (amount * discount / 100) : 0;
     return amount - discountAmount;
   };
+
+  const activeAmount = getActiveAmount();
+  const templateStats = useMemo(() => {
+    if (!projectCharges || !activeAmount) return [];
+
+    const templateOrder = ['marketing', 'utility', 'authentication'];
+    const formatted = [];
+
+    templateOrder.forEach((key) => {
+      if (projectCharges?.[key] != null) {
+        const charge = Number(projectCharges[key]);
+        formatted.push({
+          key,
+          label: key.charAt(0).toUpperCase() + key.slice(1),
+          charge,
+          count: charge > 0 ? Math.floor(activeAmount / charge) : 0
+        });
+      }
+    });
+
+    Object.keys(projectCharges).forEach((key) => {
+      if (!templateOrder.includes(key)) {
+        const charge = Number(projectCharges[key]);
+        formatted.push({
+          key,
+          label: key.charAt(0).toUpperCase() + key.slice(1),
+          charge,
+          count: charge > 0 ? Math.floor(activeAmount / charge) : 0
+        });
+      }
+    });
+
+    return formatted;
+  }, [projectCharges, activeAmount]);
 
   const handleAmountSelect = (value) => {
     setSelectedAmount(value);
@@ -156,6 +233,19 @@ const WalletRecharge = () => {
     if (value === '' || /^\d*\.?\d*$/.test(value)) {
       setCustomAmount(value);
       setSelectedAmount(null);
+    }
+  };
+
+  const handlePaymentMethodSelect = (methodId) => {
+    setSelectedPaymentMethod(methodId);
+    if (methodId !== 'upi') {
+      setShowUpiApps(false);
+      setShowQrPopup(false);
+      return;
+    }
+
+    if (paymentDetails?.qrIntent) {
+      setShowUpiApps(true);
     }
   };
 
@@ -199,8 +289,8 @@ const WalletRecharge = () => {
   const initializePayment = async () => {
     const amount = getActiveAmount();
     
-    if (!amount || amount < 10) {
-      toast.error('Please enter a valid amount (minimum ₹10)');
+    if (!amount || amount < 1) {
+      toast.error('Please enter a valid amount (minimum ₹1)');
       return;
     }
 
@@ -237,17 +327,26 @@ const WalletRecharge = () => {
         payment_id: response.payment_id,
         order_id: response.order_id,
         amount: getActiveAmount(),
-        bonus: getBonus(),
         discount: promoApplied ? discount : 0
       }));
 
-      // Handle UPI payment method - show UPI apps
+      // Handle UPI payment method - show payment sheet with QR + UPI apps
       if (selectedPaymentMethod === 'upi' && response.qrIntent) {
-        setQrIntent(response.qrIntent);
-        setShowUpiApps(true);
+        setPaymentDetails({
+          paymentUrl: response.paymentUrl,
+          qrIntent: response.qrIntent,
+          paymentId: response.payment_id,
+          orderId: response.order_id,
+          amount: getActiveAmount(),
+          payable: getPayableAmount()
+        });
+        setShowQrPopup(false);
+        if (windowWidth < 768) {
+          setShowUpiApps(true);
+        }
         setProcessing(false);
       } else {
-        // For other payment methods, redirect to payment URL
+        setProcessing(false);
         window.location.href = response.paymentUrl;
       }
 
@@ -260,9 +359,9 @@ const WalletRecharge = () => {
 
   // Open UPI app
   const openUpiApp = (appName) => {
-    if (!qrIntent) return;
+    if (!paymentDetails?.qrIntent) return;
     
-    const upiLink = qrIntent[appName] || qrIntent.defaultUpi;
+    const upiLink = paymentDetails.qrIntent[appName] || paymentDetails.qrIntent.defaultUpi;
     
     // Try to open the UPI app
     window.location.href = upiLink;
@@ -271,6 +370,41 @@ const WalletRecharge = () => {
     setTimeout(() => {
       toast.success('Opening payment app...');
     }, 500);
+  };
+
+  const showUpiModal = () => {
+    if (!paymentDetails?.qrIntent) {
+      toast.error('Generate the payment request first');
+      return;
+    }
+    setShowQrPopup(false);
+    setShowUpiApps(true);
+  };
+
+  const showQrModal = () => {
+    if (!paymentDetails?.qrIntent) {
+      toast.error('Generate the payment request first');
+      return;
+    }
+    setShowUpiApps(false);
+    setShowQrPopup(true);
+  };
+
+  const handleCloseQrModal = () => {
+    setShowQrPopup(false);
+    if (paymentDetails?.qrIntent) {
+      setShowUpiApps(true);
+    }
+  };
+
+  const handleCopy = async (text, label) => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied`);
+    } catch (error) {
+      toast.error('Unable to copy');
+    }
   };
 
   // Check for payment callback on page load
@@ -323,7 +457,7 @@ const WalletRecharge = () => {
           isMinimized ? 'md:ml-[72px]' : 'md:ml-[280px]'
         }`}
         style={{
-          width: window.innerWidth >= 768 ? (isMinimized ? 'calc(100% - 72px)' : 'calc(100% - 280px)') : '100%'
+          width: windowWidth >= 768 ? (isMinimized ? 'calc(100% - 72px)' : 'calc(100% - 280px)') : '100%'
         }}
       >
         <div className="min-h-[calc(100vh-64px)] bg-gradient-to-br from-indigo-50 via-white to-purple-50 py-4 sm:py-6 lg:py-8 px-3 sm:px-4 lg:px-8 w-full">
@@ -378,7 +512,7 @@ const WalletRecharge = () => {
                             Popular
                           </div>
                         )}
-                        <div className="text-xl sm:text-2xl font-bold text-gray-900">{option.label}</div>
+                        <div className="text-xl sm:text-xl font-bold text-gray-900">{option.label}</div>
                       </motion.button>
                     ))}
                   </div>
@@ -394,11 +528,49 @@ const WalletRecharge = () => {
                         type="text"
                         value={customAmount}
                         onChange={handleCustomAmountChange}
-                        placeholder="Enter amount (min ₹10)"
+                        placeholder="Enter amount "
                         className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-3 border-2 border-gray-200 rounded-lg sm:rounded-xl focus:border-indigo-600 focus:ring-0 text-base sm:text-lg"
                       />
                     </div>
                   </div>
+
+                  {projectCharges && (
+                    <div className="mt-4 sm:mt-6 border border-indigo-100 bg-indigo-50/40 rounded-xl p-3 sm:p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Template preview</p>
+                          <p className="text-xs text-gray-500">Based on live project charges</p>
+                        </div>
+                        <span className="text-xs font-medium text-indigo-600">
+                          ₹{activeAmount ? activeAmount.toFixed(2) : '0.00'}
+                        </span>
+                      </div>
+
+                      {activeAmount ? (
+                        templateStats.length ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                            {templateStats.map((item) => (
+                              <div key={item.key} className="rounded-lg bg-white border border-indigo-100 px-3 py-2.5">
+                                <p className="text-[11px] uppercase tracking-wide text-gray-500 font-semibold">
+                                  {item.label}
+                                </p>
+                                <p className="text-sm font-bold text-gray-900">{item.count}</p>
+                                <p className="text-[11px] text-gray-500">₹{item.charge}/template</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-500">
+                            We could not find per-template charges for this project.
+                          </p>
+                        )
+                      ) : (
+                        <p className="text-xs text-gray-500">
+                          Enter an amount to estimate how many templates you can send.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </motion.div>
 
                 {/* Payment Methods */}
@@ -414,39 +586,103 @@ const WalletRecharge = () => {
                   </h2>
                   <div className="space-y-2 sm:space-y-3">
                     {paymentMethods.map((method) => (
-                      <motion.button
-                        key={method.id}
-                        onClick={() => setSelectedPaymentMethod(method.id)}
-                        className={`w-full flex items-center justify-between p-3 sm:p-4 rounded-lg sm:rounded-xl border-2 transition-all ${
-                          selectedPaymentMethod === method.id
-                            ? 'border-indigo-600 bg-indigo-50'
-                            : 'border-gray-200 hover:border-indigo-300 bg-white active:border-indigo-400'
-                        }`}
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.99 }}
-                      >
-                        <div className="flex items-center">
-                          <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 mr-3 sm:mr-4">
-                            {method.icon}
-                          </div>
-                          <div className="text-left">
-                            <div className="flex items-center flex-wrap gap-1 sm:gap-2">
-                              <span className="font-semibold text-sm sm:text-base text-gray-900">{method.name}</span>
-                              {method.recommended && (
-                                <span className="text-[10px] sm:text-xs bg-green-100 text-green-700 px-1.5 sm:px-2 py-0.5 rounded-full font-semibold">
-                                  Recommended
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-xs sm:text-sm text-gray-500">{method.description}</span>
-                          </div>
-                        </div>
-                        <FiChevronRight
-                          className={`text-lg sm:text-xl flex-shrink-0 ${
-                            selectedPaymentMethod === method.id ? 'text-indigo-600' : 'text-gray-400'
+                      <div key={method.id} className="space-y-3">
+                        <motion.button
+                          onClick={() => handlePaymentMethodSelect(method.id)}
+                          className={`w-full flex items-center justify-between p-3 sm:p-4 rounded-lg sm:rounded-xl border-2 transition-all ${
+                            selectedPaymentMethod === method.id
+                              ? 'border-indigo-600 bg-indigo-50'
+                              : 'border-gray-200 hover:border-indigo-300 bg-white active:border-indigo-400'
                           }`}
-                        />
-                      </motion.button>
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                        >
+                          <div className="flex items-center">
+                            <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 mr-3 sm:mr-4">
+                              {method.icon}
+                            </div>
+                            <div className="text-left">
+                              <div className="flex items-center flex-wrap gap-1 sm:gap-2">
+                                <span className="font-semibold text-sm sm:text-base text-gray-900">{method.name}</span>
+                                {method.recommended && (
+                                  <span className="text-[10px] sm:text-xs bg-green-100 text-green-700 px-1.5 sm:px-2 py-0.5 rounded-full font-semibold">
+                                    Recommended
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-xs sm:text-sm text-gray-500">{method.description}</span>
+                            </div>
+                          </div>
+                          <FiChevronRight
+                            className={`text-lg sm:text-xl flex-shrink-0 ${
+                              selectedPaymentMethod === method.id ? 'text-indigo-600' : 'text-gray-400'
+                            }`}
+                          />
+                        </motion.button>
+
+                        {method.id === 'upi' && selectedPaymentMethod === 'upi' && paymentDetails?.qrIntent && (
+                          <div className="border border-indigo-100 rounded-xl p-4 bg-indigo-50/40">
+                            <div className="flex items-center justify-between mb-4">
+                              {/* <div>
+                                <p className="text-sm text-gray-500">Order ID</p>
+                                <p className="text-sm font-semibold text-gray-900 break-all">{paymentDetails.orderId}</p>
+                              </div> */}
+                              {/* <button
+                                className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center"
+                              >
+                                Copy Link
+                              </button> */}
+                            </div>
+
+                            <div className="flex flex-col items-center gap-4">
+                              <div className="bg-white p-4 rounded-2xl shadow-inner">
+                                <QRCode
+                                  value={paymentDetails.qrIntent.defaultUpi || paymentDetails.paymentUrl}
+                                  size={180}
+                                  className="w-40 h-40"
+                                />
+                              </div>
+                              <p className="text-center text-sm text-gray-600">Scan this QR using any UPI app.</p>
+                              <button
+                                onClick={() => handleCopy(paymentDetails.qrIntent.defaultUpi, 'UPI intent')}
+                                className="text-xs flex items-center text-indigo-600 font-semibold"
+                              >
+                                <FiCopy className="mr-1" size={14} /> Copy UPI Intent
+                              </button>
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-2 gap-2">
+                              <button
+                                onClick={showQrModal}
+                                className="py-2 px-3 rounded-lg bg-white border border-gray-200 hover:border-indigo-300 text-sm font-semibold text-gray-700 transition-colors"
+                              >
+                                Show QR
+                              </button>
+                        {windowWidth < 1024 ? (
+                          <button
+                            onClick={showUpiModal}
+                            className="py-2 px-3 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors"
+                          >
+                            UPI Apps
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              if (paymentDetails?.paymentUrl) {
+                                window.location.href = paymentDetails.paymentUrl;
+                              } else {
+                                toast.error('Generate the payment request first');
+                              }
+                            }}
+                            className="py-2 px-3 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors"
+                          >
+                            Payment with UPI ID
+                          </button>
+                        )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </motion.div>
@@ -467,15 +703,7 @@ const WalletRecharge = () => {
                       <span>Recharge Amount</span>
                       <span className="font-semibold">₹{getActiveAmount() || 0}</span>
                     </div>
-                    {getBonus() > 0 && (
-                      <div className="flex justify-between text-green-600 text-sm sm:text-base">
-                        <span className="flex items-center">
-                          <FiGift className="mr-1" size={14} />
-                          Bonus
-                        </span>
-                        <span className="font-semibold">+₹{getBonus()}</span>
-                      </div>
-                    )}
+
                     {promoApplied && (
                       <div className="flex justify-between text-green-600 text-sm sm:text-base">
                         <span>Discount ({discount}%)</span>
@@ -550,7 +778,7 @@ const WalletRecharge = () => {
 
       {/* UPI Apps Modal */}
       <AnimatePresence>
-        {showUpiApps && qrIntent && (
+        {showUpiApps && paymentDetails?.qrIntent && (
           <>
             <motion.div
               className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
@@ -566,8 +794,11 @@ const WalletRecharge = () => {
                 exit={{ scale: 0.9, opacity: 0 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">Select UPI App</h2>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Select UPI App</h2>
+                    <p className="text-sm text-gray-500">Amount: ₹{paymentDetails.payable}</p>
+                  </div>
                   <button
                     onClick={() => setShowUpiApps(false)}
                     className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -577,94 +808,110 @@ const WalletRecharge = () => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-6">
-                  {/* Google Pay */}
                   <motion.button
-                    onClick={() => openUpiApp('gpay')}
+                    key="qr-option"
+                    onClick={() => {
+                      setShowUpiApps(false);
+                      showQrModal();
+                    }}
                     className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
                     <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
-                      <SiGooglepay className="text-blue-600" size={32} />
+                      <MdQrCodeScanner className="text-indigo-600" size={32} />
                     </div>
-                    <span className="font-semibold text-gray-900">Google Pay</span>
+                    <span className="font-semibold text-gray-900 text-center">Scan QR</span>
                   </motion.button>
 
-                  {/* PhonePe */}
-                  <motion.button
-                    onClick={() => openUpiApp('phonepe')}
-                    className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
-                      <SiPhonepe className="text-purple-600" size={32} />
-                    </div>
-                    <span className="font-semibold text-gray-900">PhonePe</span>
-                  </motion.button>
-
-                  {/* Paytm */}
-                  <motion.button
-                    onClick={() => openUpiApp('paytm')}
-                    className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
-                      <SiPaytm className="text-blue-500" size={32} />
-                    </div>
-                    <span className="font-semibold text-gray-900">Paytm</span>
-                  </motion.button>
-
-                  {/* BHIM */}
-                  <motion.button
-                    onClick={() => openUpiApp('bhim')}
-                    className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
-                      <MdQrCodeScanner className="text-orange-600" size={32} />
-                    </div>
-                    <span className="font-semibold text-gray-900">BHIM UPI</span>
-                  </motion.button>
-
-                  {/* Amazon Pay */}
-                  <motion.button
-                    onClick={() => openUpiApp('amazonpay')}
-                    className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
-                      <BsWallet2 className="text-orange-500" size={28} />
-                    </div>
-                    <span className="font-semibold text-gray-900">Amazon Pay</span>
-                  </motion.button>
-
-                  {/* Other UPI */}
-                  <motion.button
-                    onClick={() => openUpiApp('defaultUpi')}
-                    className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
-                      <FiSmartphone className="text-indigo-600" size={28} />
-                    </div>
-                    <span className="font-semibold text-gray-900">Other UPI</span>
-                  </motion.button>
+                  {upiAppOptions
+                    .filter((option) => paymentDetails.qrIntent[option.key])
+                    .map((option) => (
+                      <motion.button
+                        key={option.key}
+                        onClick={() => openUpiApp(option.key)}
+                        className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
+                          {option.icon}
+                        </div>
+                        <span className="font-semibold text-gray-900 text-center">{option.label}</span>
+                      </motion.button>
+                    ))}
                 </div>
 
-                <div className="bg-blue-50 rounded-xl p-4">
-                  <p className="text-sm text-blue-900 text-center">
+                <div className="bg-blue-50 rounded-xl p-4 text-center">
+                  <p className="text-sm text-blue-900">
                     <FiShield className="inline mr-2" />
-                    Select your preferred UPI app to complete the payment
+                    Select your preferred UPI app or scan the QR shown on screen to complete the payment
                   </p>
                 </div>
               </motion.div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* QR Modal */}
+      <AnimatePresence>
+        {showQrPopup && paymentDetails?.qrIntent && (
+          <motion.div
+            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={handleCloseQrModal}
+          >
+            <motion.div
+              className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Scan & Pay</h2>
+                  <p className="text-sm text-gray-500">Amount: ₹{paymentDetails.payable}</p>
+                </div>
+                <button
+                  onClick={handleCloseQrModal}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <FiX size={24} />
+                </button>
+              </div>
+
+              <div className="flex flex-col items-center gap-4">
+                <div className="bg-indigo-50 p-4 rounded-2xl shadow-inner">
+                  <QRCode
+                    value={paymentDetails.qrIntent.defaultUpi || paymentDetails.paymentUrl}
+                    size={200}
+                    className="w-48 h-48"
+                  />
+                </div>
+                <p className="text-sm text-gray-600 text-center">
+                  Scan using any UPI app to complete your payment.
+                </p>
+                <div className="flex flex-col w-full gap-2">
+                  <button
+                    onClick={() => handleCopy(paymentDetails.qrIntent.defaultUpi, 'UPI intent')}
+                    className="w-full py-2 px-3 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:border-indigo-300 transition-colors flex items-center justify-center"
+                  >
+                    <FiCopy className="mr-2" size={16} /> Copy UPI Intent
+                  </button>
+                  <button
+                    onClick={() => handleCopy(paymentDetails.paymentUrl, 'Payment link')}
+                    className="w-full py-2 px-3 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors flex items-center justify-center"
+                  >
+                    <FiCopy className="mr-2" size={16} /> Copy Payment Link
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
