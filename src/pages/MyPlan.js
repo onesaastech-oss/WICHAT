@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FiCheck, FiCreditCard, FiZap, FiGitBranch, FiCode, FiTrendingUp, FiMail, FiCpu, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import { Header, Sidebar } from '../component/Menu';
 
 function MyPlan() {
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [isMinimized, setIsMinimized] = useState(() => {
+        const saved = localStorage.getItem('sidebarMinimized');
+        return saved ? JSON.parse(saved) : false;
+    });
     const [addons, setAddons] = useState([]);
     const [purchasedAddons, setPurchasedAddons] = useState([]);
     const [selectedAddons, setSelectedAddons] = useState([]);
@@ -10,6 +16,23 @@ function MyPlan() {
     const [loading, setLoading] = useState(true);
 
     const paymentSectionRef = useRef(null);
+
+    // Persist sidebar minimized state
+    useEffect(() => {
+        localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
+    }, [isMinimized]);
+
+    // Lock body scroll when mobile sidebar is open
+    useEffect(() => {
+        if (mobileMenuOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'auto';
+        }
+        return () => {
+            document.body.style.overflow = 'auto';
+        };
+    }, [mobileMenuOpen]);
 
     const basePlan = {
         id: 1,
@@ -250,15 +273,27 @@ function MyPlan() {
 
     return (
         <div className="min-h-screen bg-gray-50">
-            {/* Header */}
-            <div className="bg-white border-b border-gray-200">
-                <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                    <h1 className="text-xl font-semibold text-gray-900">Subscription & Add-ons</h1>
-                </div>
-            </div>
+            <Header
+                mobileMenuOpen={mobileMenuOpen}
+                setMobileMenuOpen={setMobileMenuOpen}
+                isMinimized={isMinimized}
+                setIsMinimized={setIsMinimized}
+            />
+            <Sidebar
+                mobileMenuOpen={mobileMenuOpen}
+                setMobileMenuOpen={setMobileMenuOpen}
+                isMinimized={isMinimized}
+                setIsMinimized={setIsMinimized}
+            />
 
             {/* Main content */}
-            <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-32 sm:pb-8">
+            <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
+                <div className="max-w-5xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+                    {/* Page header */}
+                    <div className="mb-6">
+                        <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Subscription & Add-ons</h1>
+                        <p className="text-sm text-gray-600 mt-1">Manage your subscription plan and add-ons</p>
+                    </div>
                 {/* Billing cycle toggle */}
                 <div className="flex justify-center sm:justify-end mb-6">
                     <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1">
@@ -424,6 +459,7 @@ function MyPlan() {
                         </div>
                     </>
                 )}
+                </div>
             </div>
         </div>
     );
