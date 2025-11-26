@@ -87,7 +87,7 @@ const Transactions = () => {
       const data_pass = JSON.stringify({ data, key });
 
       const response = await axios.post(
-        'https://api.w1chat.com/project/transaction-history',
+        'https://api.w1chat.com/payment/transaction-history',
         data_pass,
         {
           headers: {

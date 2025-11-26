@@ -28,6 +28,7 @@ import AutoReply from './pages/Automation/AutoReply';
 import Flow from './pages/Automation/Flow';
 import MyProfile from './pages/MyProfile.js';
 import WalletRecharge from './pages/WalletRecharge.js';
+import PaymentStatus from './pages/PaymentStatus.js';
 import { useEffect } from 'react';
 import ProtectedRoute from './component/ProtectedRoute';
 const GOOGLE_CLIENT_ID = "124604231994-dtnflivbu049428d1cg9ngfuhgq38efs.apps.googleusercontent.com";
@@ -100,6 +101,7 @@ root.render(
           <Route path="/flow" element={<Flow />} />
           <Route path="/my-profile" element={<MyProfile />} />
           <Route path="/wallet-recharge" element={<WalletRecharge />} />
+          <Route path="/payment-status" element={<PaymentStatus />} />
           {/* Add more routes as needed */}
           <Route path="*" element={<Error_404 />} />
         </Routes>

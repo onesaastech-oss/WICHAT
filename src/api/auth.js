@@ -74,7 +74,7 @@ export const createPaymentOrder = async ({ project_id, amount, redirect_url }) =
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/project/wallet-topup',
+    url: 'https://api.w1chat.com/payment/wallet-topup',
     headers: {
       'Content-Type': 'application/json',
       'token': token,
@@ -158,6 +158,48 @@ export const getPaymentTransactions = async () => {
     headers: {
       'Authorization': `Bearer ${token}`
     }
+  };
+
+  const response = await axios.request(config);
+  return response.data;
+};
+
+// Check payment status
+export const checkPaymentStatus = async ({ project_id, order_id }) => {
+  // Load auth tokens from localStorage to match existing API requirements
+  const stored =
+    typeof window !== 'undefined' ? localStorage.getItem('userData') : null;
+  const parsed = stored ? JSON.parse(stored) : null;
+  const token = parsed?.token;
+  const username = parsed?.username;
+
+  if (!token || !username) {
+    throw new Error('Session expired');
+  }
+  
+  const payload = {
+    project_id,
+    order_id
+  };
+
+  // Encrypt the payload
+  const { data, key } = Encrypt(payload);
+
+  const data_pass = JSON.stringify({
+    data,
+    key
+  });
+
+  const config = {
+    method: 'post',
+    maxBodyLength: Infinity,
+    url: 'https://api.w1chat.com/payment/payment-status',
+    headers: {
+      'Content-Type': 'application/json',
+      'token': token,
+      'username': username
+    },
+    data: data_pass
   };
 
   const response = await axios.request(config);

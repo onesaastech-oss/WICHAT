@@ -21,7 +21,7 @@ import { MdQrCodeScanner } from 'react-icons/md';
 import { Header, Sidebar } from '../component/Menu';
 import toast from 'react-hot-toast';
 import { fetchProjectInfo } from '../store/projectSlice';
-import { createPaymentOrder, validatePromoCode } from '../api/auth';
+import { createPaymentOrder, validatePromoCode, checkPaymentStatus } from '../api/auth';
 import { SiGooglepay, SiPhonepe, SiPaytm, SiAmazonpay } from 'react-icons/si';
 import QRCode from 'react-qr-code';
 
@@ -39,6 +39,7 @@ const WalletRecharge = () => {
   const [showUpiApps, setShowUpiApps] = useState(false);
   const [showQrPopup, setShowQrPopup] = useState(false);
   const [paymentDetails, setPaymentDetails] = useState(null);
+  const [isPolling, setIsPolling] = useState(false);
   
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -78,6 +79,7 @@ const WalletRecharge = () => {
     setPaymentDetails(null);
     setShowUpiApps(false);
     setShowQrPopup(false);
+    setIsPolling(false);
   }, [selectedAmount, customAmount, selectedPaymentMethod]);
 
   useEffect(() => {
@@ -85,6 +87,90 @@ const WalletRecharge = () => {
       dispatch(fetchProjectInfo());
     }
   }, [dispatch, projectInfo]);
+
+  // Poll payment status for UPI payments
+  useEffect(() => {
+    if (!isPolling || !paymentDetails?.orderId) return;
+
+    const project_id = getProjectId();
+    if (!project_id) {
+      setIsPolling(false);
+      return;
+    }
+
+    let pollInterval;
+    let pollTimeout;
+
+    const checkStatus = async () => {
+      try {
+        const response = await checkPaymentStatus({
+          project_id,
+          order_id: paymentDetails.orderId
+        });
+
+        if (response.error) {
+          console.error('Payment status check error:', response.msg);
+          return;
+        }
+
+        const status = response.status?.toUpperCase();
+
+        if (status === 'SUCCESS') {
+          // Stop polling
+          setIsPolling(false);
+          
+          // Refresh wallet balance
+          dispatch(fetchProjectInfo());
+          
+          // Show success message
+          toast.success('Payment successful! Wallet updated.');
+          
+          // Clear pending payment
+          sessionStorage.removeItem('pending_payment');
+          
+          // Redirect to payment status page
+          navigate('/payment-status', { 
+            state: { 
+              paymentStatus: 'success',
+              orderId: response.order_id,
+              paymentId: response.payment_id,
+              amount: response.amount
+            } 
+          });
+        } else if (status === 'FAILED') {
+          // Stop polling
+          setIsPolling(false);
+          
+          // Show error message
+          toast.error('Payment failed. Please try again.');
+          
+          // Clear pending payment
+          sessionStorage.removeItem('pending_payment');
+        }
+        // If PENDING, continue polling
+      } catch (error) {
+        console.error('Error checking payment status:', error);
+        // Continue polling on error (might be network issue)
+      }
+    };
+
+    // Start polling immediately, then every 3 seconds
+    checkStatus();
+    pollInterval = setInterval(checkStatus, 3000);
+
+    // Stop polling after 5 minutes (300 seconds) to avoid infinite polling
+    pollTimeout = setTimeout(() => {
+      setIsPolling(false);
+      clearInterval(pollInterval);
+      toast.error('Payment status check timeout. Please check manually.');
+    }, 300000);
+
+    // Cleanup on unmount or when polling stops
+    return () => {
+      clearInterval(pollInterval);
+      clearTimeout(pollTimeout);
+    };
+  }, [isPolling, paymentDetails?.orderId, dispatch, navigate]);
 
   // Predefined amount options
   const amountOptions = [
@@ -345,6 +431,8 @@ const WalletRecharge = () => {
           setShowUpiApps(true);
         }
         setProcessing(false);
+        // Start polling for payment status
+        setIsPolling(true);
       } else {
         setProcessing(false);
         window.location.href = response.paymentUrl;
