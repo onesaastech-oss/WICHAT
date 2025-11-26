@@ -77,7 +77,6 @@ const Transactions = () => {
       }
 
       const payload = {
-        project_id: projectId,
         last_id: resetData ? 0 : lastId
       };
 
