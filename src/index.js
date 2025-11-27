@@ -29,7 +29,7 @@ import Flow from './pages/Automation/Flow';
 import MyProfile from './pages/MyProfile.js';
 import WalletRecharge from './pages/WalletRecharge.js';
 import PaymentStatus from './pages/PaymentStatus.js';
-import { useEffect } from 'react';
+import ProjectDetails from './pages/ProjectDetails';
 import ProtectedRoute from './component/ProtectedRoute';
 const GOOGLE_CLIENT_ID = "124604231994-dtnflivbu049428d1cg9ngfuhgq38efs.apps.googleusercontent.com";
 
@@ -93,6 +93,7 @@ root.render(
           <Route path="/permission-list" element={<PermissionsList />} />
           <Route path="/blank" element={<Blank />} />
           <Route path="/projects" element={<Projects />} />
+          <Route path="/project-details/:projectId" element={<ProjectDetails />} />
           {/* Login related page */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />

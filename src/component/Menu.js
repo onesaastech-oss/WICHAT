@@ -613,9 +613,36 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [switchProjectModalOpen, setSwitchProjectModalOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
+  const [selectedProjectName, setSelectedProjectName] = useState(null);
   const dispatch = useDispatch();
   const walletBalance = useSelector((state) => state.project.walletBalance);
   const projectInfoStatus = useSelector((state) => state.project.status);
+
+  // Get selected project name from localStorage
+  useEffect(() => {
+    const getSelectedProjectName = () => {
+      try {
+        const userData = localStorage.getItem('userData');
+        if (!userData) return null;
+        
+        const parsed = JSON.parse(userData);
+        const selectedProjectId = parsed.selected_project_id;
+        const projects = Array.isArray(parsed.projects) ? parsed.projects : [];
+        
+        if (selectedProjectId && projects.length > 0) {
+          const selectedProject = projects.find(p => p.project_id === selectedProjectId);
+          return selectedProject ? selectedProject.name : null;
+        }
+        
+        return null;
+      } catch (error) {
+        console.error('Error getting selected project name:', error);
+        return null;
+      }
+    };
+
+    setSelectedProjectName(getSelectedProjectName());
+  }, []);
 
   const toggleSidebar = () => {
     setIsMinimized(!isMinimized);
@@ -707,8 +734,9 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
           >
             <FiBriefcase size={18} />
             <span className="font-medium">
-              {selectedCompany ? selectedCompany.name : 'Switch Project'}
+              {selectedProjectName || selectedCompany?.name || 'Switch Project'}
             </span>
+            <FiChevronDown size={16} />
           </button>
 
           <div className="flex items-center bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-md font-semibold">
