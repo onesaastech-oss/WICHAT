@@ -514,7 +514,7 @@ function ProjectProfileCard({ project, profile, loading, error, projectId, navig
 
     const imageSrc = project?.wa_display_image || profile?.profile_picture_url;
     const website = profile?.websites?.[0];
-    const wa_number = profile.wa_number
+    const wa_number = profile?.wa_number
 
     return (
         <div className="bg-white rounded-xl shadow p-6 h-full flex flex-col overflow-hidden">
