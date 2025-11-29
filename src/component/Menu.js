@@ -1,818 +1,496 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  FiMessageSquare,
-  FiMail,
-  FiSettings,
-  FiUsers,
-  FiLayers,
-  FiZap,
-  FiCalendar,
-  FiShoppingCart,
-  FiMaximize,
-  FiChevronDown,
-  FiChevronUp,
-  FiMenu,
-  FiX,
-  FiUser,
-  FiLogOut,
-  FiHelpCircle,
-  FiBell,
-  FiPieChart,
-  FiBarChart2,
-  FiCreditCard,
-  FiDollarSign,
-  FiPlus,
-  FiBriefcase,
-  FiRefreshCw,
-  FiCpu,
-  FiGitBranch
-} from 'react-icons/fi';
-import { useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { 
+  FiMenu, FiBriefcase, FiChevronDown, FiCreditCard, 
+  FiPlus, FiBell, FiUser, FiSettings, FiHelpCircle, 
+  FiLogOut, FiPieChart, FiMessageSquare, FiUsers, 
+  FiMail, FiZap, FiCpu, FiLock, FiChevronRight, FiX 
+} from 'react-icons/fi';
+
+// Adjust these import paths if necessary
 import { fetchProjectInfo } from '../store/projectSlice';
 import { setSelectedProjectId, setAuthData } from '../store/authSlice';
 import SwitchProjectModal from './Modals/SwitchProjectModal';
 
+// ==========================================
+// 1. Constants & Styles (Modern Indigo Theme)
+// ==========================================
+const THEME = {
+  active: "bg-indigo-50 text-indigo-700 border-indigo-200 shadow-sm", // Soft Indigo background for active
+  inactive: "text-slate-600 hover:bg-indigo-50/50 hover:text-indigo-600 border-transparent", // Subtle hover
+  locked: "text-slate-300 cursor-not-allowed hover:bg-transparent",
+  iconActive: "text-indigo-600",
+  iconInactive: "text-slate-400 group-hover:text-indigo-500"
+};
+
+// ==========================================
+// 2. Helper Functions
+// ==========================================
+const getUserData = () => {
+  try {
+    const userData = localStorage.getItem('userData');
+    return userData ? JSON.parse(userData) : null;
+  } catch (error) { return null; }
+};
+
+const requiresProject = (item) => {
+  const protectedPaths = ['/live-chat', '/template', '/campaigns'];
+  return protectedPaths.includes(item.path) || 
+         (item.submenus && item.submenus.some(submenu => protectedPaths.includes(submenu.path)));
+};
+
+const isItemActive = (item, currentPath) => {
+  if (item.path && item.path !== '#') {
+    if (item.path === '/') return currentPath === '/' || currentPath === '';
+    return currentPath === item.path || currentPath.startsWith(item.path + '/');
+  }
+  if (item.submenus) {
+    return item.submenus.some(submenu =>
+      submenu.path && submenu.path !== '#' &&
+      (currentPath === submenu.path || currentPath.startsWith(submenu.path + '/'))
+    );
+  }
+  return false;
+};
+
+const isSubmenuItemActive = (submenuPath, currentPath) => {
+  if (submenuPath === '/') return currentPath === '/' || currentPath === '';
+  return submenuPath && submenuPath !== '#' && (currentPath === submenuPath || currentPath.startsWith(submenuPath + '/'));
+};
+
+// ==========================================
+// 3. NavItem Component (MOVED OUTSIDE)
+// ==========================================
+const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubmenus, toggleSubmenu, setHoveredMenu, hoveredMenu, setMobileMenuOpen, hasProjects }) => {
+  const isActive = isItemActive(item, currentPath);
+  const isDisabled = requiresProject(item) && !hasProjects;
+  const hasSubmenu = item.submenus && item.submenus.length > 0;
+  const isOpen = isMobile ? openSubmenus[`mobile-${item.key}`] : openSubmenus[item.key];
+  const isMini = !isMobile && isMinimized && !isHovered;
+
+  // Render Submenu Item (Parent)
+  if (hasSubmenu) {
+    return (
+      <div className="mb-1">
+        <button
+          onClick={() => !isMini && toggleSubmenu(isMobile ? `mobile-${item.key}` : item.key)}
+          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group border
+            ${isActive ? THEME.active : THEME.inactive}
+            ${isMini ? 'justify-center px-2' : ''}`}
+          onMouseEnter={() => isMini && setHoveredMenu(item.key)}
+          onMouseLeave={() => isMini && setHoveredMenu(null)}
+        >
+          <div className={`flex items-center ${isMini ? 'justify-center w-full' : 'gap-3'}`}>
+            <span className={`${isActive ? THEME.iconActive : THEME.iconInactive} transition-colors`}>
+              {item.icon}
+            </span>
+            {!isMini && <span>{item.title}</span>}
+          </div>
+          {!isMini && (
+            <motion.span animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration: 0.2 }}>
+              <FiChevronRight size={16} className={isActive ? "text-indigo-400" : "text-slate-400"} />
+            </motion.span>
+          )}
+          
+          {/* Tooltip for Mini Mode */}
+          {isMini && hoveredMenu === item.key && (
+            <div className="absolute left-16 ml-3 px-3 py-1.5 bg-slate-800 text-white text-xs rounded-md shadow-lg z-50 whitespace-nowrap animate-in fade-in zoom-in-95 duration-200">
+              {item.title}
+            </div>
+          )}
+        </button>
+
+        <AnimatePresence>
+          {(!isMini && isOpen) && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }} 
+              animate={{ height: "auto", opacity: 1 }} 
+              exit={{ height: 0, opacity: 0 }} 
+              transition={{ duration: 0.2, ease: "easeInOut" }} 
+              className="overflow-hidden"
+            >
+              <div className="ml-5 pl-4 border-l-2 border-indigo-100 my-1 space-y-0.5">
+                {item.submenus.map((sub, idx) => {
+                    const isSubActive = isSubmenuItemActive(sub.path, currentPath);
+                    return (
+                    <a key={idx} href={sub.path} className={`block px-3 py-2 rounded-md text-sm transition-all duration-200 ${isSubActive ? 'text-indigo-700 font-semibold bg-indigo-50' : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'}`}>
+                      {sub.title}
+                    </a>
+                    )
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
+  // Render Single Link Item
+  return (
+    <div className="mb-1 relative">
+      <a href={isDisabled ? '#' : item.path} onClick={(e) => { if(isDisabled) e.preventDefault(); else if(isMobile) setMobileMenuOpen(false); }}
+        className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group border
+          ${isDisabled ? THEME.locked : isActive ? THEME.active : THEME.inactive}
+          ${isMini ? 'justify-center px-2' : ''}`}
+        onMouseEnter={() => isMini && setHoveredMenu(item.key)}
+        onMouseLeave={() => isMini && setHoveredMenu(null)}
+      >
+        <span className={`${isMini ? '' : 'mr-3'} ${isDisabled ? 'text-slate-300' : isActive ? THEME.iconActive : THEME.iconInactive} transition-colors`}>
+          {item.icon}
+        </span>
+        {!isMini && (
+          <div className="flex-1 flex items-center justify-between">
+            <span>{item.title}</span>
+            {isDisabled && <FiLock size={12} className="text-slate-300" />}
+          </div>
+        )}
+        {isMini && hoveredMenu === item.key && (
+            <div className="absolute left-16 ml-3 px-3 py-1.5 bg-slate-800 text-white text-xs rounded-md shadow-lg z-50 whitespace-nowrap animate-in fade-in zoom-in-95 duration-200">
+              {item.title} {isDisabled && '(Locked)'}
+            </div>
+        )}
+      </a>
+    </div>
+  );
+};
+
+// ==========================================
+// 4. Header Component
+// ==========================================
+export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized }) => {
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [switchProjectModalOpen, setSwitchProjectModalOpen] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState(null);
+  const [selectedProjectName, setSelectedProjectName] = useState(null);
+  
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const walletBalance = useSelector((state) => state.project?.walletBalance || 0);
+  const projectInfoStatus = useSelector((state) => state.project?.status || 'idle');
+
+  useEffect(() => {
+    const getSelectedProjectName = () => {
+      try {
+        const userData = localStorage.getItem('userData');
+        if (!userData) return null;
+        const parsed = JSON.parse(userData);
+        const selectedProjectId = parsed.selected_project_id;
+        const projects = parsed.projects?.list || (Array.isArray(parsed.projects) ? parsed.projects : []);
+        
+        if (selectedProjectId && projects.length > 0) {
+          const selectedProject = projects.find(p => p.project_id === selectedProjectId);
+          return selectedProject ? selectedProject.name : null;
+        }
+        return null;
+      } catch (error) { return null; }
+    };
+    setSelectedProjectName(getSelectedProjectName());
+  }, [switchProjectModalOpen]);
+
+  const toggleSidebar = () => {
+    if (setIsMinimized) setIsMinimized(!isMinimized);
+  };
+  
+  const handleLogout = () => {
+    localStorage.removeItem("userData");
+    navigate('/login');
+  };
+
+  const handleSelectCompany = (company) => {
+    if (!company) return;
+    setSelectedCompany(company);
+    try {
+      const stored = localStorage.getItem('userData');
+      const parsed = stored ? JSON.parse(stored) : {};
+      const selectedId = company.project_id || company.id || null;
+      const updatedUserData = { ...parsed, selected_project_id: selectedId };
+      localStorage.setItem('userData', JSON.stringify(updatedUserData));
+      if (selectedId) dispatch(setSelectedProjectId(selectedId));
+      dispatch(setAuthData(updatedUserData));
+    } catch (error) { console.error('Failed to update selected project', error); }
+    window.location.reload();
+  };
+
+  useEffect(() => {
+    if (projectInfoStatus === 'idle') {
+      dispatch(fetchProjectInfo());
+    }
+  }, [dispatch, projectInfoStatus]);
+
+  const profileItems = [
+    { title: 'My Profile', icon: <FiUser size={16} />, path: '/my-profile' },
+    { title: 'Settings', icon: <FiSettings size={16} />, path: '#' },
+    { title: 'Help & Support', icon: <FiHelpCircle size={16} />, path: '#' },
+  ];
+
+  return (
+    <>
+      <header className="fixed top-0 inset-x-0 z-50 h-16 border-b border-indigo-100 bg-white/90 backdrop-blur-md transition-all duration-200">
+        <div className="flex h-full items-center justify-between px-4 sm:px-6">
+          {/* Left */}
+          <div className="flex items-center gap-4">
+            <button
+              className="text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 p-2 rounded-md transition-colors focus:outline-none"
+              onClick={window.innerWidth >= 768 ? toggleSidebar : () => setMobileMenuOpen(true)}
+            >
+              <FiMenu size={22} />
+            </button>
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold text-lg shadow-md shadow-indigo-200">W</div>
+              <span className="text-xl font-bold tracking-tight text-slate-800 hidden sm:block font-sans">WICHAT</span>
+            </div>
+          </div>
+
+          {/* Right */}
+          <div className="flex items-center gap-3 md:gap-5">
+            <button
+              onClick={() => setSwitchProjectModalOpen(true)}
+              className="hidden md:flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all duration-200 group"
+            >
+              <FiBriefcase size={16} className="text-slate-400 group-hover:text-indigo-500 transition-colors" />
+              <span className="max-w-[120px] truncate">{selectedProjectName || selectedCompany?.name || 'Select Project'}</span>
+              <FiChevronDown size={14} className="text-slate-400" />
+            </button>
+
+            <div className="hidden sm:flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1 pr-3 shadow-sm hover:border-indigo-200 transition-colors cursor-default">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                <FiCreditCard size={14} />
+              </div>
+              <div className="flex flex-col leading-none">
+                {/* <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Balance</span> */}
+                <span className="text-sm font-bold text-slate-700 font-mono">₹{Number(walletBalance).toFixed(2)}</span>
+              </div>
+              <button onClick={() => navigate('/wallet-recharge')} className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-105 transition-all shadow-md shadow-indigo-200">
+                <FiPlus size={12} />
+              </button>
+            </div>
+
+            <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
+
+            <button className="relative p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all">
+              <FiBell size={20} />
+              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 border-2 border-white"></span>
+            </button>
+
+            <div className="relative">
+              <button className="flex items-center gap-2 focus:outline-none ring-offset-2 focus:ring-2 focus:ring-indigo-100 rounded-full transition-all" onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}>
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-medium text-sm shadow-md shadow-indigo-200 border-2 border-white">BM</div>
+              </button>
+
+              {profileDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setProfileDropdownOpen(false)}></div>
+                  <div className="absolute right-0 mt-3 w-56 origin-top-right rounded-xl border border-slate-100 bg-white p-1 shadow-xl ring-1 ring-black ring-opacity-5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="px-3 py-2 border-b border-slate-100 mb-1">
+                      <p className="text-sm font-semibold text-slate-900">Bashir Mustaque</p>
+                      <p className="text-xs text-slate-500 truncate">user@example.com</p>
+                    </div>
+                    <button className="md:hidden flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-colors" onClick={() => { setProfileDropdownOpen(false); setSwitchProjectModalOpen(true); }}>
+                      <FiBriefcase size={16} /> Switch Project
+                    </button>
+                    {profileItems.map((item, index) => (
+                      <a key={index} href={item.path} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-colors" onClick={() => setProfileDropdownOpen(false)}>
+                        {item.icon} {item.title}
+                      </a>
+                    ))}
+                    <div className="my-1 h-px bg-slate-100"></div>
+                    <button onClick={handleLogout} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                      <FiLogOut size={16} /> Logout
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+      
+      <SwitchProjectModal
+        isOpen={switchProjectModalOpen}
+        onClose={() => setSwitchProjectModalOpen(false)}
+        onSelectCompany={handleSelectCompany}
+      />
+    </>
+  );
+};
+
+// ==========================================
+// 5. Sidebar Component
+// ==========================================
 export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized }) => {
   const [openSubmenus, setOpenSubmenus] = useState({});
   const [hoveredMenu, setHoveredMenu] = useState(null);
   const [isHovered, setIsHovered] = useState(false);
   const [currentPath, setCurrentPath] = useState('');
-  
-  // Get user data and project count
-  const getUserData = () => {
-    try {
-      const userData = localStorage.getItem('userData');
-      return userData ? JSON.parse(userData) : null;
-    } catch (error) {
-      console.error('Error parsing userData from localStorage:', error);
-      return null;
-    }
-  };
-  
+
   const userData = getUserData();
-  const hasProjects = userData && userData.project_count > 0;
+  const projectList = userData?.projects?.list || (Array.isArray(userData?.projects) ? userData.projects : []);
+  const hasProjects = projectList.length > 0 || (userData?.projects?.project_count > 0);
 
-  // Check if menu item requires project
-  const requiresProject = (item) => {
-    const protectedPaths = ['/live-chat', '/template', '/campaigns'];
-    return protectedPaths.includes(item.path) || 
-           (item.submenus && item.submenus.some(submenu => protectedPaths.includes(submenu.path)));
-  };
-
-  // Get current path on component mount and when location changes
   useEffect(() => {
     setCurrentPath(window.location.pathname);
-
-    // Listen for navigation events
-    const handleLocationChange = () => {
-      setCurrentPath(window.location.pathname);
-    };
-
+    const handleLocationChange = () => setCurrentPath(window.location.pathname);
     window.addEventListener('popstate', handleLocationChange);
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
 
   const toggleSubmenu = (menuKey) => {
-    setOpenSubmenus(prev => ({
-      ...prev,
-      [menuKey]: !prev[menuKey]
-    }));
+    setOpenSubmenus(prev => ({ ...prev, [menuKey]: !prev[menuKey] }));
   };
 
-  // Auto expand on hover when minimized
   const handleSidebarHover = (hoverState) => {
-    if (isMinimized) {
-      setIsHovered(hoverState);
-    }
+    if (isMinimized) setIsHovered(hoverState);
   };
 
-  // Check if a menu item is active
-  const isItemActive = (item) => {
-    if (item.path && item.path !== '#') {
-      // For dashboard, use exact match since it's the root
-      if (item.path === '/') {
-        return currentPath === '/' || currentPath === '';
-      }
-      // For other paths, check if current path starts with the item path
-      // but not just as a substring - it should be exact or a subpath
-      return currentPath === item.path || currentPath.startsWith(item.path + '/');
-    }
-
-    if (item.submenus) {
-      return item.submenus.some(submenu =>
-        submenu.path && submenu.path !== '#' &&
-        (currentPath === submenu.path || currentPath.startsWith(submenu.path + '/'))
-      );
-    }
-
-    return false;
-  };
-
-  // Check if a submenu item is active
-  const isSubmenuItemActive = (submenuPath) => {
-    if (submenuPath === '/') {
-      return currentPath === '/' || currentPath === '';
-    }
-    return submenuPath && submenuPath !== '#' &&
-      (currentPath === submenuPath || currentPath.startsWith(submenuPath + '/'));
-  };
-
-  // Menu items with submenus and icons
   const menuItems = [
-    {
-      key: 'dashboard',
-      title: 'Dashboard',
-      icon: <FiPieChart size={20} />,
-      path: '/'
-    },
-    {
-      key: 'live-chat',
-      title: 'Live Chat',
-      icon: <FiMessageSquare size={20} />,
-      path: '/live-chat'
-    },
-    {
-      key: 'contact',
-      title: 'Contact',
-      icon: <FiUsers size={20} />,
+    { key: 'dashboard', title: 'Dashboard', icon: <FiPieChart size={18} />, path: '/' },
+    { key: 'live-chat', title: 'Live Chat', icon: <FiMessageSquare size={18} />, path: '/live-chat' },
+    { 
+      key: 'contact', title: 'Audience', icon: <FiUsers size={18} />, 
       submenus: [
-        { title: 'All Contact', path: '/contact', icon: <FiLayers size={18} /> },
-        { title: 'Contact Group', path: '/contact-group', icon: <FiMessageSquare size={18} /> },
+        { title: 'All Contacts', path: '/contact' },
+        { title: 'Groups', path: '/contact-group' },
       ]
     },
-    {
-      key: 'templates',
-      title: 'Templates',
-      icon: <FiMail size={20} />,
-      path: '/template'
-    },
-    {
-      key: 'campaigns',
-      title: 'Campaigns',
-      icon: <FiZap size={20} />,
-      path: '/campaigns'
-    },
-    {
-      key: 'automation',
-      title: 'Automation',
-      icon: <FiCpu size={20} />, // represents automated systems / logic
+    { key: 'templates', title: 'Templates', icon: <FiMail size={18} />, path: '/template' },
+    { key: 'campaigns', title: 'Campaigns', icon: <FiZap size={18} />, path: '/campaigns' },
+    { 
+      key: 'automation', title: 'Automation', icon: <FiCpu size={18} />, 
       submenus: [
-        { title: 'Auto Reply', path: '/auto-reply', icon: <FiMessageSquare size={18} /> }, // chat or messaging
-        { title: 'Flow', path: '/flow', icon: <FiGitBranch size={18} /> } // represents workflow / branching logic
+        { title: 'Auto Reply', path: '/auto-reply' },
+        { title: 'Flow Builder', path: '/flow' }
+      ]
+    },
+    { key: 'projects', title: 'Projects', icon: <FiBriefcase size={18} />, path: '/projects' },
+    { 
+      key: 'management', title: 'Management', icon: <FiSettings size={18} />, 
+      submenus: [
+        { title: 'Agents', path: '/agent-management' },
+        { title: 'Permissions', path: '/permission-list' }
+      ]
+    },
+    { 
+      key: 'billing', title: 'Billing', icon: <FiCreditCard size={18} />, 
+      submenus: [
+        { title: 'My Plan', path: '/my-plan' },
+        { title: 'Transactions', path: '/transactions' }
       ]
     }
-    ,
-    {
-      key: 'projects',
-      title: 'Projects',
-      icon: <FiBriefcase size={20} />,
-      path: '/projects'
-    },
-    {
-      key: 'management',
-      title: 'Management',
-      icon: <FiUsers size={20} />,
-      submenus: [
-        { title: 'Agents', path: '/agent-management', icon: <FiUsers size={18} /> },
-        // { title: 'WhatsApp Orders', path: '/whatsapp-orders', icon: <FiShoppingCart size={18} /> },
-        { title: 'Permission', path: '/permission-list', icon: <FiSettings size={18} /> }
-      ]
-    },
-    {
-      key: 'billing',
-      title: 'Billing',
-      icon: <FiCreditCard size={20} />,
-      submenus: [
-        { title: 'My Plan', path: '/my-plan', icon: <FiBarChart2 size={18} /> },
-        { title: 'Transactions', path: '/transactions', icon: <FiDollarSign size={18} /> }
-      ]
-    }
-
   ];
-
-  // Animation variants
-  const sidebarVariants = {
-    expanded: {
-      width: 280,
-      transition: {
-        type: "spring",
-        damping: 30,
-        stiffness: 300,
-        duration: 0.3
-      }
-    },
-    collapsed: {
-      width: 72,
-      transition: {
-        type: "spring",
-        damping: 30,
-        stiffness: 300,
-        duration: 0.3
-      }
-    }
-  };
-
-  const menuItemVariants = {
-    hidden: { opacity: 0, x: -10 },
-    visible: {
-      opacity: 1,
-      x: 0,
-      transition: {
-        duration: 0.15,
-        ease: "easeOut"
-      }
-    },
-    exit: {
-      opacity: 0,
-      x: -10,
-      transition: {
-        duration: 0.1,
-        ease: "easeIn"
-      }
-    }
-  };
-
-  const submenuVariants = {
-    open: {
-      height: "auto",
-      opacity: 1,
-      transition: {
-        height: {
-          duration: 0.25,
-          ease: "easeOut"
-        },
-        opacity: {
-          duration: 0.2,
-          delay: 0.05
-        }
-      }
-    },
-    closed: {
-      height: 0,
-      opacity: 0,
-      transition: {
-        height: {
-          duration: 0.25,
-          ease: "easeIn"
-        },
-        opacity: {
-          duration: 0.15
-        }
-      }
-    }
-  };
 
   return (
     <>
-      {/* Mobile Menu - 80% width with overlay */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <>
-            {/* Overlay */}
-            <motion.div
-              className="fixed inset-0 z-40 bg-black bg-opacity-50 md:hidden"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setMobileMenuOpen(false)}
-            />
-
-            {/* Mobile Sidebar */}
-            <motion.div
-              className="fixed inset-y-0 left-0 z-50 w-4/5 max-w-sm bg-white md:hidden"
-              initial={{ x: '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            >
-              <div className="flex flex-col h-full">
-                <div className="flex items-center justify-between h-16 px-4 border-b">
-                  <h1 className="text-xl font-bold text-indigo-600">WICHAT</h1>
-                  <button
-                    className="text-gray-500 hover:text-gray-600 focus:outline-none focus:ring-0"
-                    onClick={() => setMobileMenuOpen(false)}
-                    aria-label="Close menu"
-                  >
-                    <FiX size={24} />
-                  </button>
-                </div>
-
-                <nav className="flex-1 p-4 overflow-y-auto scrollbar-hide">
-                  {menuItems.map((item) => {
-                    const isActive = isItemActive(item);
-                    const isDisabled = requiresProject(item) && !hasProjects;
-                    return (
-                      <div key={item.key} className="mb-1">
-                        {item.path ? (
-                          <motion.a
-                            href={isDisabled ? '#' : item.path}
-                            className={`flex items-center w-full p-4 text-left rounded-lg transition-colors duration-150 outline-none ring-0 ${
-                              isDisabled 
-                                ? 'text-gray-400 cursor-not-allowed opacity-50' 
-                                : isActive
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'text-gray-700 hover:bg-gray-100'
-                              }`}
-                            whileHover={!isDisabled ? { scale: 1.02 } : {}}
-                            whileTap={!isDisabled ? { scale: 0.98 } : {}}
-                            onClick={(e) => {
-                              if (isDisabled) {
-                                e.preventDefault();
-                                return;
-                              }
-                              setMobileMenuOpen(false);
-                            }}
-                          >
-                            <span className={`mr-3 ${
-                              isDisabled 
-                                ? 'text-gray-400' 
-                                : isActive 
-                                  ? 'text-white' 
-                                  : 'text-gray-600'
-                              }`}>
-                              {item.icon}
-                            </span>
-                            <span className="font-medium text-base">{item.title}</span>
-                            {isDisabled && (
-                              <span className="ml-auto text-xs text-gray-400">Requires Project</span>
-                            )}
-                          </motion.a>
-                        ) : (
-                          <>
-                            <motion.button
-                              className={`flex items-center justify-between w-full p-4 text-left rounded-lg transition-colors duration-150 outline-none ring-0 border-0 ${isActive
-                                ? 'bg-indigo-600 text-white'
-                                : 'text-gray-700 hover:bg-gray-100'
-                                }`}
-                              onClick={() => toggleSubmenu(`mobile-${item.key}`)}
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                            >
-                              <div className="flex items-center">
-                                <span className={`mr-3 ${isActive ? 'text-white' : 'text-gray-600'}`}>
-                                  {item.icon}
-                                </span>
-                                <span className="font-medium text-base">{item.title}</span>
-                              </div>
-                              {openSubmenus[`mobile-${item.key}`] ?
-                                <FiChevronUp className="text-gray-400" /> :
-                                <FiChevronDown className="text-gray-400" />
-                              }
-                            </motion.button>
-
-                            <motion.div
-                              className="overflow-hidden"
-                              initial="closed"
-                              animate={openSubmenus[`mobile-${item.key}`] ? "open" : "closed"}
-                              variants={submenuVariants}
-                            >
-                              <div className="ml-8 mt-1 space-y-1">
-                                {item.submenus.map((submenu, index) => {
-                                  const isSubActive = isSubmenuItemActive(submenu.path);
-                                  return (
-                                    <motion.a
-                                      key={index}
-                                      href={submenu.path}
-                                      className={`flex items-center p-3 rounded-lg transition-colors duration-150 outline-none ring-0 ${isSubActive
-                                        ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                                        : 'text-gray-600 hover:bg-gray-50'
-                                        }`}
-                                      whileHover={{ x: 4 }}
-                                      onClick={() => setMobileMenuOpen(false)}
-                                    >
-                                      <span className={`mr-3 ${isSubActive ? 'text-blue-600' : 'text-gray-600'}`}>
-                                        {submenu.icon}
-                                      </span>
-                                      <span className="text-base">{submenu.title}</span>
-                                    </motion.a>
-                                  );
-                                })}
-                              </div>
-                            </motion.div>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </nav>
+            <motion.div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm md:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMobileMenuOpen(false)} />
+            <motion.div className="fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-2xl md:hidden flex flex-col" initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: "spring", damping: 30, stiffness: 300 }}>
+              <div className="h-16 flex items-center justify-between px-6 border-b border-indigo-100 bg-indigo-50/30">
+                <span className="text-xl font-bold text-slate-800 font-sans">WICHAT</span>
+                <button onClick={() => setMobileMenuOpen(false)} className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
+                  <FiX size={20} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
+                {menuItems.map(item => (
+                  <NavItem 
+                    key={item.key} 
+                    item={item} 
+                    isMobile={true}
+                    currentPath={currentPath}
+                    openSubmenus={openSubmenus}
+                    toggleSubmenu={toggleSubmenu}
+                    hasProjects={hasProjects}
+                    setMobileMenuOpen={setMobileMenuOpen}
+                  />
+                ))}
               </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      {/* Desktop Sidebar */}
       <motion.div
-        className="hidden md:flex md:flex-col md:fixed md:inset-y-0 bg-white border-r z-40 scrollbar-hide"
-        variants={sidebarVariants}
-        animate={(isMinimized && !isHovered) ? "collapsed" : "expanded"}
-        initial={isMinimized ? "collapsed" : "expanded"}
+        className="hidden md:flex md:flex-col md:fixed md:inset-y-0 bg-white border-r border-indigo-100 z-40 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.05)]"
+        initial={false}
+        animate={{ width: (isMinimized && !isHovered) ? 80 : 260 }}
+        style={{ top: '64px', height: 'calc(100vh - 64px)' }}
         onMouseEnter={() => handleSidebarHover(true)}
         onMouseLeave={() => handleSidebarHover(false)}
-        style={{
-          top: '64px',
-          height: 'calc(100vh - 64px)',
-          overflowX: 'hidden'
-        }}
       >
-        <div className={`flex-1 flex flex-col overflow-y-auto scrollbar-hide ${(isMinimized && !isHovered) ? 'overflow-x-hidden' : ''}`}>
-          {/* Navigation Items Only - No header section */}
-          <nav className="flex-1 px-3 py-4 space-y-1">
-            {menuItems.map((item) => {
-              const isActive = isItemActive(item);
-              const isDisabled = requiresProject(item) && !hasProjects;
-              return (
-                <div
-                  key={item.key}
-                  className="mb-1 relative"
-                  onMouseEnter={() => (isMinimized && !isHovered) && setHoveredMenu(item.key)}
-                  onMouseLeave={() => (isMinimized && !isHovered) && setHoveredMenu(null)}
-                >
-                  {item.path ? (
-                    <motion.a
-                      href={isDisabled ? '#' : item.path}
-                      className={`flex items-center w-full p-3 rounded-lg transition-colors duration-150 group outline-none ring-0 ${
-                        isDisabled 
-                          ? 'text-gray-400 cursor-not-allowed opacity-50' 
-                          : isActive
-                            ? 'bg-indigo-600 text-white'
-                            : 'text-gray-700 hover:bg-gray-50'
-                        }`}
-                      whileHover={!isDisabled ? { scale: 1.02 } : {}}
-                      whileTap={!isDisabled ? { scale: 0.98 } : {}}
-                      layout
-                      transition={{ duration: 0.15 }}
-                      onClick={(e) => {
-                        if (isDisabled) {
-                          e.preventDefault();
-                          return;
-                        }
-                      }}
-                    >
-                      <span className={`flex items-center justify-center ${(isMinimized && !isHovered) ? 'w-6 h-6 mx-auto' : 'mr-3'} ${
-                        isDisabled 
-                          ? 'text-gray-400' 
-                          : isActive 
-                            ? 'text-white' 
-                            : 'text-gray-600'
-                        }`}>
-                        {item.icon}
-                      </span>
-                      <AnimatePresence mode="wait">
-                        {(!isMinimized || isHovered) && (
-                          <motion.span
-                            className="font-medium whitespace-nowrap text-base"
-                            variants={menuItemVariants}
-                            initial="hidden"
-                            animate="visible"
-                            exit="exit"
-                            key={`text-${item.key}`}
-                          >
-                            {item.title}
-                            {isDisabled && (
-                              <span className="ml-2 text-xs text-gray-400">(Requires Project)</span>
-                            )}
-                          </motion.span>
-                        )}
-                      </AnimatePresence>
-
-                      {/* Tooltip for minimized state when not hovered */}
-                      {(isMinimized && !isHovered && hoveredMenu === item.key) && (
-                        <motion.div
-                          className={`absolute left-full ml-2 px-3 py-2 text-sm rounded-md whitespace-nowrap z-50 border-0 ${
-                            isDisabled 
-                              ? 'bg-red-600 text-white' 
-                              : 'bg-gray-800 text-white'
-                          }`}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -10 }}
-                          style={{ boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' }}
-                        >
-                          {isDisabled ? `${item.title} - Requires Project` : item.title}
-                        </motion.div>
-                      )}
-                    </motion.a>
-                  ) : (
-                    <>
-                      <motion.button
-                        className={`flex items-center w-full p-3 rounded-lg transition-colors duration-150 group outline-none ring-0 border-0 ${isActive
-                          ? 'bg-indigo-600 text-white'
-                          : openSubmenus[item.key] ? 'bg-gray-100' : 'hover:bg-gray-50'
-                          } ${(isMinimized && !isHovered) ? 'justify-center' : 'justify-between'}`}
-                        onClick={() => (!isMinimized || isHovered) && toggleSubmenu(item.key)}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        layout
-                        transition={{ duration: 0.15 }}
-                      >
-                        <div className={`flex items-center ${(isMinimized && !isHovered) ? 'w-full justify-center' : 'flex-1'}`}>
-                          <span className={`flex items-center justify-center ${(isMinimized && !isHovered) ? 'w-6 h-6' : 'mr-3'} ${isActive ? 'text-white' : 'text-gray-600'}`}>
-                            {item.icon}
-                          </span>
-                          <AnimatePresence mode="wait">
-                            {(!isMinimized || isHovered) && (
-                              <motion.span
-                                className="font-medium whitespace-nowrap text-base"
-                                variants={menuItemVariants}
-                                initial="hidden"
-                                animate="visible"
-                                exit="exit"
-                                key={`text-${item.key}`}
-                              >
-                                {item.title}
-                              </motion.span>
-                            )}
-                          </AnimatePresence>
-                        </div>
-
-                        <AnimatePresence mode="wait">
-                          {(!isMinimized || isHovered) && (
-                            <motion.span
-                              variants={menuItemVariants}
-                              initial="hidden"
-                              animate="visible"
-                              exit="exit"
-                              key={`chevron-${item.key}`}
-                            >
-                              {openSubmenus[item.key] ?
-                                <FiChevronUp className={isActive ? "text-white" : "text-gray-400"} size={18} /> :
-                                <FiChevronDown className={isActive ? "text-white" : "text-gray-400"} size={18} />
-                              }
-                            </motion.span>
-                          )}
-                        </AnimatePresence>
-
-                        {/* Tooltip for minimized state when not hovered */}
-                        {(isMinimized && !isHovered && hoveredMenu === item.key) && (
-                          <motion.div
-                            className={`absolute left-full ml-2 px-3 py-2 text-sm rounded-md whitespace-nowrap z-50 border-0 ${
-                              isDisabled 
-                                ? 'bg-red-600 text-white' 
-                                : 'bg-gray-800 text-white'
-                            }`}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -10 }}
-                            style={{ boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' }}
-                          >
-                            {isDisabled ? `${item.title} - Requires Project` : item.title}
-                          </motion.div>
-                        )}
-                      </motion.button>
-
-                      <AnimatePresence>
-                        {(!isMinimized || isHovered) && (
-                          <motion.div
-                            className="overflow-hidden"
-                            initial="closed"
-                            animate={openSubmenus[item.key] ? "open" : "closed"}
-                            variants={submenuVariants}
-                            layout
-                          >
-                            <div className="ml-8 mt-1 space-y-1">
-                              {item.submenus.map((submenu, index) => {
-                                const isSubActive = isSubmenuItemActive(submenu.path);
-                                return (
-                                  <motion.a
-                                    key={index}
-                                    href={submenu.path}
-                                    className={`flex items-center p-3 rounded-lg transition-colors duration-150 outline-none ring-0 ${isSubActive
-                                      ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                                      : 'text-gray-600 hover:bg-gray-50'
-                                      }`}
-                                    whileHover={{ x: 4 }}
-                                    layout
-                                  >
-                                    <span className={`mr-3 ${isSubActive ? 'text-blue-600' : 'text-gray-600'}`}>
-                                      {submenu.icon}
-                                    </span>
-                                    <span className="text-base">{submenu.title}</span>
-                                  </motion.a>
-                                );
-                              })}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </>
-                  )}
-                </div>
-              );
-            })}
+        <div className="flex-1 flex flex-col overflow-y-auto py-6 px-3 scrollbar-hide">
+          <nav className="space-y-1">
+            {menuItems.map(item => (
+              <NavItem 
+                key={item.key} 
+                item={item} 
+                isMobile={false}
+                isMinimized={isMinimized}
+                isHovered={isHovered}
+                currentPath={currentPath}
+                openSubmenus={openSubmenus}
+                toggleSubmenu={toggleSubmenu}
+                setHoveredMenu={setHoveredMenu}
+                hoveredMenu={hoveredMenu}
+                hasProjects={hasProjects}
+              />
+            ))}
           </nav>
         </div>
+        
+        <AnimatePresence>
+          {(!isMinimized || isHovered) && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ delay: 0.1 }} className="p-4 border-t border-indigo-100">
+              <div className="bg-gradient-to-br from-indigo-50 to-white rounded-xl p-4 text-xs border border-indigo-100 shadow-sm">
+                <p className="font-semibold text-indigo-900 mb-1">Need help?</p>
+                <p className="text-slate-600 mb-3 leading-relaxed">Check our docs or contact support for assistance.</p>
+                <button className="w-full py-1.5 bg-white border border-indigo-200 text-indigo-600 font-medium rounded-md shadow-sm hover:bg-indigo-50 transition-colors">Contact Support</button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </>
   );
 };
 
-export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized }) => {
-  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-  const [switchProjectModalOpen, setSwitchProjectModalOpen] = useState(false);
-  const [selectedCompany, setSelectedCompany] = useState(null);
-  const [selectedProjectName, setSelectedProjectName] = useState(null);
-  const dispatch = useDispatch();
-  const walletBalance = useSelector((state) => state.project.walletBalance);
-  const projectInfoStatus = useSelector((state) => state.project.status);
-
-  // Get selected project name from localStorage
-  useEffect(() => {
-    const getSelectedProjectName = () => {
-      try {
-        const userData = localStorage.getItem('userData');
-        if (!userData) return null;
-        
-        const parsed = JSON.parse(userData);
-        const selectedProjectId = parsed.selected_project_id;
-        const projects = Array.isArray(parsed.projects) ? parsed.projects : [];
-        
-        if (selectedProjectId && projects.length > 0) {
-          const selectedProject = projects.find(p => p.project_id === selectedProjectId);
-          return selectedProject ? selectedProject.name : null;
-        }
-        
-        return null;
-      } catch (error) {
-        console.error('Error getting selected project name:', error);
-        return null;
-      }
-    };
-
-    setSelectedProjectName(getSelectedProjectName());
-  }, []);
-
-  const toggleSidebar = () => {
-    setIsMinimized(!isMinimized);
-  };
-
-  const navigate = useNavigate();
-
-  const handleLogout = () => {
-    localStorage.removeItem("userData");
-    navigate('/login');
-  }
-
-  const handleSelectCompany = (company) => {
-    if (!company) return;
-
-    setSelectedCompany(company);
-
-    try {
-      const stored = localStorage.getItem('userData');
-      const parsed = stored ? JSON.parse(stored) : {};
-      const selectedId = company.project_id || company.id || null;
-
-      const updatedUserData = {
-        ...parsed,
-        selected_project_id: selectedId
-      };
-
-      // Persist selection for non-Redux code
-      localStorage.setItem('userData', JSON.stringify(updatedUserData));
-
-      // Sync Redux auth state
-      if (selectedId) {
-        dispatch(setSelectedProjectId(selectedId));
-      }
-      dispatch(setAuthData(updatedUserData));
-    } catch (error) {
-      console.error('Failed to update selected project', error);
-    }
-
-    // Full page refresh so all screens pick up the new project
-    window.location.reload();
-  }
-
-  const profileItems = [
-    { title: 'My Profile', icon: <FiUser className="mr-2" size={16} />, path: '/my-profile' },
-    { title: 'Settings', icon: <FiSettings className="mr-2" size={16} />, path: '#' },
-    { title: 'Help', icon: <FiHelpCircle className="mr-2" size={16} />, path: '#' },
-  ];
-
-  useEffect(() => {
-    // Fetch wallet balance and other project info on mount
-    if (projectInfoStatus === 'idle') {
-      dispatch(fetchProjectInfo());
-    }
-  }, [dispatch, projectInfoStatus]);
+// ==========================================
+// 6. Main Layout Wrapper (Default Export)
+// ==========================================
+const Layout = () => {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
 
   return (
-    <header className="fixed top-0 inset-x-0 bg-white shadow-sm z-50 border-b">
-      <div className="flex items-center justify-between h-16 px-4 sm:px-6 md:px-6">
-        {/* Left side - Menu + Logo */}
-        <div className='left flex items-center'>
-          <button
-            className="hidden md:block text-gray-500 hover:text-gray-600 focus:outline-none mr-3"
-            onClick={toggleSidebar}
-            aria-label="Toggle sidebar"
-          >
-            <FiMenu size={24} />
-          </button>
-
-          <button
-            className="md:hidden text-gray-500 hover:text-gray-600 focus:outline-none mr-3"
-            onClick={() => setMobileMenuOpen(true)}
-            aria-label="Open menu"
-          >
-            <FiMenu size={24} />
-          </button>
-
-          <h1 className="text-xl font-bold text-indigo-600">WICHAT</h1>
-        </div>
-
-        {/* Right side */}
-        <div className="flex items-center space-x-4 text-xs sm:text-sm">
-
-          {/* Switch Project Button */}
-          <button
-            onClick={() => setSwitchProjectModalOpen(true)}
-            className="hidden md:flex items-center space-x-2 px-3 py-1.5 text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors focus:outline-none"
-            title="Switch Project"
-          >
-            <FiBriefcase size={18} />
-            <span className="font-medium">
-              {selectedProjectName || selectedCompany?.name || 'Switch Project'}
-            </span>
-            <FiChevronDown size={16} />
-          </button>
-
-          <div className="flex items-center bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-md font-semibold">
-            <FiCreditCard className="mr-1.5" size={16} />
-            <span className="mr-2">₹{Number(walletBalance).toFixed(2)}</span>
-            <button
-              onClick={() => navigate('/wallet-recharge')}
-              className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
-              title="Add Money"
-            >
-              <FiPlus size={12} />
-            </button>
-          </div>
-
-          {/* Notifications */}
-          <button className="relative p-1 text-gray-500 hover:text-gray-600 focus:outline-none">
-            <FiBell size={20} />
-            <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
-
-          {/* Profile Dropdown */}
-          <div className="relative">
-            <button
-              className="flex items-center focus:outline-none"
-              onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-            >
-              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                <span className="text-indigo-600 font-medium text-sm">BM</span>
-              </div>
-            </button>
-
-            {profileDropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setProfileDropdownOpen(false)}></div>
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
-                  {profileItems.map((item, index) => (
-                    <a
-                      key={index}
-                      href={item.path}
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      onClick={() => setProfileDropdownOpen(false)}
-                    >
-                      {item.icon}
-                      {item.title}
-                    </a>
-                  ))}
-                  {/* Switch Project - Mobile Only */}
-                  <button
-                    className="md:hidden flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
-                    onClick={() => {
-                      setProfileDropdownOpen(false);
-                      setSwitchProjectModalOpen(true);
-                    }}
-                  >
-                    <FiBriefcase className="mr-2" size={16} />
-                    Switch Project
-                  </button>
-                  <a
-                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
-                    onClick={handleLogout}
-                  >
-                    <FiLogOut className="mr-2" size={16} /> Logout
-                  </a>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Switch Project Modal */}
-      <SwitchProjectModal
-        isOpen={switchProjectModalOpen}
-        onClose={() => setSwitchProjectModalOpen(false)}
-        onSelectCompany={handleSelectCompany}
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      <Header 
+        mobileMenuOpen={mobileMenuOpen} 
+        setMobileMenuOpen={setMobileMenuOpen}
+        isMinimized={isMinimized}
+        setIsMinimized={setIsMinimized}
       />
-    </header>
+
+      <Sidebar 
+        mobileMenuOpen={mobileMenuOpen} 
+        setMobileMenuOpen={setMobileMenuOpen}
+        isMinimized={isMinimized}
+        setIsMinimized={setIsMinimized}
+      />
+
+      <main 
+        className={`pt-16 transition-all duration-300 ease-in-out ${
+          isMinimized ? 'md:pl-20' : 'md:pl-[260px]'
+        }`}
+      >
+        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto animate-in fade-in duration-500">
+          <Outlet />
+        </div>
+      </main>
+    </div>
   );
 };
+
+export default Layout;

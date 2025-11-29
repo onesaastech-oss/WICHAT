@@ -37,7 +37,7 @@ const Projects = () => {
   const [userData, setUserData] = useState(null);
   const [projects, setProjects] = useState([]);
 
-  const userProjects = Array.isArray(userData?.projects) ? userData.projects : [];
+  const userProjects = Array.isArray(userData?.projects?.list) ? userData.projects.list : [];
   const hasUserProjects = userData && userProjects.length > 0;
 
   const [selectedUserProjectId, setSelectedUserProjectId] = useState(
@@ -57,16 +57,17 @@ const Projects = () => {
         setLoading(true);
         const response = await fetchUserProfile();
         
-        if (response.success && response.data) {
-          const profileData = response.data;
+        if (response && !response.error) {
+          const profileData = response;
           setUserData(profileData);
           
+          
           // Update localStorage with fresh data
-          localStorage.setItem('userData', JSON.stringify(profileData));
+          // localStorage.setItem('userData', JSON.stringify(profileData));
           
           // Set projects from API response
-          if (Array.isArray(profileData.projects)) {
-            setProjects(profileData.projects.map(project => ({
+          if (Array.isArray(profileData.projects?.list)) {
+            setProjects(profileData.projects.list.map(project => ({
               id: project.project_id,
               name: project.name,
               description: project.description || 'No description',
@@ -80,8 +81,8 @@ const Projects = () => {
           // Set selected project
           if (profileData.selected_project_id) {
             setSelectedUserProjectId(profileData.selected_project_id);
-          } else if (profileData.projects && profileData.projects.length > 0) {
-            setSelectedUserProjectId(profileData.projects[0].project_id);
+          } else if (profileData.projects?.list && profileData.projects.list.length > 0) {
+            setSelectedUserProjectId(profileData.projects.list[0].project_id);
           }
         }
       } catch (error) {

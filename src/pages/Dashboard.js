@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Header, Sidebar } from '../component/Menu';
 import {
     FiMessageSquare,
@@ -20,6 +21,7 @@ import {
     FiGlobe,
     FiShield,
     FiUser,
+    FiChevronRight,
     FiBarChart2
 } from 'react-icons/fi';
 import axios from 'axios';
@@ -27,6 +29,7 @@ import { Encrypt } from './encryption/payload-encryption';
 import { getProjectMetaDetails } from '../api/auth';
 
 function Dashboard() {
+    const navigate = useNavigate();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [tokens, setTokens] = useState(null);
     const [dashboardData, setDashboardData] = useState(null);
@@ -105,7 +108,8 @@ function Dashboard() {
                     campaign: { total: 0, message: { total: 0, sent: 0, pending: 0, delivered: 0, read: 0, failed: 0 } },
                     chat: { total: 0 },
                     contact: { total: 0 },
-                    template: { total: 0, approved: 0, pending: 0, rejected: 0 }
+                    template: { total: 0, approved: 0, pending: 0, rejected: 0 },
+                    message: { total: 0, today_sent: 0 }
                 });
                 return;
             }
@@ -227,11 +231,29 @@ function Dashboard() {
             bgColor: "bg-orange-50",
             textColor: "text-orange-600"
         },
+        {
+            title: "Total Messages",
+            value: dashboardData.message?.total?.toLocaleString() || "0",
+            icon: <FiMail className="w-6 h-6" />,
+            color: "bg-teal-500",
+            bgColor: "bg-teal-50",
+            textColor: "text-teal-600"
+        },
+        {
+            title: "Today Sent",
+            value: dashboardData.message?.today_sent?.toLocaleString() || "0",
+            icon: <FiSend className="w-6 h-6" />,
+            color: "bg-pink-500",
+            bgColor: "bg-pink-50",
+            textColor: "text-pink-600"
+        },
     ] : [
         { title: "Total Campaigns", value: "0", icon: <FiZap className="w-6 h-6" />, color: "bg-blue-500", bgColor: "bg-blue-50", textColor: "text-blue-600" },
         { title: "Total Chats", value: "0", icon: <FiMessageSquare className="w-6 h-6" />, color: "bg-green-500", bgColor: "bg-green-50", textColor: "text-green-600" },
         { title: "Total Contacts", value: "0", icon: <FiUsers className="w-6 h-6" />, color: "bg-purple-500", bgColor: "bg-purple-50", textColor: "text-purple-600" },
         { title: "Total Templates", value: "0", icon: <FiFileText className="w-6 h-6" />, color: "bg-orange-500", bgColor: "bg-orange-50", textColor: "text-orange-600" },
+        { title: "Total Messages", value: "0", icon: <FiMail className="w-6 h-6" />, color: "bg-teal-500", bgColor: "bg-teal-50", textColor: "text-teal-600" },
+        { title: "Today Sent", value: "0", icon: <FiSend className="w-6 h-6" />, color: "bg-pink-500", bgColor: "bg-pink-50", textColor: "text-pink-600" },
     ];
 
     // Campaign message metrics
@@ -303,8 +325,8 @@ function Dashboard() {
                     {/* ------------------------------------------------------------- */}
 
                     {loading ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                            {[1, 2, 3, 4].map((index) => (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                            {[1, 2, 3, 4, 5, 6].map((index) => (
                                 <div key={index} className="bg-white rounded-xl shadow p-6 animate-pulse">
                                     <div className="h-4 bg-gray-200 rounded w-24 mb-4"></div>
                                     <div className="h-8 bg-gray-200 rounded w-16"></div>
@@ -319,7 +341,7 @@ function Dashboard() {
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 items-stretch">
                             {/* Left Column: Metrics Grid (Takes 2/3 width on Desktop) */}
                             <div className="lg:col-span-2">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 h-full">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 h-full">
                                     {mainMetrics.map((metric, index) => (
                                         <EnhancedMetricCard key={index} {...metric} />
                                     ))}
@@ -333,6 +355,8 @@ function Dashboard() {
                                     profile={projectMeta?.profile}
                                     loading={projectMetaLoading}
                                     error={projectMetaError}
+                                    projectId={tokens?.selected_project_id}
+                                    navigate={navigate}
                                 />
                             </div>
                         </div>
@@ -452,7 +476,7 @@ function Dashboard() {
 // Reusable Components
 // ----------------------------------------------------------------------
 
-function ProjectProfileCard({ project, profile, loading, error }) {
+function ProjectProfileCard({ project, profile, loading, error, projectId, navigate }) {
     if (loading) {
         return (
             <div className="bg-white rounded-xl shadow p-6 h-full animate-pulse flex flex-col">
@@ -490,6 +514,7 @@ function ProjectProfileCard({ project, profile, loading, error }) {
 
     const imageSrc = project?.wa_display_image || profile?.profile_picture_url;
     const website = profile?.websites?.[0];
+    const wa_number = profile.wa_number
 
     return (
         <div className="bg-white rounded-xl shadow p-6 h-full flex flex-col overflow-hidden">
@@ -509,18 +534,39 @@ function ProjectProfileCard({ project, profile, loading, error }) {
                     )}
                 </div>
                 
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                        <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold">Project</p>
-                         {project?.is_whatsapp_verified && (
-                             <FiShield className="text-emerald-500 w-3 h-3" title="Verified" />
-                        )}
-                    </div>
-                    <h3 className="text-lg sm:text-xl font-bold text-gray-900 truncate" title={project?.name}>
-                        {project?.name || '—'}
-                    </h3>
-                    <p className="text-sm text-gray-500 truncate">{project?.wa_display_name}</p>
-                </div>
+                <div 
+    className="flex-1 min-w-0 group cursor-pointer p-4 rounded-lg border border-gray-200 
+               hover:border-indigo-400 hover:shadow-md hover:bg-indigo-50/30 
+               transition-all duration-200 active:scale-[0.99]"
+    onClick={() => projectId && navigate(`/project-details/${projectId}`)}
+    role="button"
+    tabIndex={0}
+    onKeyDown={(e) => e.key === 'Enter' && projectId && navigate(`/project-details/${projectId}`)}
+>
+    <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+                <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold">Project</p>
+                {project?.is_whatsapp_verified && (
+                    <FiShield className="text-emerald-500 w-3 h-3" title="Verified" />
+                )}
+            </div>
+            <h3 
+                className="text-lg sm:text-xl font-bold text-gray-900 truncate 
+                           group-hover:text-indigo-600 transition-colors" 
+                title={project?.name}
+            >
+                {project?.name || '—'}
+            </h3>
+            <p className="text-sm text-gray-500 truncate mt-1">{project?.wa_display_name}</p>
+        </div>
+        
+        {/* Clickable indicator */}
+        <FiChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0 mt-1
+                                   group-hover:text-indigo-600 group-hover:translate-x-1 
+                                   transition-all duration-200" />
+    </div>
+</div>
             </div>
 
             {/* Tags Section */}
@@ -553,7 +599,7 @@ function ProjectProfileCard({ project, profile, loading, error }) {
                 <ProfileDetailRow
                     icon={<FiPhone className="w-4 h-4" />}
                     label="WhatsApp Number"
-                    value={project?.wa_number}
+                    value={wa_number || project?.wa_number}
                 />
                  <ProfileDetailRow
                     icon={<FiFileText className="w-4 h-4" />}
@@ -567,13 +613,13 @@ function ProjectProfileCard({ project, profile, loading, error }) {
                     label="Website"
                     value={website}
                     isLink={true}
-                />
+                /> */}
                
                 <ProfileDetailRow
                     icon={<FiActivity className="w-4 h-4" />}
                     label="Product"
                     value={profile?.messaging_product}
-                /> */}
+                />
             </div>
         </div>
     );

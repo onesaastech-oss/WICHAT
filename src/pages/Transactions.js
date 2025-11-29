@@ -239,7 +239,7 @@ const Transactions = () => {
       [
         transaction.description,
         transaction.type,
-        `$${transaction.amount.toFixed(2)}`,
+        `₹${transaction.amount.toFixed(2)}`,
         transaction.remark || 'N/A'
       ]
     ];
@@ -271,7 +271,7 @@ const Transactions = () => {
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
     doc.text('Total Amount:', 140, finalY);
-    doc.text(`$${transaction.amount.toFixed(2)}`, 180, finalY);
+    doc.text(`₹${transaction.amount.toFixed(2)}`, 180, finalY);
     
     // Footer
     doc.setFontSize(8);
@@ -395,7 +395,7 @@ const Transactions = () => {
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Net Balance</p>
                   <p className={`text-2xl font-bold ${totalAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    ${Math.abs(totalAmount).toFixed(2)}
+                  ₹{Math.abs(totalAmount).toFixed(2)}
                   </p>
                 </div>
                 <div className="bg-green-100 rounded-lg p-3">
@@ -614,7 +614,7 @@ const Transactions = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={getTypeColor(transaction.type)}>
-                            {transaction.type === 'Credit' ? '+' : '-'}${transaction.amount.toFixed(2)}
+                            {transaction.type === 'Credit' ? '+' : '-'}₹{transaction.amount.toFixed(2)}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -650,7 +650,7 @@ const Transactions = () => {
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-semibold text-gray-900">{transaction.id}</span>
+                          <span className="text-sm font-semibold text-gray-900">{(transaction.id).slice(6)}</span>
                           <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(transaction.status)}`}>
                             {transaction.status}
                           </span>
@@ -658,7 +658,7 @@ const Transactions = () => {
                         <p className="text-xs text-gray-500">{transaction.invoiceNumber}</p>
                       </div>
                       <span className={getTypeColor(transaction.type)}>
-                        {transaction.type === 'Credit' ? '+' : '-'}${transaction.amount.toFixed(2)}
+                        {transaction.type === 'Credit' ? '' : ''}₹{transaction.amount.toFixed(2)}
                       </span>
                     </div>
                     <p className="text-sm text-gray-700 mb-2">{getTransactionTypeDisplay(transaction.description)}</p>

@@ -1405,11 +1405,23 @@ function TemplateEdit() {
             </div>
 
             {/*WhatsApp Preview section */}
-            <WhatsAppPreview
-              formData={formData}
-              bodyVariables={bodyVariables}
-              darkMode={false} // or make it toggleable
-            />
+            <div className="lg:col-span-1">
+              <div className="lg:sticky lg:top-24 lg:self-start">
+                <div className="bg-white shadow rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Template Preview</h3>
+                    <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                      Live
+                    </span>
+                  </div>
+                  <WhatsAppPreview
+                    formData={formData}
+                    bodyVariables={bodyVariables}
+                    darkMode={false} // or make it toggleable
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -7,14 +7,18 @@ const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }
     const [searchQuery, setSearchQuery] = useState('');
     const [projects, setProjects] = useState([]);
 
-    // Get projects from localStorage
+    // Get projects from localStorage (API response format: projects.list)
     useEffect(() => {
         if (isOpen) {
             try {
                 const userData = localStorage.getItem('userData');
                 if (userData) {
                     const parsedData = JSON.parse(userData);
-                    if (parsedData.projects && Array.isArray(parsedData.projects)) {
+                    // API returns projects as object with list property
+                    if (parsedData.projects?.list && Array.isArray(parsedData.projects.list)) {
+                        setProjects(parsedData.projects.list);
+                    } else if (parsedData.projects && Array.isArray(parsedData.projects)) {
+                        // Fallback for old format
                         setProjects(parsedData.projects);
                     } else {
                         setProjects([]);

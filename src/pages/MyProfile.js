@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
+import { fetchUserProfile, updateUserProfile } from '../api/auth';
 import {
     FiUser,
     FiMail,
@@ -19,21 +20,21 @@ const MyProfile = () => {
         return saved ? JSON.parse(saved) : false;
     });
 
-    // Basic profile information (persisted locally)
-    const [profile, setProfile] = useState(() => {
-        const saved = localStorage.getItem('userProfile');
-        return saved
-            ? JSON.parse(saved)
-            : {
-                  fullName: '',
-                  email: '',
-                  phone: '',
-                  role: 'Owner',
-                  companyName: '',
-                  timezone: 'Asia/Kolkata',
-                  locale: 'en-IN'
-              };
+    // Basic profile information
+    const [profile, setProfile] = useState({
+        fullName: '',
+        email: '',
+        phone: '',
+        countryCode: '91',
+        gender: 'male',
+        role: 'Owner',
+        companyName: '',
+        timezone: 'Asia/Kolkata',
+        locale: 'en-IN'
     });
+
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
 
     // Security form (not persisted – you would integrate backend API here)
     const [security, setSecurity] = useState({
@@ -60,6 +61,33 @@ const MyProfile = () => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
     }, [isMinimized]);
 
+    // Fetch user profile on component mount
+    useEffect(() => {
+        const loadProfile = async () => {
+            try {
+                setLoading(true);
+                const response = await fetchUserProfile();
+                if (response && !response.error && response.profile) {
+                    const profileData = response.profile;
+                    setProfile((prev) => ({
+                        ...prev,
+                        fullName: profileData.name || '',
+                        email: profileData.email || '',
+                        phone: profileData.mobile || '',
+                        countryCode: profileData.country_code || '91',
+                        gender: profileData.gender || 'male'
+                    }));
+                }
+            } catch (error) {
+                console.error('Error fetching profile:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadProfile();
+    }, []);
+
     // Lock body scroll when mobile sidebar is open
     useEffect(() => {
         if (mobileMenuOpen) {
@@ -71,11 +99,6 @@ const MyProfile = () => {
             document.body.style.overflow = 'auto';
         };
     }, [mobileMenuOpen]);
-
-    // Persist profile + notification settings
-    useEffect(() => {
-        localStorage.setItem('userProfile', JSON.stringify(profile));
-    }, [profile]);
 
     useEffect(() => {
         localStorage.setItem('userNotifications', JSON.stringify(notifications));
@@ -95,10 +118,29 @@ const MyProfile = () => {
         }));
     };
 
-    const handleProfileSubmit = (e) => {
+    const handleProfileSubmit = async (e) => {
         e.preventDefault();
-        // Here you would typically call an API to persist the profile on the server.
-        alert('Profile details saved');
+        try {
+            setSaving(true);
+            const response = await updateUserProfile({
+                name: profile.fullName,
+                email: profile.email,
+                country_code: profile.countryCode,
+                mobile: profile.phone,
+                gender: profile.gender
+            });
+
+            if (response && !response.error) {
+                alert('Profile updated successfully');
+            } else {
+                alert(response?.message || 'Failed to update profile');
+            }
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            alert('Error updating profile. Please try again.');
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleSecuritySubmit = (e) => {
@@ -172,6 +214,12 @@ const MyProfile = () => {
                             </div>
                         </div>
 
+                        {loading ? (
+                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6 text-center">
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Loading profile...</p>
+                            </div>
+                        ) : (
+                        <>
                         {/* Top summary card */}
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
@@ -198,7 +246,7 @@ const MyProfile = () => {
                                             </span>
                                             <span className="inline-flex items-center">
                                                 <FiPhone className="mr-1 h-3 w-3" />
-                                                {profile.phone || 'Add phone number'}
+                                                {profile.countryCode ? `+${profile.countryCode} ` : ''}{profile.phone || 'Add phone number'}
                                             </span>
                                         </div>
                                     </div>
@@ -282,6 +330,20 @@ const MyProfile = () => {
                                         </div>
                                         <div>
                                             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                Country Code
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={profile.countryCode}
+                                                onChange={(e) =>
+                                                    handleProfileChange('countryCode', e.target.value)
+                                                }
+                                                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                placeholder="91"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                 Phone (WhatsApp)
                                             </label>
                                             <div className="relative">
@@ -295,9 +357,25 @@ const MyProfile = () => {
                                                         handleProfileChange('phone', e.target.value)
                                                     }
                                                     className="block w-full pl-9 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                                    placeholder="+91 98765 43210"
+                                                    placeholder="9876543210"
                                                 />
                                             </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                Gender
+                                            </label>
+                                            <select
+                                                value={profile.gender}
+                                                onChange={(e) =>
+                                                    handleProfileChange('gender', e.target.value)
+                                                }
+                                                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                            >
+                                                <option value="male">Male</option>
+                                                <option value="female">Female</option>
+                                                <option value="others">Others</option>
+                                            </select>
                                         </div>
                                         <div>
                                             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -353,10 +431,11 @@ const MyProfile = () => {
                                     <div className="flex items-center justify-end">
                                         <button
                                             type="submit"
-                                            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                            disabled={saving || loading}
+                                            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             <FiSave className="mr-2 h-4 w-4" />
-                                            Save changes
+                                            {saving ? 'Saving...' : 'Save changes'}
                                         </button>
                                     </div>
                                 </form>
@@ -559,6 +638,8 @@ const MyProfile = () => {
                                 </div>
                             </div>
                         </div>
+                        </>
+                        )}
                     </div>
                 </main>
             </div>

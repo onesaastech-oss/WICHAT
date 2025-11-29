@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiCheck, FiCreditCard, FiZap, FiGitBranch, FiCode, FiTrendingUp, FiMail, FiCpu, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import { FiCheck, FiCreditCard, FiZap, FiGitBranch, FiCode, FiTrendingUp, FiMail, FiCpu, FiChevronDown, FiChevronUp, FiX, FiShield, FiLock, FiSmartphone, FiChevronRight, FiRefreshCw, FiCopy } from 'react-icons/fi';
+import { BsBank2, BsWallet2 } from 'react-icons/bs';
+import { MdQrCodeScanner } from 'react-icons/md';
+import { SiGooglepay, SiPhonepe, SiPaytm, SiAmazonpay } from 'react-icons/si';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { Header, Sidebar } from '../component/Menu';
+import toast from 'react-hot-toast';
+import { createPaymentOrder, checkPaymentStatus } from '../api/auth';
+import QRCode from 'react-qr-code';
 
 function MyPlan() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -14,7 +22,16 @@ function MyPlan() {
     const [expandedAddons, setExpandedAddons] = useState([]);
     const [billingCycle, setBillingCycle] = useState('monthly');
     const [loading, setLoading] = useState(true);
+    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
+    const [processing, setProcessing] = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [showUpiApps, setShowUpiApps] = useState(false);
+    const [showQrPopup, setShowQrPopup] = useState(false);
+    const [paymentDetails, setPaymentDetails] = useState(null);
+    const [isPolling, setIsPolling] = useState(false);
+    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
+    const navigate = useNavigate();
     const paymentSectionRef = useRef(null);
 
     // Persist sidebar minimized state
@@ -33,6 +50,132 @@ function MyPlan() {
             document.body.style.overflow = 'auto';
         };
     }, [mobileMenuOpen]);
+
+    // Track window resize
+    useEffect(() => {
+        const handleResize = () => {
+            setWindowWidth(window.innerWidth);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // Get project_id from localStorage
+    const getProjectId = () => {
+        try {
+            const userData = localStorage.getItem('userData');
+            if (userData) {
+                const parsed = JSON.parse(userData);
+                return parsed.selected_project_id || null;
+            }
+        } catch (error) {
+            console.error('Error getting project_id:', error);
+        }
+        return null;
+    };
+
+    // Reset payment details when amount or payment method changes
+    useEffect(() => {
+        setPaymentDetails(null);
+        setShowUpiApps(false);
+        setShowQrPopup(false);
+        setIsPolling(false);
+        setSelectedPaymentMethod(null);
+    }, [selectedAddons, billingCycle]);
+
+    // Lock body scroll when payment modal is open
+    useEffect(() => {
+        if (showPaymentModal || showUpiApps || showQrPopup) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'auto';
+        }
+        return () => {
+            document.body.style.overflow = 'auto';
+        };
+    }, [showPaymentModal, showUpiApps, showQrPopup]);
+
+    // Poll payment status for UPI payments
+    useEffect(() => {
+        if (!isPolling || !paymentDetails?.orderId) return;
+
+        const project_id = getProjectId();
+        if (!project_id) {
+            setIsPolling(false);
+            return;
+        }
+
+        let pollInterval;
+        let pollTimeout;
+
+        const checkStatus = async () => {
+            try {
+                const response = await checkPaymentStatus({
+                    project_id,
+                    order_id: paymentDetails.orderId
+                });
+
+                if (response.error) {
+                    console.error('Payment status check error:', response.msg);
+                    return;
+                }
+
+                const status = response.status?.toUpperCase();
+
+                if (status === 'SUCCESS') {
+                    setIsPolling(false);
+                    toast.success('Payment successful! Subscription updated.');
+                    sessionStorage.removeItem('pending_payment');
+                    navigate('/payment-status', { 
+                        state: { 
+                            paymentStatus: 'success',
+                            orderId: response.order_id,
+                            paymentId: response.payment_id,
+                            amount: response.amount
+                        } 
+                    });
+                } else if (status === 'FAILED') {
+                    setIsPolling(false);
+                    toast.error('Payment failed. Please try again.');
+                    sessionStorage.removeItem('pending_payment');
+                }
+            } catch (error) {
+                console.error('Error checking payment status:', error);
+            }
+        };
+
+        checkStatus();
+        pollInterval = setInterval(checkStatus, 3000);
+
+        pollTimeout = setTimeout(() => {
+            setIsPolling(false);
+            clearInterval(pollInterval);
+            toast.error('Payment status check timeout. Please check manually.');
+        }, 300000);
+
+        return () => {
+            clearInterval(pollInterval);
+            clearTimeout(pollTimeout);
+        };
+    }, [isPolling, paymentDetails?.orderId, navigate]);
+
+    // Check for payment callback on page load
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const paymentStatus = urlParams.get('status');
+        
+        if (paymentStatus === 'success') {
+            toast.success('Payment successful! Subscription updated.');
+            sessionStorage.removeItem('pending_payment');
+            setTimeout(() => {
+                window.history.replaceState({}, '', '/my-plan');
+            }, 2000);
+        } else if (paymentStatus === 'failed') {
+            toast.error('Payment failed. Please try again.');
+            sessionStorage.removeItem('pending_payment');
+            window.history.replaceState({}, '', '/my-plan');
+        }
+    }, []);
 
     const basePlan = {
         id: 1,
@@ -176,12 +319,213 @@ function MyPlan() {
         return basePrice + addonsPrice;
     };
 
-    const handlePayment = () => {
+    // Payment methods
+    const paymentMethods = [
+        {
+            id: 'upi',
+            name: 'UPI & QR',
+            icon: <MdQrCodeScanner className="text-indigo-600" size={28} />,
+            description: 'Pay via UPI apps or QR code',
+            recommended: true
+        },
+        {
+            id: 'card',
+            name: 'Credit/Debit Card',
+            icon: <FiCreditCard className="text-indigo-600" size={28} />,
+            description: 'Visa, Mastercard, RuPay, Amex',
+            recommended: false
+        },
+        {
+            id: 'netbanking',
+            name: 'Net Banking',
+            icon: <BsBank2 className="text-indigo-600" size={26} />,
+            description: 'All major banks',
+            recommended: false
+        },
+        {
+            id: 'wallet',
+            name: 'Wallets',
+            icon: <BsWallet2 className="text-indigo-600" size={26} />,
+            description: 'Paytm, PhonePe, Amazon Pay',
+            recommended: false
+        }
+    ];
+
+    const upiAppOptions = [
+        {
+            key: 'gpay',
+            label: 'Google Pay',
+            icon: <SiGooglepay className="text-blue-600" size={28} />
+        },
+        {
+            key: 'phonepe',
+            label: 'PhonePe',
+            icon: <SiPhonepe className="text-purple-600" size={28} />
+        },
+        {
+            key: 'paytm',
+            label: 'Paytm',
+            icon: <SiPaytm className="text-blue-500" size={28} />
+        },
+        {
+            key: 'bhim',
+            label: 'BHIM UPI',
+            icon: <MdQrCodeScanner className="text-orange-500" size={28} />
+        },
+        {
+            key: 'amazonpay',
+            label: 'Amazon Pay',
+            icon: <SiAmazonpay className="text-yellow-600" size={28} />
+        },
+        {
+            key: 'navi',
+            label: 'Navi',
+            icon: <BsWallet2 className="text-indigo-600" size={26} />
+        },
+        {
+            key: 'defaultUpi',
+            label: 'Other UPI Apps',
+            icon: <FiSmartphone className="text-indigo-600" size={26} />
+        }
+    ];
+
+    const handlePaymentMethodSelect = async (methodId) => {
+        setSelectedPaymentMethod(methodId);
+        setShowUpiApps(false);
+        setShowQrPopup(false);
+        
+        // Proceed with payment initialization, passing methodId directly
+        await initializePayment(methodId);
+    };
+
+    // Initialize payment
+    const initializePayment = async (methodId = null) => {
         const newAddons = selectedAddons.filter(id => !purchasedAddons.includes(id));
-        if (newAddons.length > 0) {
-            alert(`Processing payment for new addons: ${newAddons.map(id => addons.find(a => a.id === id)?.name).join(', ')}`);
-        } else {
-            alert('No new addons to purchase');
+        if (newAddons.length === 0) {
+            toast.error('No new addons to purchase');
+            return;
+        }
+
+        const totalAmount = calculateTotal();
+        if (!totalAmount || totalAmount < 1) {
+            toast.error('Please select addons to purchase');
+            return;
+        }
+
+        const paymentMethod = methodId || selectedPaymentMethod;
+        if (!paymentMethod) {
+            toast.error('Please select a payment method');
+            return;
+        }
+
+        const project_id = getProjectId();
+        if (!project_id) {
+            toast.error('Please select a project first');
+            return;
+        }
+
+        setProcessing(true);
+
+        try {
+            // Get current URL for redirect
+            const redirect_url = 'https://wichat-sigma.vercel.app' + '/payment-status';
+
+            // Create payment order via API
+            const response = await createPaymentOrder({
+                project_id,
+                amount: totalAmount,
+                redirect_url
+            });
+
+            if (response.error) {
+                throw new Error(response.msg || 'Failed to create payment order');
+            }
+
+            // Store payment details in sessionStorage for verification later
+            sessionStorage.setItem('pending_payment', JSON.stringify({
+                payment_id: response.payment_id,
+                order_id: response.order_id,
+                amount: totalAmount,
+                addons: newAddons
+            }));
+
+            // Handle UPI payment method - show payment sheet with QR + UPI apps
+            const currentPaymentMethod = methodId || selectedPaymentMethod;
+            if (currentPaymentMethod === 'upi' && response.qrIntent) {
+                setPaymentDetails({
+                    paymentUrl: response.paymentUrl,
+                    qrIntent: response.qrIntent,
+                    paymentId: response.payment_id,
+                    orderId: response.order_id,
+                    amount: totalAmount
+                });
+                setShowPaymentModal(false);
+                setShowQrPopup(false);
+                if (windowWidth < 768) {
+                    setShowUpiApps(true);
+                } else {
+                    setShowQrPopup(true);
+                }
+                setProcessing(false);
+                // Start polling for payment status
+                setIsPolling(true);
+            } else {
+                setShowPaymentModal(false);
+                setProcessing(false);
+                window.location.href = response.paymentUrl;
+            }
+
+        } catch (error) {
+            console.error('Payment initialization error:', error);
+            toast.error(error.message || 'Failed to initialize payment');
+            setProcessing(false);
+        }
+    };
+
+    // Open UPI app
+    const openUpiApp = (appName) => {
+        if (!paymentDetails?.qrIntent) return;
+        
+        const upiLink = paymentDetails.qrIntent[appName] || paymentDetails.qrIntent.defaultUpi;
+        window.location.href = upiLink;
+        
+        setTimeout(() => {
+            toast.success('Opening payment app...');
+        }, 500);
+    };
+
+    const showUpiModal = () => {
+        if (!paymentDetails?.qrIntent) {
+            toast.error('Generate the payment request first');
+            return;
+        }
+        setShowQrPopup(false);
+        setShowUpiApps(true);
+    };
+
+    const showQrModal = () => {
+        if (!paymentDetails?.qrIntent) {
+            toast.error('Generate the payment request first');
+            return;
+        }
+        setShowUpiApps(false);
+        setShowQrPopup(true);
+    };
+
+    const handleCloseQrModal = () => {
+        setShowQrPopup(false);
+        if (paymentDetails?.qrIntent) {
+            setShowUpiApps(true);
+        }
+    };
+
+    const handleCopy = async (text, label) => {
+        if (!text) return;
+        try {
+            await navigator.clipboard.writeText(text);
+            toast.success(`${label} copied`);
+        } catch (error) {
+            toast.error('Unable to copy');
         }
     };
 
@@ -441,7 +785,7 @@ function MyPlan() {
                                                 {selectedAddons.filter(id => !purchasedAddons.includes(id)).length} new add-on(s)
                                             </p>
                                             <button
-                                                onClick={handlePayment}
+                                                onClick={() => setShowPaymentModal(true)}
                                                 className="inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-2.5 border border-transparent rounded-lg text-xs sm:text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors whitespace-nowrap"
                                             >
                                                 <FiCreditCard className="mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -461,6 +805,257 @@ function MyPlan() {
                 )}
                 </div>
             </div>
+
+            {/* Payment Method Selection Modal */}
+            <AnimatePresence>
+                {showPaymentModal && (
+                    <motion.div
+                        className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowPaymentModal(false)}
+                    >
+                        <motion.div
+                            className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Modal Header */}
+                            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+                                <div>
+                                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Select Payment Method</h2>
+                                    <p className="text-sm text-gray-500 mt-1">Choose your preferred payment option</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowPaymentModal(false)}
+                                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    <FiX size={24} />
+                                </button>
+                            </div>
+
+                            {/* Payment Summary */}
+                            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                                <h3 className="text-sm font-semibold text-gray-900 mb-3">Order Summary</h3>
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-gray-600">Base Plan</span>
+                                        <span className="font-medium text-gray-900">
+                                            ₹{(billingCycle === 'monthly' ? basePlan.priceMonthly : basePlan.priceYearly).toLocaleString()}
+                                        </span>
+                                    </div>
+                                    {selectedAddons.filter(id => !purchasedAddons.includes(id)).map(addonId => {
+                                        const addon = addons.find(a => a.id === addonId);
+                                        const price = billingCycle === 'monthly' ? addon.priceMonthly : addon.priceYearly;
+                                        return (
+                                            <div key={addonId} className="flex items-center justify-between text-sm">
+                                                <span className="text-gray-600 truncate">{addon.name}</span>
+                                                <span className="font-medium text-gray-900 flex-shrink-0 ml-2">₹{price.toLocaleString()}</span>
+                                            </div>
+                                        );
+                                    })}
+                                    <div className="border-t border-gray-300 pt-2 flex items-center justify-between">
+                                        <span className="text-base font-semibold text-gray-900">Total</span>
+                                        <span className="text-lg font-bold text-indigo-600">
+                                            ₹{calculateTotal().toLocaleString()}
+                                            <span className="text-sm font-normal text-gray-500">/{billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Payment Methods */}
+                            <div className="p-6">
+                                <div className="space-y-3">
+                                    {paymentMethods.map((method) => (
+                                        <motion.button
+                                            key={method.id}
+                                            onClick={() => handlePaymentMethodSelect(method.id)}
+                                            disabled={processing}
+                                            className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                                                selectedPaymentMethod === method.id
+                                                    ? 'border-indigo-600 bg-indigo-50'
+                                                    : 'border-gray-200 hover:border-indigo-300 bg-white'
+                                            } ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            whileHover={!processing ? { scale: 1.01 } : {}}
+                                            whileTap={!processing ? { scale: 0.99 } : {}}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50">
+                                                    {method.icon}
+                                                </div>
+                                                <div className="text-left">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-semibold text-base text-gray-900">{method.name}</span>
+                                                        {method.recommended && (
+                                                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+                                                                Recommended
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-sm text-gray-500">{method.description}</span>
+                                                </div>
+                                            </div>
+                                            <FiChevronRight
+                                                className={`text-xl flex-shrink-0 ${
+                                                    selectedPaymentMethod === method.id ? 'text-indigo-600' : 'text-gray-400'
+                                                }`}
+                                            />
+                                        </motion.button>
+                                    ))}
+                                </div>
+
+                                {/* Security Badge */}
+                                <div className="mt-6 pt-6 border-t border-gray-200">
+                                    <div className="flex items-center justify-center text-sm text-gray-500">
+                                        <FiShield className="mr-2 text-green-600" size={18} />
+                                        <span>100% Secure Payment</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* UPI Apps Modal */}
+            <AnimatePresence>
+                {showUpiApps && paymentDetails?.qrIntent && (
+                    <motion.div
+                        className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowUpiApps(false)}
+                    >
+                        <motion.div
+                            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-gray-900">Select UPI App</h2>
+                                    <p className="text-sm text-gray-500">Amount: ₹{paymentDetails.amount}</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowUpiApps(false)}
+                                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    <FiX size={24} />
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 mb-6">
+                                <motion.button
+                                    onClick={() => {
+                                        setShowUpiApps(false);
+                                        showQrModal();
+                                    }}
+                                    className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                >
+                                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
+                                        <MdQrCodeScanner className="text-indigo-600" size={32} />
+                                    </div>
+                                    <span className="font-semibold text-gray-900 text-center">Scan QR</span>
+                                </motion.button>
+
+                                {upiAppOptions
+                                    .filter((option) => paymentDetails.qrIntent[option.key])
+                                    .map((option) => (
+                                        <motion.button
+                                            key={option.key}
+                                            onClick={() => openUpiApp(option.key)}
+                                            className="flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all"
+                                            whileHover={{ scale: 1.05 }}
+                                            whileTap={{ scale: 0.95 }}
+                                        >
+                                            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-md">
+                                                {option.icon}
+                                            </div>
+                                            <span className="font-semibold text-gray-900 text-center">{option.label}</span>
+                                        </motion.button>
+                                    ))}
+                            </div>
+
+                            <div className="bg-blue-50 rounded-xl p-4 text-center">
+                                <p className="text-sm text-blue-900">
+                                    <FiShield className="inline mr-2" />
+                                    Select your preferred UPI app or scan the QR to complete the payment
+                                </p>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* QR Modal */}
+            <AnimatePresence>
+                {showQrPopup && paymentDetails?.qrIntent && (
+                    <motion.div
+                        className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={handleCloseQrModal}
+                    >
+                        <motion.div
+                            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6"
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-gray-900">Scan & Pay</h2>
+                                    <p className="text-sm text-gray-500">Amount: ₹{paymentDetails.amount}</p>
+                                </div>
+                                <button
+                                    onClick={handleCloseQrModal}
+                                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    <FiX size={24} />
+                                </button>
+                            </div>
+
+                            <div className="flex flex-col items-center gap-4">
+                                <div className="bg-indigo-50 p-4 rounded-2xl shadow-inner">
+                                    <QRCode
+                                        value={paymentDetails.qrIntent.defaultUpi || paymentDetails.paymentUrl}
+                                        size={200}
+                                        className="w-48 h-48"
+                                    />
+                                </div>
+                                <p className="text-sm text-gray-600 text-center">
+                                    Scan using any UPI app to complete your payment.
+                                </p>
+                                <div className="flex flex-col w-full gap-2">
+                                    <button
+                                        onClick={() => handleCopy(paymentDetails.qrIntent.defaultUpi, 'UPI intent')}
+                                        className="w-full py-2 px-3 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:border-indigo-300 transition-colors flex items-center justify-center"
+                                    >
+                                        <FiCopy className="mr-2" size={16} /> Copy UPI Intent
+                                    </button>
+                                    <button
+                                        onClick={() => handleCopy(paymentDetails.paymentUrl, 'Payment link')}
+                                        className="w-full py-2 px-3 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors flex items-center justify-center"
+                                    >
+                                        <FiCopy className="mr-2" size={16} /> Copy Payment Link
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
