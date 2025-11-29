@@ -85,6 +85,14 @@ export const updateUserProfile = async ({ name, email, country_code, mobile, gen
     gender
   };
 
+  // Encrypt the payload
+  const { data, key } = Encrypt(payload);
+
+  const data_pass = JSON.stringify({
+    data,
+    key
+  });
+
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
@@ -94,7 +102,7 @@ export const updateUserProfile = async ({ name, email, country_code, mobile, gen
       'username': username,
       'Content-Type': 'application/json'
     },
-    data: payload
+    data: data_pass
   };
 
   const response = await axios.request(config);

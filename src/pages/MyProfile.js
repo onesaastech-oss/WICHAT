@@ -131,6 +131,18 @@ const MyProfile = () => {
             });
 
             if (response && !response.error) {
+                // Update local state with the returned profile data
+                if (response.profile) {
+                    const profileData = response.profile;
+                    setProfile((prev) => ({
+                        ...prev,
+                        fullName: profileData.name || prev.fullName,
+                        email: profileData.email || prev.email,
+                        phone: profileData.mobile || prev.phone,
+                        countryCode: profileData.country_code || prev.countryCode,
+                        gender: profileData.gender || prev.gender
+                    }));
+                }
                 alert('Profile updated successfully');
             } else {
                 alert(response?.message || 'Failed to update profile');
@@ -377,20 +389,7 @@ const MyProfile = () => {
                                                 <option value="others">Others</option>
                                             </select>
                                         </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                Workspace / company name
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={profile.companyName}
-                                                onChange={(e) =>
-                                                    handleProfileChange('companyName', e.target.value)
-                                                }
-                                                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                                placeholder="Business / workspace name"
-                                            />
-                                        </div>
+
                                         <div>
                                             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                 Timezone
