@@ -586,7 +586,7 @@ const WalletRecharge = () => {
                       <motion.button
                         key={option.value}
                         onClick={() => handleAmountSelect(option.value)}
-                        className={`relative p-3 sm:p-4 rounded-lg sm:rounded-xl border-2 transition-all ${
+                        className={`relative p-2 sm:px-3 sm:py-4 rounded-lg sm:rounded-xl border-2 transition-all ${
                           selectedAmount === option.value
                             ? 'border-indigo-600 bg-indigo-50'
                             : 'border-gray-200 hover:border-indigo-300 bg-white active:border-indigo-400'
@@ -600,7 +600,7 @@ const WalletRecharge = () => {
                             Popular
                           </div>
                         )}
-                        <div className="text-xl sm:text-xl font-bold text-gray-900">{option.label}</div>
+                        <div className="text-sm sm:text-sm font-bold text-gray-900">{option.label}</div>
                       </motion.button>
                     ))}
                   </div>

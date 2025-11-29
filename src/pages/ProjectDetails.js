@@ -690,9 +690,9 @@ const ProjectDetails = () => {
                                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                                         
                                         {/* Banner/Header of Card */}
-                                        <div className="h-24 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
-                                        <div className="px-6 pb-6">
-                                            <div className="relative flex items-end -mt-12 mb-6">
+                              
+                                        <div className="px-4 pb-4">
+                                            <div className="relative flex mt-3 mb-6  items-center">
                                                 <div className="relative group">
                                                     <img 
                                                         src={isEditing ? editForm.profile_picture_url : data.profile?.profile_picture_url || ''} 

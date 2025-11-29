@@ -440,7 +440,7 @@ const MyProfile = () => {
                                 </form>
 
                                 {/* Security form */}
-                                <form
+                                {/* <form
                                     onSubmit={handleSecuritySubmit}
                                     className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 space-y-6"
                                 >
@@ -515,7 +515,7 @@ const MyProfile = () => {
                                             Update password
                                         </button>
                                     </div>
-                                </form>
+                                </form> */}
                             </div>
 
                             {/* Right column: notifications & meta */}
