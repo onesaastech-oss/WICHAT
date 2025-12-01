@@ -12,6 +12,7 @@ import {
 // Adjust these import paths if necessary
 import { fetchProjectInfo } from '../store/projectSlice';
 import { setSelectedProjectId, setAuthData } from '../store/authSlice';
+import { fetchUserProfile } from '../api/auth';
 import SwitchProjectModal from './Modals/SwitchProjectModal';
 
 // ==========================================
@@ -165,6 +166,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
   const [switchProjectModalOpen, setSwitchProjectModalOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [selectedProjectName, setSelectedProjectName] = useState(null);
+  const [userProfile, setUserProfile] = useState({ name: '', email: '' });
   
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -219,6 +221,72 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
       dispatch(fetchProjectInfo());
     }
   }, [dispatch, projectInfoStatus]);
+
+  // Load user profile - first from localStorage, then fetch from API
+  useEffect(() => {
+    // Load from localStorage immediately
+    const loadFromLocalStorage = () => {
+      try {
+        const userData = localStorage.getItem('userData');
+        if (userData) {
+          const parsed = JSON.parse(userData);
+          if (parsed.profile) {
+            setUserProfile({
+              name: parsed.profile.name || '',
+              email: parsed.profile.email || ''
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing userData from localStorage:', error);
+      }
+    };
+
+    loadFromLocalStorage();
+
+    // Fetch from API in the background
+    const fetchProfile = async () => {
+      try {
+        const response = await fetchUserProfile();
+        if (response && response.profile) {
+          setUserProfile({
+            name: response.profile.name || '',
+            email: response.profile.email || ''
+          });
+          // Update localStorage with fresh data
+          try {
+            const userData = localStorage.getItem('userData');
+            if (userData) {
+              const parsed = JSON.parse(userData);
+              localStorage.setItem('userData', JSON.stringify({
+                ...parsed,
+                profile: response.profile
+              }));
+            }
+          } catch (error) {
+            console.error('Error updating localStorage:', error);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+        // Keep showing localStorage data on error
+      }
+    };
+
+    fetchProfile();
+  }, []);
+
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (userProfile.name) {
+      const names = userProfile.name.trim().split(' ');
+      if (names.length >= 2) {
+        return (names[0][0] + names[names.length - 1][0]).toUpperCase();
+      }
+      return userProfile.name.substring(0, 2).toUpperCase();
+    }
+    return 'U'; // Default initial
+  };
 
   const profileItems = [
     { title: 'My Profile', icon: <FiUser size={16} />, path: '/my-profile' },
@@ -277,7 +345,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
 
             <div className="relative">
               <button className="flex items-center gap-2 focus:outline-none ring-offset-2 focus:ring-2 focus:ring-indigo-100 rounded-full transition-all" onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}>
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-medium text-sm shadow-md shadow-indigo-200 border-2 border-white">BM</div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-medium text-sm shadow-md shadow-indigo-200 border-2 border-white">{getUserInitials()}</div>
               </button>
 
               {profileDropdownOpen && (
@@ -285,8 +353,8 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
                   <div className="fixed inset-0 z-40" onClick={() => setProfileDropdownOpen(false)}></div>
                   <div className="absolute right-0 mt-3 w-56 origin-top-right rounded-xl border border-slate-100 bg-white p-1 shadow-xl ring-1 ring-black ring-opacity-5 z-50 animate-in fade-in zoom-in-95 duration-100">
                     <div className="px-3 py-2 border-b border-slate-100 mb-1">
-                      <p className="text-sm font-semibold text-slate-900">Bashir Mustaque</p>
-                      <p className="text-xs text-slate-500 truncate">user@example.com</p>
+                      <p className="text-sm font-semibold text-slate-900">{userProfile.name || 'User'}</p>
+                      <p className="text-xs text-slate-500 truncate">{userProfile.email || ''}</p>
                     </div>
                     <button className="md:hidden flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-colors" onClick={() => { setProfileDropdownOpen(false); setSwitchProjectModalOpen(true); }}>
                       <FiBriefcase size={16} /> Switch Project

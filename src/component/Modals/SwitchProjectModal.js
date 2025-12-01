@@ -1,35 +1,78 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiCheck, FiBriefcase } from 'react-icons/fi';
+import { FiX, FiCheck, FiBriefcase, FiRefreshCw } from 'react-icons/fi';
+import { fetchUserProfile } from '../../api/auth';
 
 const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }) => {
     const [selectedCompany, setSelectedCompany] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [projects, setProjects] = useState([]);
+    const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState(null);
 
-    // Get projects from localStorage (API response format: projects.list)
+    // Load projects from localStorage immediately, then fetch from API
     useEffect(() => {
         if (isOpen) {
-            try {
-                const userData = localStorage.getItem('userData');
-                if (userData) {
-                    const parsedData = JSON.parse(userData);
-                    // API returns projects as object with list property
-                    if (parsedData.projects?.list && Array.isArray(parsedData.projects.list)) {
-                        setProjects(parsedData.projects.list);
-                    } else if (parsedData.projects && Array.isArray(parsedData.projects)) {
-                        // Fallback for old format
-                        setProjects(parsedData.projects);
-                    } else {
-                        setProjects([]);
+            // First, load from localStorage immediately (synchronous)
+            const loadFromLocalStorage = () => {
+                try {
+                    const userData = localStorage.getItem('userData');
+                    if (userData) {
+                        const parsedData = JSON.parse(userData);
+                        if (parsedData.projects?.list && Array.isArray(parsedData.projects.list)) {
+                            setProjects(parsedData.projects.list);
+                        } else if (parsedData.projects && Array.isArray(parsedData.projects)) {
+                            setProjects(parsedData.projects);
+                        }
                     }
-                } else {
-                    setProjects([]);
+                } catch (error) {
+                    console.error('Error parsing userData from localStorage:', error);
                 }
-            } catch (error) {
-                console.error('Error parsing userData from localStorage:', error);
-                setProjects([]);
-            }
+            };
+
+            // Load from localStorage first
+            loadFromLocalStorage();
+
+            // Then fetch from API in the background
+            const fetchFromAPI = async () => {
+                setRefreshing(true);
+                setError(null);
+                try {
+                    const response = await fetchUserProfile();
+                    if (response && response.projects) {
+                        // API returns projects as object with list property
+                        let newProjects = [];
+                        if (response.projects.list && Array.isArray(response.projects.list)) {
+                            newProjects = response.projects.list;
+                        } else if (Array.isArray(response.projects)) {
+                            newProjects = response.projects;
+                        }
+                        
+                        // Smoothly update with new data
+                        if (newProjects.length > 0) {
+                            setProjects(newProjects);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching projects from API:', error);
+                    setError('Failed to refresh projects');
+                    // Keep showing localStorage data on error
+                } finally {
+                    setRefreshing(false);
+                }
+            };
+
+            // Small delay to ensure localStorage data is shown first
+            const timeoutId = setTimeout(() => {
+                fetchFromAPI();
+            }, 100);
+
+            return () => clearTimeout(timeoutId);
+        } else {
+            // Reset state when modal closes
+            setProjects([]);
+            setRefreshing(false);
+            setError(null);
         }
     }, [isOpen]);
 
@@ -56,7 +99,7 @@ const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }
         }
     }, [isOpen]);
 
-    // Use projects from localStorage, fallback to companies prop, then empty array
+    // Use projects from API, fallback to companies prop, then empty array
     const projectList = projects.length > 0 ? projects : (companies.length > 0 ? companies : []);
 
     // Filter projects based on search query
@@ -105,6 +148,15 @@ const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                 Switch Project
                             </h3>
+                            {refreshing && (
+                                <motion.div
+                                    animate={{ rotate: 360 }}
+                                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                    className="ml-2"
+                                >
+                                    <FiRefreshCw className="w-4 h-4 text-indigo-500" />
+                                </motion.div>
+                            )}
                         </div>
                         <button
                             onClick={onClose}
@@ -127,6 +179,11 @@ const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }
 
                     {/* Project List */}
                     <div className="flex-1 overflow-y-auto p-4">
+                        {error && (
+                            <div className="mb-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                                <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+                            </div>
+                        )}
                         {filteredProjects.length === 0 ? (
                             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                                 No projects found
