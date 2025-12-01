@@ -139,8 +139,11 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         if (!tokens) return;
 
         try {
+            // Use the currently selected project ID (fallback to first project if needed)
+            const projectId = tokens.selected_project_id  || '';
+
             const messagePayload = {
-                project_id: tokens.projects?.[0]?.project_id || '',
+                project_id: projectId,
                 last_id: "0"
             };
 
@@ -384,6 +387,17 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         onChatSelect(updatedChat);
     };
 
+    // Calculate total unread count across all chats
+    const getTotalUnreadCount = () => {
+        return chats.reduce((total, chat) => {
+            const unreadValueRaw = Number(chat.unread_count ?? 0);
+            const unreadCount = Number.isFinite(unreadValueRaw) ? Math.max(0, unreadValueRaw) : 0;
+            return total + unreadCount;
+        }, 0);
+    };
+
+
+    const totalUnreadCount = getTotalUnreadCount();
 
     return (
         <>
@@ -402,28 +416,38 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
 
             {/* Tabs */}
             <div className="flex border-b" style={{ borderColor: darkMode ? '#374151' : '#e5e7eb' }}>
-                {['All', 'Unread', 'Favourites', 'Assigned'].map((tab) => (
-                    <button
-                        key={tab}
-                        className={`flex-1 py-3 text-sm font-medium relative ${activeTab === tab
-                            ? darkMode
-                                ? 'text-blue-400'
-                                : 'text-blue-600'
-                            : darkMode
-                                ? 'text-gray-400'
-                                : 'text-gray-500'
-                            }`}
-                        onClick={() => setActiveTab(tab)}
-                    >
-                        {tab}
-                        {activeTab === tab && (
-                            <div
-                                className={`absolute bottom-0 left-1/2 transform -translate-x-1/2 w-1/2 h-1 rounded-full ${darkMode ? 'bg-blue-400' : 'bg-blue-600'
-                                    }`}
-                            ></div>
-                        )}
-                    </button>
-                ))}
+                {['All', 'Unread', 'Favourites', 'Assigned'].map((tab) => {
+                    // Show total unread count badge on "All" tab
+                    const showUnreadBadge = tab === 'All' && totalUnreadCount > 0;
+                    
+                    return (
+                        <button
+                            key={tab}
+                            className={`flex-1 py-3 text-sm font-medium relative flex items-center justify-center gap-2 ${activeTab === tab
+                                ? darkMode
+                                    ? 'text-blue-400'
+                                    : 'text-blue-600'
+                                : darkMode
+                                    ? 'text-gray-400'
+                                    : 'text-gray-500'
+                                }`}
+                            onClick={() => setActiveTab(tab)}
+                        >
+                            <span>{tab}</span>
+                            {showUnreadBadge && (
+                                <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-green-500 text-white text-xs font-semibold flex items-center justify-center">
+                                    {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                                </span>
+                            )}
+                            {activeTab === tab && (
+                                <div
+                                    className={`absolute bottom-0 left-1/2 transform -translate-x-1/2 w-1/2 h-1 rounded-full ${darkMode ? 'bg-blue-400' : 'bg-blue-600'
+                                        }`}
+                                ></div>
+                            )}
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Chat List */}

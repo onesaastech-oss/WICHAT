@@ -522,7 +522,7 @@ const DateSeparator = ({ displayDate, dateId }) => {
 // };
 
 // Message Item Component with Info Button
-const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime, messageKey, highlightedMessageId }) => {
+const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview, formatTime, messageKey, highlightedMessageId }) => {
     const [showInfoModal, setShowInfoModal] = useState(false);
     const [audioTime, setAudioTime] = useState({ currentTime: 0, duration: 0 });
 
@@ -551,7 +551,7 @@ const MessageItem = ({ msg, activeChat, darkMode, renderFilePreview, formatTime,
                     <div className={`flex items-end space-x-1 sm:space-x-2 ${msg.type === 'out' ? 'flex-row-reverse space-x-reverse' : ''}`}>
                         {msg.type !== 'out' && (
                             <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold text-xs sm:text-sm flex-shrink-0">
-                                {activeChat.name.charAt(0).toUpperCase()}
+                                {(displayName || activeChat?.name || '').charAt(0).toUpperCase()}
                             </div>
                         )}
                         <div
@@ -1498,13 +1498,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
     }, [tokens?.token, tokens?.username, tokens.projects]);
 
-    // Auto-fetch contact details when activeChat changes and panel is open
+    // Auto-fetch contact details when activeChat changes
     useEffect(() => {
-        if (showContactDetails && activeChat?.number && tokens?.token) {
+        if (activeChat?.number && tokens?.token) {
             console.log('🔄 Active chat changed, fetching contact details for:', activeChat.number);
             fetchContactDetails(activeChat.number);
         }
-    }, [activeChat?.number, showContactDetails, tokens?.token, fetchContactDetails]);
+    }, [activeChat?.number, tokens?.token, fetchContactDetails]);
 
     // Reset contact details when switching chats
     useEffect(() => {
@@ -1514,6 +1514,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             setContactDetailsError('');
         }
     }, [activeChat?.number]);
+
+    // Compute display name: prefer contactDetails name if available, otherwise use activeChat.name
+    const displayName = useMemo(() => {
+        if (contactDetails?.has_contact && contactDetails?.contact?.name) {
+            return contactDetails.contact.name;
+        }
+        return activeChat?.name || '';
+    }, [contactDetails, activeChat?.name]);
 
     const processApiResponse = async (apiMessages, isLoadingPrevious = false, apiLastId = null) => {
         try {
@@ -2669,7 +2677,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
                         <div className="relative">
                             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold text-sm sm:text-base">
-                                {activeChat.name.charAt(0).toUpperCase()}
+                                {displayName.charAt(0).toUpperCase()}
                             </div>
                             {activeChat.isFavorite && (
                                 <div className="absolute -top-1 -right-1">
@@ -2679,7 +2687,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         </div>
                         <div className="min-w-0">
                             <h3 className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base truncate max-w-[120px] sm:max-w-none">
-                                {activeChat.name}
+                                {displayName}
                             </h3>
                         </div>
                     </div>
@@ -2770,6 +2778,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                                     highlightedMessageId={highlightedMessageId}
                                                     msg={msg}
                                                     activeChat={activeChat}
+                                                    displayName={displayName}
                                                     darkMode={darkMode}
                                                     renderFilePreview={renderFilePreview}
                                                     formatTime={formatTime}

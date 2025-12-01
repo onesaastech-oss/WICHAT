@@ -93,7 +93,7 @@ const CampaignList = () => {
             const lastIdToUse = reset ? 0 : (currentLastId !== null ? currentLastId : lastId);
 
             const payload = {
-                project_id: tokens.projects?.[0]?.project_id || '',
+                project_id: tokens.selected_project_id || '',
                 last_id: lastIdToUse,
                 status: filterStatus // filterStatus already uses API values: 'all', 'complete', 'pending', 'stopped'
             };

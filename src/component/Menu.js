@@ -14,6 +14,7 @@ import { fetchProjectInfo } from '../store/projectSlice';
 import { setSelectedProjectId, setAuthData } from '../store/authSlice';
 import { fetchUserProfile } from '../api/auth';
 import SwitchProjectModal from './Modals/SwitchProjectModal';
+import { dbHelper } from '../pages/db';
 
 // ==========================================
 // 1. Constants & Styles (Modern Indigo Theme)
@@ -64,12 +65,13 @@ const isSubmenuItemActive = (submenuPath, currentPath) => {
 // ==========================================
 // 3. NavItem Component (MOVED OUTSIDE)
 // ==========================================
-const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubmenus, toggleSubmenu, setHoveredMenu, hoveredMenu, setMobileMenuOpen, hasProjects }) => {
+const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubmenus, toggleSubmenu, setHoveredMenu, hoveredMenu, setMobileMenuOpen, hasProjects, unreadCount }) => {
   const isActive = isItemActive(item, currentPath);
   const isDisabled = requiresProject(item) && !hasProjects;
   const hasSubmenu = item.submenus && item.submenus.length > 0;
   const isOpen = isMobile ? openSubmenus[`mobile-${item.key}`] : openSubmenus[item.key];
   const isMini = !isMobile && isMinimized && !isHovered;
+  const showUnreadBadge = item.key === 'live-chat' && unreadCount > 0;
 
   // Render Submenu Item (Parent)
   if (hasSubmenu) {
@@ -139,13 +141,25 @@ const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubm
         onMouseEnter={() => isMini && setHoveredMenu(item.key)}
         onMouseLeave={() => isMini && setHoveredMenu(null)}
       >
-        <span className={`${isMini ? '' : 'mr-3'} ${isDisabled ? 'text-slate-300' : isActive ? THEME.iconActive : THEME.iconInactive} transition-colors`}>
+        <span className={`${isMini ? '' : 'mr-3'} ${isDisabled ? 'text-slate-300' : isActive ? THEME.iconActive : THEME.iconInactive} transition-colors relative`}>
           {item.icon}
+          {isMini && showUnreadBadge && (
+            <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-green-500 text-white text-[10px] font-semibold flex items-center justify-center border-2 border-white">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
         </span>
         {!isMini && (
           <div className="flex-1 flex items-center justify-between">
             <span>{item.title}</span>
-            {isDisabled && <FiLock size={12} className="text-slate-300" />}
+            <div className="flex items-center gap-2">
+              {showUnreadBadge && (
+                <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-green-500 text-white text-xs font-semibold flex items-center justify-center">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+              {isDisabled && <FiLock size={12} className="text-slate-300" />}
+            </div>
           </div>
         )}
         {isMini && hoveredMenu === item.key && (
@@ -393,6 +407,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
   const [hoveredMenu, setHoveredMenu] = useState(null);
   const [isHovered, setIsHovered] = useState(false);
   const [currentPath, setCurrentPath] = useState('');
+  const [totalUnreadCount, setTotalUnreadCount] = useState(0);
 
   const userData = getUserData();
   const projectList = userData?.projects?.list || (Array.isArray(userData?.projects) ? userData.projects : []);
@@ -403,6 +418,69 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
     const handleLocationChange = () => setCurrentPath(window.location.pathname);
     window.addEventListener('popstate', handleLocationChange);
     return () => window.removeEventListener('popstate', handleLocationChange);
+  }, []);
+
+  // Fetch and calculate total unread count
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const userData = getUserData();
+        const selectedProjectId = userData?.selected_project_id;
+        
+        if (!selectedProjectId) {
+          setTotalUnreadCount(0);
+          return;
+        }
+
+        // Initialize database if needed
+        try {
+          await dbHelper.init(selectedProjectId);
+        } catch (error) {
+          // Database might not be initialized yet, that's okay
+          setTotalUnreadCount(0);
+          return;
+        }
+
+        // Get chats from database
+        const chats = await dbHelper.getChats();
+        
+        // Calculate total unread count
+        const totalUnread = chats.reduce((total, chat) => {
+          const unreadValueRaw = Number(chat.unread_count ?? 0);
+          const unreadCount = Number.isFinite(unreadValueRaw) ? Math.max(0, unreadValueRaw) : 0;
+          return total + unreadCount;
+        }, 0);
+
+        setTotalUnreadCount(totalUnread);
+      } catch (error) {
+        // Silently handle errors - database might not be available
+        setTotalUnreadCount(0);
+      }
+    };
+
+    fetchUnreadCount();
+
+    // Set up database change listener to update count when chats change
+    let unsubscribe;
+    try {
+      unsubscribe = dbHelper.setOnDataChange((table, operation, data) => {
+        if (table === 'chats') {
+          fetchUnreadCount();
+        }
+      });
+    } catch (error) {
+      // Listener setup might fail if DB not initialized, that's okay
+    }
+
+    // Poll for updates every 5 seconds as a fallback
+    const interval = setInterval(fetchUnreadCount, 5000);
+
+    return () => {
+      if (unsubscribe && typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+      clearInterval(interval);
+    };
   }, []);
 
   const toggleSubmenu = (menuKey) => {
@@ -473,6 +551,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
                     toggleSubmenu={toggleSubmenu}
                     hasProjects={hasProjects}
                     setMobileMenuOpen={setMobileMenuOpen}
+                    unreadCount={totalUnreadCount}
                   />
                 ))}
               </div>
@@ -504,6 +583,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
                 setHoveredMenu={setHoveredMenu}
                 hoveredMenu={hoveredMenu}
                 hasProjects={hasProjects}
+                unreadCount={totalUnreadCount}
               />
             ))}
           </nav>

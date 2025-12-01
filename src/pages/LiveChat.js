@@ -51,10 +51,15 @@ function LiveChat() {
                 return;
             }
 
+            // Initialize chat database for the currently selected project
             let dbInitSuccess = false;
-            if (parsedData.projects?.[0]?.project_id) {
-                dbInitSuccess = await dbHelper.init(parsedData.projects?.[0]?.project_id || 'default_project');
+            const selectedProjectId = parsedData.selected_project_id ;
+
+            if (selectedProjectId) {
+                dbInitSuccess = await dbHelper.init(selectedProjectId || 'default_project');
                 setDbAvailable(dbInitSuccess);
+            } else {
+                console.warn('No project_id found for LiveChat DB init, falling back to disabled DB state');
             }
 
             setTokens(parsedData);
