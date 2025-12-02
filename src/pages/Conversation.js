@@ -989,6 +989,26 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     onContactUpdate(trimmedNumber, trimmedName);
                 }
 
+                // Update local contact details state immediately to reflect changes in UI
+                setContactDetails(prev => {
+                    const updatedContact = {
+                        ...prev?.contact,
+                        ...contactData,
+                        modify_date: new Date().toISOString()
+                    };
+                    
+                    // Ensure create_date is preserved if it exists in previous state
+                    if (prev?.contact?.create_date && !updatedContact.create_date) {
+                        updatedContact.create_date = prev.contact.create_date;
+                    }
+
+                    return {
+                        ...prev,
+                        has_contact: true,
+                        contact: updatedContact
+                    };
+                });
+
                 setShowContactModal(false);
             } else {
                 const errorMessage = response?.data?.message || 'Unknown error';
