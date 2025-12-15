@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
+import { useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
+import { fetchProjectInfo } from '../store/projectSlice';
 import {
     FiPaperclip,
     FiMic,
@@ -31,7 +34,9 @@ import {
     FiHome,
     FiMail,
     FiGlobe,
-    FiFileText
+    FiFileText,
+    FiUserPlus,
+    FiUserCheck
 } from 'react-icons/fi';
 import { FaRegEye } from "react-icons/fa6";
 import { MdOutlineCancel } from "react-icons/md";
@@ -70,6 +75,7 @@ const computeSimpleHash = (value) => {
     }
     return Math.abs(hash).toString(36);
 };
+
 
 const getMessageKey = (msg) => {
     if (!msg) return 'message-unknown';
@@ -399,127 +405,7 @@ const DateSeparator = ({ displayDate, dateId }) => {
     );
 };
 
-// Template Message Renderer Component
-// const TemplateMessageRenderer = ({ msg, darkMode, renderFilePreview, isOwnMessage, onAudioTimeChange }) => {
-//     const template = msg.template || {};
-//     const components = template.components || [];
-//     const componentList = Array.isArray(msg.component) ? msg.component : [];
 
-//     // Extract components
-//     const headerComponent = components.find(c => c.type === 'HEADER');
-//     const componentHeader = componentList.find(c => c.type?.toLowerCase() === 'header');
-//     const bodyComponent = components.find(c => c.type === 'BODY');
-//     const footerComponent = components.find(c => c.type === 'FOOTER');
-//     const buttonsComponent = components.find(c => c.type === 'BUTTONS');
-
-//     // Get header media info
-//     const headerParamType = componentHeader?.parameters?.[0]?.type?.toUpperCase();
-//     const headerFormat = headerComponent?.format || headerParamType || 'NONE';
-//     const hasHeaderMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
-
-//     // Get body text (already resolved message with variables replaced)
-//     const bodyText = msg.message || bodyComponent?.text || '';
-
-//     // Get footer text
-//     const footerText = footerComponent?.text || '';
-
-//     // Get buttons
-//     const buttons = buttonsComponent?.buttons || [];
-
-//     // Determine text colors based on message type (outgoing has white text on green bg)
-//     const textColorClass = isOwnMessage
-//         ? 'text-gray-800'
-//         : (darkMode ? 'text-white' : 'text-gray-900');
-//     const footerColorClass = isOwnMessage
-//         ? 'text-gray-800'
-//         : (darkMode ? 'text-gray-300' : 'text-gray-600');
-//     const buttonClass = isOwnMessage
-//         ? 'bg-[#D9FDD3] text-gray-800 border border-gray-600 hover:bg-white/30'
-//         : (darkMode
-//             ? 'bg-white/20 text-white border border-white/30 hover:bg-white/30'
-//             : 'bg-white text-gray-800 border border-gray-200 hover:bg-gray-50');
-
-//     return (
-//         <div className="space-y-2">
-//             {/* Header Media */}
-//             {hasHeaderMedia && msg.media_url && (
-//                 <div className="mb-2">
-//                     {renderFilePreview(
-//                         {
-//                             ...msg,
-//                             message_type: headerFormat.toLowerCase() === 'document' ? 'document' :
-//                                 headerFormat.toLowerCase() === 'video' ? 'video' :
-//                                     headerFormat.toLowerCase() === 'image' ? 'image' : 'document',
-//                             send_by: isOwnMessage ? 'You' : (msg.send_by || msg.send_by_name || '')
-//                         },
-//                         { onAudioTimeChange }
-//                     )}
-//                 </div>
-//             )}
-
-//             {/* Body Text */}
-//             {bodyText && (
-//                 <div className={`text-sm sm:text-base whitespace-pre-wrap break-words ${textColorClass}`}>
-//                     {bodyText}
-//                 </div>
-//             )}
-
-//             {/* Footer */}
-//             {footerText && (
-//                 <div className={`text-xs mt-2 ${footerColorClass}`}>
-//                     {footerText}
-//                 </div>
-//             )}
-
-//             {/* Buttons */}
-//             {buttons && buttons.length > 0 && (
-//                 <div className="flex flex-wrap gap-2 mt-3">
-//                     {buttons.map((btn, idx) => {
-//                         const isUrl = btn.type === 'URL';
-//                         const isPhone = btn.type === 'PHONE_NUMBER';
-//                         const buttonText = btn.text || 'Button';
-
-//                         if (isUrl) {
-//                             return (
-//                                 <a
-//                                     key={idx}
-//                                     href={btn.url || '#'}
-//                                     target="_blank"
-//                                     rel="noopener noreferrer"
-//                                     className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${buttonClass}`}
-//                                     onClick={(e) => e.stopPropagation()}
-//                                 >
-//                                     {buttonText}
-//                                 </a>
-//                             );
-//                         } else if (isPhone) {
-//                             return (
-//                                 <a
-//                                     key={idx}
-//                                     href={`tel:${btn.phone_number || ''}`}
-//                                     className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${buttonClass}`}
-//                                     onClick={(e) => e.stopPropagation()}
-//                                 >
-//                                     {buttonText}
-//                                 </a>
-//                             );
-//                         } else {
-//                             return (
-//                                 <button
-//                                     key={idx}
-//                                     className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${buttonClass}`}
-//                                     disabled
-//                                 >
-//                                     {buttonText}
-//                                 </button>
-//                             );
-//                         }
-//                     })}
-//                 </div>
-//             )}
-//         </div>
-//     );
-// };
 
 // Message Item Component with Info Button
 const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview, formatTime, messageKey, highlightedMessageId }) => {
@@ -644,6 +530,9 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
     );
 };
 
+
+
+
 // Main Conversation Component
 function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socketMessage = null, onMessageStatusUpdate, onContactUpdate }) {
     const [messageInput, setMessageInput] = useState('');
@@ -664,6 +553,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const [lastId, setLastId] = useState("0");
     const [hasMoreMessages, setHasMoreMessages] = useState(true);
     const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+    const [showAssignMenu, setShowAssignMenu] = useState(false);
+    const [assignActionLoading, setAssignActionLoading] = useState(false);
     const [showContactModal, setShowContactModal] = useState(false);
     const [contactLoading, setContactLoading] = useState(false);
     const [contactSubmitting, setContactSubmitting] = useState(false);
@@ -673,6 +564,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const [searchModalOpen, setSearchModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+    const projectInfo = useSelector((state) => state.project.info);
+
     const [contactForm, setContactForm] = useState({
         name: activeChat?.name || '',
         number: activeChat?.number || '',
@@ -690,9 +583,15 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         setHasAcknowledgedUnassigned(false);
     }, [activeChat?.number]);
 
+    console.log(assignmentInfo);
+
+
+
     const isChatUnassigned = assignmentInfo?.assigned === false;
     const needsUnassignedPrompt = isChatUnassigned && !hasAcknowledgedUnassigned;
     const isComposerBlocked = isAllowedToSendMessage === false;
+    console.log(isChatUnassigned);
+
 
     // Voice recording states
     const [isRecording, setIsRecording] = useState(false);
@@ -715,8 +614,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const inputSelectionRef = useRef({ start: 0, end: 0 });
     const headerMenuButtonRef = useRef(null);
     const headerMenuRef = useRef(null);
+    const assignMenuButtonRef = useRef(null);
+    const assignMenuRef = useRef(null);
     const contactDbInitRef = useRef(false);
 
+    const dispatch = useDispatch();
     useEffect(() => {
         return () => {
             if (selectedFile?.previewUrl && typeof URL !== 'undefined') {
@@ -741,6 +643,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 // Some input types do not support setSelectionRange (e.g., mobile number types).
             }
         };
+
 
         const raf = requestAnimationFrame(handleFocus);
         return () => cancelAnimationFrame(raf);
@@ -996,7 +899,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         ...contactData,
                         modify_date: new Date().toISOString()
                     };
-                    
+
                     // Ensure create_date is preserved if it exists in previous state
                     if (prev?.contact?.create_date && !updatedContact.create_date) {
                         updatedContact.create_date = prev.contact.create_date;
@@ -1201,6 +1104,27 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         setShowHeaderMenu(false);
     }, [activeChat?.number]);
 
+    useEffect(() => {
+        if (!showAssignMenu) return;
+
+        const handleClickOutside = (event) => {
+            const menuNode = assignMenuRef.current;
+            const buttonNode = assignMenuButtonRef.current;
+
+            if (menuNode && menuNode.contains(event.target)) return;
+            if (buttonNode && buttonNode.contains(event.target)) return;
+
+            setShowAssignMenu(false);
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showAssignMenu]);
+
+    useEffect(() => {
+        setShowAssignMenu(false);
+    }, [activeChat?.number]);
+
     const restoreMessageInputFocus = useCallback(() => {
         const inputEl = messageInputRef.current;
         if (!inputEl) return;
@@ -1227,6 +1151,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             end: inputEl.selectionEnd || 0
         };
     };
+
+    useEffect(() => {
+        if (!projectInfo) {
+            dispatch(fetchProjectInfo());
+        }
+    }, [dispatch, projectInfo]);
+
+    console.log(projectInfo);
 
     const handleEmojiSelect = (emoji) => {
         const inputEl = messageInputRef.current;
@@ -1410,6 +1342,91 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
         setIsAllowedToSendMessage(canSend);
     }, []);
+
+    const handleAssignmentChange = useCallback(async (type, targetUsername = '') => {
+        if (type === 'assign' && !targetUsername) {
+            toast.error('Please choose a user to assign this chat.');
+            return;
+        }
+
+        if (!activeChat?.number) {
+            toast.error('No active chat selected.');
+            return;
+        }
+
+        if (!tokens?.token || !tokens?.username) {
+            toast.error('Missing credentials to update assignment.');
+            return;
+        }
+
+        setAssignActionLoading(true);
+
+        try {
+            const payload = {
+                project_id: tokens.selected_project_id || '',
+                type,
+                number: activeChat.number
+            };
+
+            if (type === 'assign') {
+                payload.target = targetUsername;
+            }
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            const response = await axios.post(
+                `https://api.w1chat.com/message/chat-assign`,
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (response.data?.error) {
+                throw new Error(response.data?.message || 'Failed to update assignment.');
+            }
+
+            const newAssigning = response.data?.assigning;
+            if (newAssigning) {
+                updateSendPermission(newAssigning);
+            } else {
+                const selectedUser = assignmentInfo?.users?.find((user) => user.username === targetUsername);
+                const fallbackInfo = type === 'assign'
+                    ? {
+                        assigned: true,
+                        assigned_to_me: selectedUser?.is_me || targetUsername === tokens.username,
+                        assigned_user: selectedUser || { username: targetUsername, name: selectedUser?.name || targetUsername },
+                        users: assignmentInfo?.users || []
+                    }
+                    : {
+                        assigned: false,
+                        assigned_to_me: false,
+                        assigned_user: null,
+                        users: assignmentInfo?.users || []
+                    };
+
+                updateSendPermission(fallbackInfo);
+            }
+
+            if (type === 'unassign') {
+                setHasAcknowledgedUnassigned(false);
+            }
+
+            toast.success(type === 'assign' ? 'Chat assigned successfully.' : 'Chat unassigned.');
+            setShowAssignMenu(false);
+        } catch (error) {
+            console.error('Failed to update assignment:', error);
+            const message = error.response?.data?.message || error.message || 'Failed to update assignment.';
+            toast.error(message);
+        } finally {
+            setAssignActionLoading(false);
+        }
+    }, [activeChat?.number, tokens?.token, tokens?.username, tokens?.selected_project_id, assignmentInfo, updateSendPermission]);
 
     const syncWithAPI = async (isLoadingPrevious = false) => {
         if (!activeChat || (isLoadingPrevious ? loadingPrevious : loadingHistory)) return;
@@ -2671,6 +2688,12 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         </AnimatePresence>
     );
 
+    const assignmentUsers = assignmentInfo?.users || [];
+    const assignedUsername = assignmentInfo?.assigned_user?.username;
+    const assignedUserName = assignmentInfo?.assigned_user?.name || assignmentInfo?.assigned_user?.username || assignmentInfo?.assigned_user?.mobile || 'Unassigned';
+    const isAssigned = assignmentInfo?.assigned === true;
+    const isAssignedToMeOrChatAssignAccess = assignmentInfo?.assigned_to_me === true || projectInfo?.permissions?.chat_assign_access === true;
+
     return (
         <div className="flex h-full dark:bg-gray-900 w-full" style={{ backgroundImage: "url('/wpbg.png')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}>
             {/* Main conversation area */}
@@ -2713,6 +2736,105 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     </div>
 
                     <div className="flex items-center space-x-1 sm:space-x-2">
+                        {
+                            isAssignedToMeOrChatAssignAccess && (
+                                <div className="relative flex">
+                                    <button
+                                        ref={assignMenuButtonRef}
+                                        onClick={() => setShowAssignMenu((prev) => !prev)}
+                                        className="flex items-center space-x-3  text-left text-sm text-gray-800 transition bg-gray-50 hover:bg-gray-100 dark:bg-gray-700/60 dark:text-gray-100 dark:hover:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-700"
+                                    >
+                                        <div
+                                            className={`flex h-9 w-9 items-center justify-center rounded-xl ${isAssigned
+                                                ? (assignmentInfo?.assigned_to_me
+                                                    ? 'bg-green-50 text-green-600 dark:bg-green-900/40 dark:text-green-200'
+                                                    : 'bg-amber-50 text-amber-600 dark:bg-amber-900/40 dark:text-amber-200')
+                                                : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-200'
+                                                }`}
+                                        >
+                                            {assignActionLoading ? (
+                                                <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                            ) : (
+                                                (isAssigned ? <FiUserCheck className="h-4 w-4" /> : <FiUserPlus className="h-4 w-4" />)
+                                            )}
+                                        </div>
+                                    </button>
+
+                                    <AnimatePresence>
+                                        {showAssignMenu && (
+                                            <motion.div
+                                                key="conversation-assign-menu"
+                                                ref={assignMenuRef}
+                                                initial={{ opacity: 0, y: -8 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: -8 }}
+                                                transition={{ duration: 0.18, ease: 'easeOut' }}
+                                                className="absolute right-0 mt-2 w-72 rounded-2xl border border-gray-200 bg-white py-2 shadow-xl ring-1 ring-black/5 dark:border-gray-700 dark:bg-gray-800 z-40"
+                                            >
+                                                <div className="px-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                                                    <p className="font-semibold text-sm text-gray-900 dark:text-white">Assign chat</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Select an agent or unassign this chat.</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                        Current: {isAssigned ? assignedUserName : 'Unassigned'}
+                                                    </p>
+                                                </div>
+
+                                                {isAssigned && (
+                                                    <button
+                                                        onClick={() => handleAssignmentChange('unassign')}
+                                                        disabled={assignActionLoading}
+                                                        className={`flex w-full items-center space-x-3 px-4 py-2.5 text-left text-sm text-red-600 transition hover:bg-red-50 dark:hover:bg-red-900/30 ${assignActionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                                    >
+                                                        {
+                                                            assignmentInfo?.assigned_to_me && ( 
+                                                                <div className="flex-1">
+                                                                    <p className="font-semibold">Unassign chat</p>
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Make this chat available</p>
+                                                                </div>
+                                                            )
+                                                        }
+
+                                                    </button>
+                                                )}
+
+                                                <div className="max-h-64 overflow-y-auto">
+                                                    {assignmentUsers.length === 0 && (
+                                                        <p className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">No agents found for assignment.</p>
+                                                    )}
+
+                                                    {assignmentUsers.map((user) => {
+                                                        const isActive = assignedUsername === user.username;
+                                                        return (
+                                                            <button
+                                                                key={user.username}
+                                                                onClick={() => handleAssignmentChange('assign', user.username)}
+                                                                disabled={assignActionLoading || isActive}
+                                                                className={`flex w-full items-center space-x-3 px-4 py-2.5 text-left text-sm text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 ${assignActionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                                            >
+                                                                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                                                                    <FiUser className="h-4 w-4" />
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <p className="font-semibold">
+                                                                        {user.name || user.username || 'Unknown'}
+                                                                        {user.is_me && <span className="ml-1 text-[11px] text-green-600 dark:text-green-300">(You)</span>}
+                                                                    </p>
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                                        {user.email || user.mobile || user.username}
+                                                                    </p>
+                                                                </div>
+                                                                {isActive && <FiCheck className="h-4 w-4 text-green-500" />}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+                            )
+                        }
+
                         <div className="relative flex">
                             <button
                                 onClick={handleSearchMenuClick}
@@ -2731,8 +2853,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                             >
                                 <FiMoreVertical className="w-4 h-4 sm:w-5 sm:h-5" />
                             </button>
-
-
 
                             <AnimatePresence>
                                 {showHeaderMenu && (

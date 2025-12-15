@@ -59,6 +59,7 @@ function PermissionsList() {
         { permission: "view all chat", apiKey: "all_chat_view", status: false },
         { permission: "broadcast access", apiKey: "broadcast_access", status: false },
         { permission: "setting access", apiKey: "setting_access", status: false },
+        { permission: "chat assign access", apiKey: "chat_assign_access", status: false },
     ];
 
     // Ref to track scroll position
