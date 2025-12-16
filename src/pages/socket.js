@@ -84,6 +84,7 @@ class SocketManager {
         this.isConnected = false;
         this.messageCallbacks = [];
         this.chatUpdateCallbacks = [];
+        this.assignmentCallbacks = [];
     }
 
     connect(token, username) {
@@ -121,6 +122,11 @@ class SocketManager {
 
                 // Notify all registered callbacks
                 this.messageCallbacks.forEach(callback => callback(data));
+            });
+
+            this.socket.on("chat_assigned", async (data) => {
+                console.log("📌 chat_assigned socket event:", data);
+                this.assignmentCallbacks.forEach(callback => callback(data));
             });
 
             this.socket.on("connect_error", (error) => {
@@ -350,6 +356,13 @@ class SocketManager {
         this.chatUpdateCallbacks.push(callback);
         return () => {
             this.chatUpdateCallbacks = this.chatUpdateCallbacks.filter(cb => cb !== callback);
+        };
+    }
+
+    onAssignment(callback) {
+        this.assignmentCallbacks.push(callback);
+        return () => {
+            this.assignmentCallbacks = this.assignmentCallbacks.filter(cb => cb !== callback);
         };
     }
 

@@ -18,6 +18,7 @@ function LiveChat() {
     const [dbAvailable, setDbAvailable] = useState(false);
     const [chats, setChats] = useState([]);
     const [messages, setMessages] = useState([]);
+    const [assignmentUpdate, setAssignmentUpdate] = useState(null);
     const previousLocationRef = useRef(null);
     const isBackNavigationRef = useRef(false);
 
@@ -197,8 +198,14 @@ function LiveChat() {
             }
         });
 
+        const unsubscribeAssignment = socketManager.onAssignment((assignData) => {
+            console.log('🔄 chat_assigned received via socket:', assignData);
+            setAssignmentUpdate(assignData);
+        });
+
         return () => {
             unsubscribeMessage();
+            unsubscribeAssignment();
         };
     }, [isInitialized, activeChat, dbAvailable]);
 
@@ -436,6 +443,7 @@ function LiveChat() {
                                     dbAvailable={dbAvailable}
                                     refresh={activeChat.refresh}
                                     socketMessage={messages}
+                                socketAssigning={assignmentUpdate}
                                     onMessageStatusUpdate={handleMessageStatusUpdate}
                                     onContactUpdate={handleContactUpdate}
                                 />

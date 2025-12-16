@@ -534,7 +534,7 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
 
 
 // Main Conversation Component
-function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socketMessage = null, onMessageStatusUpdate, onContactUpdate }) {
+function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socketMessage = null, socketAssigning = null, onMessageStatusUpdate, onContactUpdate }) {
     const [messageInput, setMessageInput] = useState('');
     const [isAllowedToSendMessage, setIsAllowedToSendMessage] = useState(null);
     const [assignmentInfo, setAssignmentInfo] = useState(null);
@@ -583,14 +583,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         setHasAcknowledgedUnassigned(false);
     }, [activeChat?.number]);
 
-    console.log(assignmentInfo);
-
 
 
     const isChatUnassigned = assignmentInfo?.assigned === false;
     const needsUnassignedPrompt = isChatUnassigned && !hasAcknowledgedUnassigned;
     const isComposerBlocked = isAllowedToSendMessage === false;
-    console.log(isChatUnassigned);
 
 
     // Voice recording states
@@ -688,7 +685,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     }, [contactSubmitting]);
 
     const handleContactMenuClick = useCallback(async () => {
-        console.log(1);
 
         setShowHeaderMenu(false);
         if (!activeChat?.number) {
@@ -697,14 +693,12 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             return;
         }
 
-        console.log(2);
 
 
         setShowContactModal(true);
         setContactError('');
         setContactLoading(true);
 
-        console.log(3);
 
 
         setContactForm((prev) => ({
@@ -713,13 +707,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             number: activeChat?.number || ''
         }));
 
-        console.log(4);
 
 
         try {
             const ready = await ensureContactDb();
 
-            console.log(5);
 
             if (!ready) {
                 setContactError('Unable to access local contact storage.');
@@ -764,7 +756,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
             let existing = await contactDbHelper.getContactByNumber(activeChat.number);
 
-            console.log(6);
 
             setExistingContactId(existing?.contact_id || null);
             setContactForm({
@@ -817,8 +808,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
         try {
             const isUpdate = Boolean(existingContactId);
-            console.log(existingContactId);
-            console.log(isUpdate);
+
 
 
             const payload = {
@@ -1158,7 +1148,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
     }, [dispatch, projectInfo]);
 
-    console.log(projectInfo);
 
     const handleEmojiSelect = (emoji) => {
         const inputEl = messageInputRef.current;
@@ -1251,6 +1240,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
     }, [socketMessage, activeChat]);
 
+
+
     // Ensure we render from the bottom with no visible scroll on first paint
     useLayoutEffect(() => {
         scrollToBottomSync();
@@ -1342,6 +1333,23 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
         setIsAllowedToSendMessage(canSend);
     }, []);
+
+        // 🔹 When chat assignment updates arrive via socket
+        useEffect(() => {
+            if (!socketAssigning || !socketAssigning.assigning) return;
+    
+            const eventNumber = socketAssigning.number || socketAssigning.contact?.number;
+            if (activeChat?.number && eventNumber && eventNumber !== activeChat.number) {
+                return;
+            }
+    
+            console.log('🔔 chat_assigned socket payload:', socketAssigning);
+            updateSendPermission(socketAssigning.assigning);
+    
+            if (socketAssigning.assigning.assigned === false) {
+                setHasAcknowledgedUnassigned(false);
+            }
+        }, [socketAssigning, activeChat?.number, updateSendPermission]);
 
     const handleAssignmentChange = useCallback(async (type, targetUsername = '') => {
         if (type === 'assign' && !targetUsername) {
@@ -1503,7 +1511,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 number: number
             };
 
-            console.log('📤 Fetching contact details for:', payload);
 
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
@@ -1520,7 +1527,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 }
             );
 
-            console.log('📥 Contact details response:', response.data);
 
             if (!response?.data?.error) {
                 setContactDetails(response.data);
@@ -1538,7 +1544,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     // Auto-fetch contact details when activeChat changes
     useEffect(() => {
         if (activeChat?.number && tokens?.token) {
-            console.log('🔄 Active chat changed, fetching contact details for:', activeChat.number);
             fetchContactDetails(activeChat.number);
         }
     }, [activeChat?.number, tokens?.token, fetchContactDetails]);
@@ -1562,7 +1567,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
     const processApiResponse = async (apiMessages, isLoadingPrevious = false, apiLastId = null) => {
         try {
-            console.log(apiMessages);
             const messageList = apiMessages.map(apiMessage => {
                 // Build readable text for template if server message is missing/empty
 
@@ -2291,7 +2295,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     number: activeChat.number
                 };
 
-                console.log(messagePayload);
 
                 if (fileType === 'photo') messagePayload.image_link = fileUrl;
                 else if (fileType === 'video') messagePayload.video_link = fileUrl;
