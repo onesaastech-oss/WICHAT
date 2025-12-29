@@ -104,6 +104,9 @@ export default function AudienceSelector({
           onHeadersExtracted={(headers) => {
             setExcelHeaders(headers);
           }}
+          onDataExtracted={(data) => {
+            setExcelData(data);
+          }}
           onFileUploaded={onExcelFileUploaded}
           tokens={tokens}
         />

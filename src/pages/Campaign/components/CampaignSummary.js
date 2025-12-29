@@ -403,7 +403,7 @@ export default function CampaignSummary({
         // Derive phone column index (1-based) from selected mapping
         const phoneIndex =
           excelMapping?.phone && Array.isArray(excelHeaders)
-            ? excelHeaders.indexOf(excelMapping.phone) + 1
+            ? excelHeaders.indexOf(excelMapping.phone)
             : 0;
 
         if (!phoneIndex || phoneIndex < 1) {
@@ -429,7 +429,10 @@ export default function CampaignSummary({
           fileUrl = sheetLink.trim();
         }
 
-        // Compute start/end rows (headers are row 0)
+        // Compute start/end rows (0-based indexing)
+        // startRow = 0 (header row)
+        // endRow = last data row index (0-based)
+        // Example: 4 data rows means indices 0(header), 1, 2, 3, 4 -> endRow = 4
         const startRow = 0;
         const endRow = Array.isArray(excelData) && excelData.length > 0 ? excelData.length : 0;
 
@@ -674,4 +677,3 @@ export default function CampaignSummary({
     </div>
   );
 }
-

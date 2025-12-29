@@ -8,6 +8,7 @@ export default function ExcelUpload({
   setExcelMapping,
   onContactsExtracted,
   onHeadersExtracted,
+  onDataExtracted,
   onFileUploaded,
   tokens
 }) {
@@ -104,6 +105,11 @@ export default function ExcelUpload({
 
       setHeaders(fileHeaders);
       setExcelData(data);
+      
+      // Notify parent component about data
+      if (onDataExtracted) {
+        onDataExtracted(data);
+      }
       
       // Then upload the file to the server
       try {
