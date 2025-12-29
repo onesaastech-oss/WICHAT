@@ -429,9 +429,9 @@ export default function CampaignSummary({
           fileUrl = sheetLink.trim();
         }
 
-        // Compute start/end rows (headers are row 1)
-        const startRow = 1;
-        const endRow = Math.max(1 + (Array.isArray(excelData) ? excelData.length : 0), 1);
+        // Compute start/end rows (headers are row 0)
+        const startRow = 0;
+        const endRow = Array.isArray(excelData) && excelData.length > 0 ? excelData.length : 0;
 
         // Build WhatsApp component parameters based on template BODY placeholders
         // Map template variables ({{1}}, {{2}}, etc.) to Excel column indices ({{0}}, {{1}}, etc.)
