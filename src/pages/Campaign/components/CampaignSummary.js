@@ -190,7 +190,7 @@ export default function CampaignSummary({
           phone: phoneNumbers,
           name: campaignName,
           template_id: selectedTemplate.id,
-          project_id: tokens?.projects?.[0]?.project_id || '',
+          project_id: tokens?.selected_project_id || tokens?.projects?.[0]?.project_id || '',
           component: formattedComponents
         };
 
@@ -361,7 +361,7 @@ export default function CampaignSummary({
           group_id: groupId,
           name: campaignName,
           template_id: selectedTemplate.id,
-          project_id: tokens?.projects?.[0]?.project_id || '',
+          project_id: tokens?.selected_project_id || tokens?.projects?.[0]?.project_id || '',
           component: formattedComponents
         };
 
@@ -430,8 +430,8 @@ export default function CampaignSummary({
         }
 
         // Compute start/end rows (headers are row 1)
-        const startRow = 2;
-        const endRow = Math.max(1 + (Array.isArray(excelData) ? excelData.length : 0), 2);
+        const startRow = 1;
+        const endRow = Math.max(1 + (Array.isArray(excelData) ? excelData.length : 0), 1);
 
         // Build WhatsApp component parameters based on template BODY placeholders
         // Map template variables ({{1}}, {{2}}, etc.) to Excel column indices ({{0}}, {{1}}, etc.)
@@ -539,7 +539,7 @@ export default function CampaignSummary({
           end_row: endRow,
           name: campaignName,
           template_id: selectedTemplate.id,
-          project_id: tokens?.projects?.[0]?.project_id || '',
+          project_id: tokens?.selected_project_id || tokens?.projects?.[0]?.project_id || '',
           component: formattedComponents
         };
 
@@ -549,7 +549,7 @@ export default function CampaignSummary({
         const data_pass = JSON.stringify({ data, key });
 
         // Determine endpoint based on audience type
-        const endpoint = `${campaignCreateUrl}/${audienceType === 'excel' ? 'excel' : 'sheet'}`;
+        const endpoint = `${campaignCreateUrl}/${audienceType === 'excel' ? 'excel' : 'excel'}`;
         const sourceType = audienceType === 'excel' ? 'Excel' : 'Google Sheet';
 
         const response = await axios.post(

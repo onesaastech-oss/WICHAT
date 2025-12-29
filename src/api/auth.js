@@ -468,3 +468,53 @@ export const getEmbedSignupLink = async ({ project_id }) => {
   return response.data;
 };
 
+// Create project
+export const createProject = async ({ company_name, project_name }) => {
+  // Load auth tokens from localStorage to match existing API requirements
+  const getUserData = () => {
+    try {
+      const userData = localStorage.getItem('userData');
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      console.error('Error parsing userData from localStorage:', error);
+      return null;
+    }
+  };
+  
+  const userData = getUserData();
+  const token = userData?.token;
+  const username = userData?.username;
+
+  if (!token || !username) {
+    throw new Error('Session expired');
+  }
+  
+  const payload = {
+    company_name,
+    project_name
+  };
+
+  // Encrypt the payload
+  const { data, key } = Encrypt(payload);
+
+  const data_pass = JSON.stringify({
+    data,
+    key
+  });
+
+  const config = {
+    method: 'post',
+    maxBodyLength: Infinity,
+    url: 'https://api.w1chat.com/project/create-project',
+    headers: {
+      'Content-Type': 'application/json',
+      'token': token,
+      'username': username
+    },
+    data: data_pass
+  };
+
+  const response = await axios.request(config);
+  return response.data;
+};
+

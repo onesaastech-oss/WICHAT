@@ -530,8 +530,10 @@ function TemplateAdd() {
       const userData = JSON.parse(localStorage.getItem('userData') || '{}');
 
       // Prepare payload with project_id (matching working API pattern)
+      const selectedProjectId = userData.selected_project_id || userData.projects?.[0]?.project_id;
+      
       const payload = {
-        project_id: userData.projects?.[0]?.project_id || "",
+        project_id: selectedProjectId,
         template: {
           name: formData.name,
           category: formData.category,

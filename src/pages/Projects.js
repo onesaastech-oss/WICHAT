@@ -19,7 +19,7 @@ import moment from 'moment';
 import { useDispatch } from 'react-redux';
 import { setSelectedProjectId } from '../store/authSlice';
 import toast from 'react-hot-toast';
-import { fetchUserProfile } from '../api/auth';
+import { fetchUserProfile, createProject } from '../api/auth';
 
 const Projects = () => {
   const navigate = useNavigate();
@@ -45,9 +45,8 @@ const Projects = () => {
   );
 
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    status: 'Active'
+    company_name: '',
+    name: ''
   });
 
   // Fetch user profile data on component mount
@@ -142,9 +141,8 @@ const Projects = () => {
   const handleCreateProject = () => {
     setEditingProject(null);
     setFormData({
-      name: '',
-      description: '',
-      status: 'Active'
+      company_name: '',
+      name: ''
     });
     setShowCreateModal(true);
   };
@@ -152,9 +150,8 @@ const Projects = () => {
   const handleEditProject = (project) => {
     setEditingProject(project);
     setFormData({
-      name: project.name,
-      description: project.description,
-      status: project.status
+      company_name: project.company_name || '',
+      name: project.name
     });
     setShowActionsMenu(null);
     setShowCreateModal(true);
@@ -172,9 +169,8 @@ const Projects = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // TODO: Implement API calls for create/update project
-    // For now, just update local state
     if (editingProject) {
+      // TODO: Implement API call for update project
       setProjects(projects.map(p => 
         p.id === editingProject.id 
           ? { 
@@ -185,21 +181,53 @@ const Projects = () => {
           : p
       ));
       toast.success('Project updated successfully');
+      setShowCreateModal(false);
+      setFormData({ company_name: '', name: '' });
+      setEditingProject(null);
     } else {
-      const newProject = {
-        id: projects.length > 0 ? Math.max(...projects.map(p => p.id)) + 1 : 1,
-        ...formData,
-        members: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      setProjects([...projects, newProject]);
-      toast.success('Project created successfully');
+      // Create new project via API
+      try {
+        setLoading(true);
+        const response = await createProject({
+          company_name: formData.company_name,
+          project_name: formData.name
+        });
+        
+        if (response && !response.error) {
+          toast.success('Project created successfully');
+          
+          // Refresh the projects list by fetching user profile again
+          const profileResponse = await fetchUserProfile();
+          if (profileResponse && !profileResponse.error) {
+            const profileData = profileResponse;
+            setUserData(profileData);
+            
+            if (Array.isArray(profileData.projects?.list)) {
+              setProjects(profileData.projects.list.map(project => ({
+                id: project.project_id,
+                name: project.name,
+                description: project.description || 'No description',
+                status: project.status || 'Active',
+                members: project.members || 0,
+                createdAt: project.created_at || new Date().toISOString(),
+                updatedAt: project.updated_at || new Date().toISOString()
+              })));
+            }
+          }
+          
+          setShowCreateModal(false);
+          setFormData({ company_name: '', name: '' });
+          setEditingProject(null);
+        } else {
+          toast.error(response?.message || 'Failed to create project');
+        }
+      } catch (error) {
+        console.error('Error creating project:', error);
+        toast.error(error?.message || 'Failed to create project');
+      } finally {
+        setLoading(false);
+      }
     }
-    
-    setShowCreateModal(false);
-    setFormData({ name: '', description: '', status: 'Active' });
-    setEditingProject(null);
   };
 
   const getStatusColor = (status) => {
@@ -566,6 +594,20 @@ const Projects = () => {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Company Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.company_name}
+                      onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      placeholder="Enter company name"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Project Name *
                     </label>
                     <input
@@ -576,33 +618,6 @@ const Projects = () => {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       placeholder="Enter project name"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Description
-                    </label>
-                    <textarea
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      rows={3}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      placeholder="Enter project description"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Status *
-                    </label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    >
-                      <option value="Active">Active</option>
-                      <option value="Inactive">Inactive</option>
-                    </select>
                   </div>
                 </div>
 
