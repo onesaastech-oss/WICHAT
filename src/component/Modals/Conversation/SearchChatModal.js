@@ -168,7 +168,7 @@ export const SearchChatModal = ({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4 overscroll-contain"
                     onClick={onClose}
                 >
                     <motion.div
@@ -176,7 +176,7 @@ export const SearchChatModal = ({
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0.95, opacity: 0 }}
                         transition={{ type: 'spring', duration: 0.25 }}
-                        className="w-full max-w-2xl rounded-2xl bg-white shadow-xl dark:bg-gray-800"
+                        className="w-full h-full sm:h-auto max-w-2xl rounded-none sm:rounded-2xl bg-white shadow-xl dark:bg-gray-800 flex flex-col mobile-modal-shell"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
@@ -190,7 +190,7 @@ export const SearchChatModal = ({
                             </button>
                         </div>
 
-                        <div className="space-y-4 px-5 py-4">
+                        <div className="space-y-4 px-5 py-4 flex-1 mobile-modal-body">
                             <div className="flex items-center gap-2">
                                 <button
                                     type="button"
@@ -208,7 +208,9 @@ export const SearchChatModal = ({
                                         value={query}
                                         onChange={(e) => onQueryChange(e.target.value)}
                                         placeholder="Search messages, media captions, locations..."
-                                        className="w-full rounded-xl border border-gray-300 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                        className="w-full rounded-xl border border-gray-300 bg-white py-2 pl-10 pr-3 text-base sm:text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                        autoComplete="off"
+                                        inputMode="text"
                                     />
                                 </div>
                                 {/* Hidden date input - positioned off-screen but still functional */}
@@ -231,7 +233,10 @@ export const SearchChatModal = ({
                                 />
                             </div>
 
-                            <div className="max-h-80 space-y-2 overflow-y-auto">
+                            <div
+                                className="max-h-[50vh] sm:max-h-80 space-y-2 overflow-y-auto overscroll-contain"
+                                style={{ WebkitOverflowScrolling: 'touch' }}
+                            >
                                 {!query.trim() ? (
                                     <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
                                         Start typing to search within the loaded messages for this chat.

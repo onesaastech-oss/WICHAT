@@ -47,6 +47,11 @@ function Contact() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [contactToDelete, setContactToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [sortColumn, setSortColumn] = useState(null); // 'name', 'email', 'firm_name'
   const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
   const navigate = useNavigate();
@@ -681,32 +686,172 @@ function Contact() {
     }
   };
 
-  // Handle export to Excel
+  // Handle delete contact - opens confirmation modal
+  const handleDeleteContact = (contact) => {
+    if (permissions && permissions.delete_contact === false) {
+      alert('You do not have permission to delete contacts.');
+      return;
+    }
+    setContactToDelete(contact);
+    setShowDeleteModal(true);
+  };
+
+  // Confirm and execute delete
+  const confirmDeleteContact = async () => {
+    if (!tokens?.token || !tokens?.username || !contactToDelete) return;
+
+    setIsDeleting(true);
+
+    try {
+      const payload = {
+        contact_id: contactToDelete.id,
+        project_id: tokens.selected_project_id || ''
+      };
+
+      console.log('🗑️ Deleting contact:', payload);
+
+      const { data, key } = Encrypt(payload);
+      const data_pass = JSON.stringify({ data, key });
+
+      const response = await axios.post(
+        'https://api.w1chat.com/contact/delete-contact',
+        data_pass,
+        {
+          headers: {
+            'token': tokens.token,
+            'username': tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response?.data?.error) {
+        // Delete from local database using both id and number for reliability
+        await contactDbHelper.deleteContact(contactToDelete.id, contactToDelete.mobile);
+
+        // Refresh the contacts list
+        const refreshedResult = await contactDbHelper.getContacts(currentPage, 10);
+        const mappedRefreshed = refreshedResult.contacts.map(c => ({
+          id: c.contact_id,
+          name: c.name,
+          mobile: c.number,
+          email: c.email,
+          firm_name: c.firm_name,
+          website: c.website,
+          remark: c.remark,
+          languageCode: c.language_code,
+          country: c.country,
+          createdOn: c.create_date,
+          is_favorite: c.is_favorite || false
+        }));
+
+        // Update favorites from refreshed data
+        const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
+        setFavoriteContacts(refreshedFavorites);
+
+        setContacts(mappedRefreshed);
+        setTotalPages(refreshedResult.totalPages);
+
+        // If current page is empty and not the first page, go to previous page
+        if (mappedRefreshed.length === 0 && currentPage > 1) {
+          setCurrentPage(currentPage - 1);
+        }
+
+        // Close delete modal
+        setShowDeleteModal(false);
+        setContactToDelete(null);
+
+        // Show success message
+        const successMsg = response?.data?.msg || 'Contact deleted successfully';
+        setSuccessMessage(successMsg);
+        setShowSuccessModal(true);
+      } else {
+        alert('Failed to delete contact: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Failed to delete contact:', error);
+      alert('Failed to delete contact. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Cancel delete
+  const cancelDeleteContact = () => {
+    setShowDeleteModal(false);
+    setContactToDelete(null);
+  };
+
+  // Handle export to Excel - opens confirmation modal
   const handleExportToExcel = () => {
     if (contacts.length === 0) {
       alert('No contacts to export');
       return;
     }
+    setShowExportModal(true);
+  };
 
-    const csvContent = [
-      ['Name', 'Mobile', 'Email', 'Company', 'Website', 'Remark',],
-      ...contacts.map(contact => [
-        contact.name,
-        contact.mobile,
-        contact.email,
-        contact.firm_name,
-        contact.website,
-        contact.remark,
-      ])
-    ].map(row => row.join(',')).join('\n');
+  // Confirm and execute export
+  const confirmExportContacts = async () => {
+    if (!tokens?.token || !tokens?.username) return;
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'contacts.csv';
-    a.click();
-    window.URL.revokeObjectURL(url);
+    setIsExporting(true);
+
+    try {
+      const payload = {
+        project_id: tokens.selected_project_id || '',
+        type: 'excel'
+      };
+
+      console.log('📤 Exporting contacts:', payload);
+
+      const { data, key } = Encrypt(payload);
+      const data_pass = JSON.stringify({ data, key });
+
+      const response = await axios.post(
+        'https://api.w1chat.com/contact/export-contacts',
+        data_pass,
+        {
+          headers: {
+            'token': tokens.token,
+            'username': tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response?.data?.error && response?.data?.url) {
+        // Download the file from the URL
+        const downloadUrl = response.data.url;
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.setAttribute('download', '');
+        link.setAttribute('target', '_blank');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Close export modal
+        setShowExportModal(false);
+
+        // Show success message
+        const successMsg = response?.data?.msg || 'Contacts exported successfully';
+        setSuccessMessage(successMsg);
+        setShowSuccessModal(true);
+      } else {
+        alert('Failed to export contacts: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Failed to export contacts:', error);
+      alert('Failed to export contacts. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Cancel export
+  const cancelExportContacts = () => {
+    setShowExportModal(false);
   };
 
   // Handle select all contacts
@@ -1073,6 +1218,7 @@ function Contact() {
                                       className={`text-red-600 hover:text-red-900 ${permissions && permissions.delete_contact === false ? 'opacity-50 cursor-not-allowed hover:text-red-600' : ''}`}
                                       title={permissions && permissions.delete_contact === false ? '' : 'Delete contact'}
                                       disabled={permissions && permissions.delete_contact === false}
+                                      onClick={() => handleDeleteContact(contact)}
                                       style={{ display: permissions && permissions.delete_contact === false ? 'inline-block' : (!permissions || permissions.delete_contact) ? 'inline-block' : 'none' }}
                                     >
                                       <FiTrash2 className="h-4 w-4" />
@@ -1613,6 +1759,112 @@ function Contact() {
                   className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   Import Contacts
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Confirmation Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+          <div className="relative mx-auto p-6 border w-5/6 sm:w-3/6 md:w-2/6 lg:w-2/6 xl:w-1/4 shadow-xl rounded-lg bg-white transform transition-all">
+            <div className="mt-2">
+              {/* Download Icon */}
+              <div className="flex items-center justify-center mb-4">
+                <div className="mx-auto flex items-center justify-center h-14 w-14 rounded-full bg-indigo-100">
+                  <FiDownload className="h-7 w-7 text-indigo-600" />
+                </div>
+              </div>
+              
+              {/* Content */}
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Export Contacts</h3>
+                <p className="text-sm text-gray-500 mb-1">You are about to export</p>
+                <p className="text-xs text-gray-400 mb-6">The file will be downloaded as Excel format.</p>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelExportContacts}
+                  disabled={isExporting}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmExportContacts}
+                  disabled={isExporting}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isExporting ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <FiDownload className="h-4 w-4" />
+                      Download
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && contactToDelete && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+          <div className="relative mx-auto p-6 border w-5/6 sm:w-3/6 md:w-2/6 lg:w-2/6 xl:w-1/4 shadow-xl rounded-lg bg-white transform transition-all">
+            <div className="mt-2">
+              {/* Warning Icon */}
+              <div className="flex items-center justify-center mb-4">
+                <div className="mx-auto flex items-center justify-center h-14 w-14 rounded-full bg-red-100">
+                  <FiTrash2 className="h-7 w-7 text-red-600" />
+                </div>
+              </div>
+              
+              {/* Content */}
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Contact</h3>
+                <p className="text-sm text-gray-500 mb-1">Are you sure you want to delete</p>
+                <p className="text-base font-medium text-gray-800 mb-1">"{contactToDelete.name}"?</p>
+                <p className="text-xs text-gray-400 mb-6">This action cannot be undone.</p>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelDeleteContact}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteContact}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isDeleting ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete'
+                  )}
                 </button>
               </div>
             </div>

@@ -1133,14 +1133,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         });
     }, []);
 
-    const updateSelectionFromInput = () => {
+    const updateSelectionFromInput = useCallback(() => {
         const inputEl = messageInputRef.current;
         if (!inputEl) return;
         inputSelectionRef.current = {
             start: inputEl.selectionStart || 0,
             end: inputEl.selectionEnd || 0
         };
-    };
+    }, []);
 
     useEffect(() => {
         if (!projectInfo) {
@@ -1151,17 +1151,23 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
     const handleEmojiSelect = (emoji) => {
         const inputEl = messageInputRef.current;
-        const { start, end } = inputSelectionRef.current || { start: messageInput.length, end: messageInput.length };
-        const insertAt = Number.isInteger(start) ? start : messageInput.length;
-        const replaceTo = Number.isInteger(end) ? end : insertAt;
+        const fallbackPosition = messageInput.length;
+        const { start, end } = inputSelectionRef.current || {};
+        const isValidSelection = Number.isInteger(start) && Number.isInteger(end);
+        const inputIsFocused = inputEl && document.activeElement === inputEl;
+        const shouldAppendToEnd = !isValidSelection || !inputIsFocused;
+        const insertAt = shouldAppendToEnd ? fallbackPosition : start;
+        const replaceTo = shouldAppendToEnd ? fallbackPosition : end;
         const newValue = messageInput.slice(0, insertAt) + emoji + messageInput.slice(replaceTo);
         setMessageInput(newValue);
 
-        // Restore focus and caret after updating value
+        const newCaret = insertAt + emoji.length;
+        inputSelectionRef.current = { start: newCaret, end: newCaret };
+
+        // Restore focus and caret after updating value; default to end when picker steals focus
         requestAnimationFrame(() => {
             if (inputEl) {
                 inputEl.focus();
-                const newCaret = insertAt + emoji.length;
                 try {
                     inputEl.setSelectionRange(newCaret, newCaret);
                 } catch (_) {
@@ -1175,6 +1181,23 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         event.preventDefault();
         restoreMessageInputFocus();
     }, [restoreMessageInputFocus]);
+
+    const handleComposerFocus = useCallback(() => {
+        document.body.classList.add('chat-composer-focused');
+        inputSelectionRef.current = {
+            start: messageInput.length,
+            end: messageInput.length
+        };
+    }, [messageInput.length]);
+
+    const handleComposerBlur = useCallback(() => {
+        document.body.classList.remove('chat-composer-focused');
+        updateSelectionFromInput();
+    }, [updateSelectionFromInput]);
+
+    useEffect(() => {
+        return () => document.body.classList.remove('chat-composer-focused');
+    }, []);
 
     const handleEmojiButtonClick = useCallback((event) => {
         event.preventDefault();
@@ -1334,22 +1357,22 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         setIsAllowedToSendMessage(canSend);
     }, []);
 
-        // 🔹 When chat assignment updates arrive via socket
-        useEffect(() => {
-            if (!socketAssigning || !socketAssigning.assigning) return;
-    
-            const eventNumber = socketAssigning.number || socketAssigning.contact?.number;
-            if (activeChat?.number && eventNumber && eventNumber !== activeChat.number) {
-                return;
-            }
-    
-            console.log('🔔 chat_assigned socket payload:', socketAssigning);
-            updateSendPermission(socketAssigning.assigning);
-    
-            if (socketAssigning.assigning.assigned === false) {
-                setHasAcknowledgedUnassigned(false);
-            }
-        }, [socketAssigning, activeChat?.number, updateSendPermission]);
+    // 🔹 When chat assignment updates arrive via socket
+    useEffect(() => {
+        if (!socketAssigning || !socketAssigning.assigning) return;
+
+        const eventNumber = socketAssigning.number || socketAssigning.contact?.number;
+        if (activeChat?.number && eventNumber && eventNumber !== activeChat.number) {
+            return;
+        }
+
+        console.log('🔔 chat_assigned socket payload:', socketAssigning);
+        updateSendPermission(socketAssigning.assigning);
+
+        if (socketAssigning.assigning.assigned === false) {
+            setHasAcknowledgedUnassigned(false);
+        }
+    }, [socketAssigning, activeChat?.number, updateSendPermission]);
 
     const handleAssignmentChange = useCallback(async (type, targetUsername = '') => {
         if (type === 'assign' && !targetUsername) {
@@ -2789,7 +2812,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                                         className={`flex w-full items-center space-x-3 px-4 py-2.5 text-left text-sm text-red-600 transition hover:bg-red-50 dark:hover:bg-red-900/30 ${assignActionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                     >
                                                         {
-                                                            assignmentInfo?.assigned_to_me && ( 
+                                                            assignmentInfo?.assigned_to_me && (
                                                                 <div className="flex-1">
                                                                     <p className="font-semibold">Unassign chat</p>
                                                                     <p className="text-xs text-gray-500 dark:text-gray-400">Make this chat available</p>
@@ -3029,10 +3052,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
                 {/* Input Area */}
 
-                <div className="p-3 sm:p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-800 w-full">
+                <div className="p-3 sm:p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-800 w-full chat-input-area">
                     <div className="relative">
                         <div className={`${(isComposerBlocked || needsUnassignedPrompt) ? 'opacity-0 pointer-events-none select-none' : ''}`}>
-                            <div className="flex items-center space-x-2 sm:space-x-3">
+                            <div className="flex items-center space-x-2 sm:space-x-3 w-full overflow-hidden">
                                 <button
                                     onClick={() => setShowMediaModal(true)}
                                     className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -3046,25 +3069,34 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                         onMouseDown={handleEmojiButtonMouseDown}
                                         onClick={handleEmojiButtonClick}
                                         aria-label="Toggle emoji picker"
-                                        className="mr-2 sm:mr-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                                        className="hidden sm:flex sm:mr-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                                     >
                                         <FiSmile className="w-4 h-4 sm:w-5 sm:h-5" />
                                     </button>
-                                    <input
-                                        type="text"
+                                    <textarea
                                         autoFocus
+                                        autoComplete="off"
                                         placeholder="Type a message..."
-                                        className="flex-1 bg-transparent focus:outline-none placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white text-sm sm:text-base"
+                                        className="flex-1 bg-transparent focus:outline-none placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white text-base resize-none overflow-y-auto custom-scrollbar"
+                                        rows={1}
                                         value={messageInput}
                                         ref={messageInputRef}
                                         onChange={(e) => {
                                             setMessageInput(e.target.value);
                                             updateSelectionFromInput();
                                         }}
+                                        onFocus={handleComposerFocus}
+                                        onBlur={handleComposerBlur}
                                         onClick={updateSelectionFromInput}
                                         onKeyUp={updateSelectionFromInput}
                                         onSelect={updateSelectionFromInput}
-                                        onKeyPress={handleKeyPress}
+                                        onKeyDown={(e) => {
+                                            // Send on Enter (without Shift)
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleSendMessage();
+                                            }
+                                        }}
                                         disabled={isUploading || loadingHistory}
                                     />
                                     <EmojiPickerPopover

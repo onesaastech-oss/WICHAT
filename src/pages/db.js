@@ -757,13 +757,42 @@ export const contactDbHelper = {
         }
     },
 
-    async deleteContact(contactId) {
+    async deleteContact(contactId, number = null) {
         try {
             const db = this.db;
-            await db.contacts.where('contact_id').equals(contactId).delete();
-            console.log('✅ Contact deleted successfully');
+            let deleted = 0;
+            
+            // Try to delete by number first (more reliable)
+            if (number) {
+                deleted = await db.contacts
+                    .where('number')
+                    .equals(String(number))
+                    .delete();
+                
+                if (deleted > 0) {
+                    console.log(`✅ Contact deleted by number: ${number} (${deleted} record(s))`);
+                    return deleted;
+                }
+            }
+            
+            // Fallback: try to delete by contact_id
+            if (contactId) {
+                const contactIdStr = String(contactId);
+                deleted = await db.contacts
+                    .filter(contact => String(contact.contact_id) === contactIdStr)
+                    .delete();
+                
+                if (deleted > 0) {
+                    console.log(`✅ Contact deleted by contact_id: ${contactId} (${deleted} record(s))`);
+                    return deleted;
+                }
+            }
+            
+            console.warn(`⚠️ No contact found with id: ${contactId} or number: ${number}`);
+            return 0;
         } catch (error) {
             console.error("❌ Error deleting contact:", error);
+            return 0;
         }
     },
 

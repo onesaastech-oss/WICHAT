@@ -248,8 +248,11 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className={`w-full max-w-4xl max-h-[90vh] ${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-2xl flex flex-col`}>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-0 sm:p-4">
+            <div
+                className={`w-full h-full sm:h-auto sm:max-h-[90vh] ${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-none sm:rounded-2xl shadow-2xl flex flex-col mobile-modal-shell`}
+                style={{ touchAction: 'manipulation' }}
+            >
                 {/* Header */}
                 <div className={`flex items-center justify-between p-4 sm:p-6 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                     <h2 className={`text-lg sm:text-xl font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -278,7 +281,7 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                                     darkMode 
                                         ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500' 
                                         : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500'
-                                } focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
+                                } text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
                             />
                         </div>
 
@@ -286,7 +289,7 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                         <div className="relative category-dropdown">
                             <button
                                 onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                                className={`flex items-center gap-2 px-4 py-2 sm:py-3 rounded-lg border transition-colors ${
+                                className={`flex items-center gap-2 px-4 py-2 sm:py-3 rounded-lg border transition-colors text-base sm:text-sm ${
                                     darkMode 
                                         ? 'bg-gray-700 border-gray-600 text-white hover:bg-gray-600' 
                                         : 'bg-white border-gray-300 text-gray-900 hover:bg-gray-50'
@@ -361,7 +364,10 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                 </div>
 
                 {/* Templates List */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                <div
+                    className="flex-1 overflow-y-auto p-4 sm:p-6 mobile-modal-body"
+                    style={{ WebkitOverflowScrolling: 'touch' }}
+                >
                     {loading && templates.length === 0 ? (
                         <div className="flex items-center justify-center py-8">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
