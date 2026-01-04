@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Header, Sidebar } from '../component/Menu';
+import Tooltip from '../component/Tooltip';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
-import { FiPlus, FiEdit, FiTrash2, FiFacebook, FiRefreshCw } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiFacebook, FiRefreshCw, FiAlertCircle } from 'react-icons/fi';
 
 function Template() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -77,6 +78,7 @@ function Template() {
           language: t.template?.language?.toUpperCase() || 'EN',
           category: t.category,
           status: t.status,
+          rejectReason: t.reject_reason || null,
           updatedOn: new Date(t.create_date).toLocaleDateString(),
           template_data: t.template
         }));
@@ -214,9 +216,25 @@ function Template() {
                           <td className="px-6 py-4 text-sm text-gray-500">{template.language}</td>
                           <td className="px-6 py-4 text-sm text-gray-500">{template.category}</td>
                           <td className="px-6 py-4">
-                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(template.status)}`}>
-                              {template.status}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(template.status)}`}>
+                                {template.status}
+                              </span>
+                              {template.status === 'REJECTED' && template.rejectReason && (
+                                <Tooltip
+                                  content={`Reason: ${template.rejectReason}`}
+                                  disabled={true}
+                                  position="top"
+                                >
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                                  >
+                                    <FiAlertCircle className="w-3 h-3" />
+                                  </button>
+                                </Tooltip>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-500">{template.updatedOn}</td>
                           <td className="px-6 py-4 text-right text-sm font-medium">
