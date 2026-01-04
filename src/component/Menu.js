@@ -305,7 +305,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
   const profileItems = [
     { title: 'My Profile', icon: <FiUser size={16} />, path: '/my-profile' },
     { title: 'Settings', icon: <FiSettings size={16} />, path: '#' },
-    { title: 'Help & Support', icon: <FiHelpCircle size={16} />, path: '#' },
+    { title: 'Help & Support', icon: <FiHelpCircle size={16} />, path: '/support' },
   ];
 
   return (
@@ -595,7 +595,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
               <div className="bg-gradient-to-br from-indigo-50 to-white rounded-xl p-4 text-xs border border-indigo-100 shadow-sm">
                 <p className="font-semibold text-indigo-900 mb-1">Need help?</p>
                 <p className="text-slate-600 mb-3 leading-relaxed">Check our docs or contact support for assistance.</p>
-                <button className="w-full py-1.5 bg-white border border-indigo-200 text-indigo-600 font-medium rounded-md shadow-sm hover:bg-indigo-50 transition-colors">Contact Support</button>
+                <a href="/support" className="block w-full py-1.5 bg-white border border-indigo-200 text-indigo-600 font-medium rounded-md shadow-sm hover:bg-indigo-50 transition-colors text-center">Contact Support</a>
               </div>
             </motion.div>
           )}
