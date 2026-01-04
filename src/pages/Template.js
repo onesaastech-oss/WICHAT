@@ -419,7 +419,7 @@ function Template() {
                 ))
               ) : (
                 templates.map((template, index) => (
-                  <div key={template.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                  <div key={template.id} className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
                     <div className="p-4">
                       {/* Header */}
                       <div className="flex items-start justify-between mb-3">
@@ -442,7 +442,7 @@ function Template() {
                           </button>
                           
                           {activeDropdown === template.id && (
-                            <div className="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                            <div className="absolute right-0 bottom-full mb-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                               <Link
                                 to={`/template-edit/${template.id}`}
                                 className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
