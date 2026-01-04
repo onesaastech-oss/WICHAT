@@ -4,7 +4,7 @@ import Tooltip from '../component/Tooltip';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
-import { FiPlus, FiEdit, FiTrash2, FiRefreshCw, FiAlertCircle, FiMoreVertical } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiRefreshCw, FiAlertCircle, FiMoreVertical, FiChevronDown, FiCheck } from 'react-icons/fi';
 
 function Template() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -16,8 +16,10 @@ function Template() {
   const [tokens, setTokens] = useState(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const observerTarget = useRef(null);
   const abortControllerRef = useRef(null);
+  const filterRef = useRef(null);
 
   const [isMinimized, setIsMinimized] = useState(() => {
     const saved = localStorage.getItem('sidebarMinimized');
@@ -31,6 +33,18 @@ function Template() {
   useEffect(() => {
     const userData = localStorage.getItem('userData');
     if (userData) setTokens(JSON.parse(userData));
+  }, []);
+
+  // Close filter dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filterRef.current && !filterRef.current.contains(event.target)) {
+        setIsFilterOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const fetchTemplates = useCallback(async (isInitial = false) => {
@@ -158,6 +172,48 @@ function Template() {
     }
   };
 
+  const filterOptions = [
+    { value: '', label: 'All Status', count: templates.length, color: 'text-gray-600' },
+    { 
+      value: 'APPROVED', 
+      label: 'Approved', 
+      count: templates.filter(t => t.status === 'APPROVED').length,
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-50',
+      icon: (
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+        </svg>
+      )
+    },
+    { 
+      value: 'PENDING', 
+      label: 'Pending', 
+      count: templates.filter(t => t.status === 'PENDING').length,
+      color: 'text-amber-600',
+      bgColor: 'bg-amber-50',
+      icon: (
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+        </svg>
+      )
+    },
+    { 
+      value: 'REJECTED', 
+      label: 'Rejected', 
+      count: templates.filter(t => t.status === 'REJECTED').length,
+      color: 'text-rose-600',
+      bgColor: 'bg-rose-50',
+      icon: (
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+        </svg>
+      )
+    },
+  ];
+
+  const selectedFilter = filterOptions.find(opt => opt.value === statusFilter) || filterOptions[0];
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header 
@@ -183,20 +239,69 @@ function Template() {
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Templates</h1>
               
               <div className="flex items-center gap-2 flex-wrap">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="flex-1 sm:flex-initial rounded-lg border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm"
-                >
-                  <option value="">All Status</option>
-                  <option value="APPROVED">Approved</option>
-                  <option value="PENDING">Pending</option>
-                  <option value="REJECTED">Rejected</option>
-                </select>
+                {/* Custom Filter Dropdown */}
+                <div className="relative flex-1 sm:flex-initial" ref={filterRef}>
+                  <button
+                    onClick={() => setIsFilterOpen(!isFilterOpen)}
+                    className="w-full sm:w-auto inline-flex items-center justify-between gap-3 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-all shadow-sm"
+                  >
+                    <div className="flex items-center gap-2">
+                      {selectedFilter.icon && (
+                        <span className={selectedFilter.color}>{selectedFilter.icon}</span>
+                      )}
+                      <span>{selectedFilter.label}</span>
+                      {selectedFilter.count > 0 && (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${selectedFilter.bgColor || 'bg-gray-100'} ${selectedFilter.color}`}>
+                          {selectedFilter.count}
+                        </span>
+                      )}
+                    </div>
+                    <FiChevronDown className={`w-4 h-4 transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {isFilterOpen && (
+                    <div className="absolute z-20 mt-2 w-full sm:w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-2 animate-fadeIn">
+                      <div className="px-3 py-2 border-b border-gray-100">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Filter by Status</p>
+                      </div>
+                      {filterOptions.map((option) => (
+                        <button
+                          key={option.value}
+                          onClick={() => {
+                            setStatusFilter(option.value);
+                            setIsFilterOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${
+                            statusFilter === option.value
+                              ? 'bg-indigo-50 text-indigo-700'
+                              : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            {option.icon && (
+                              <span className={option.color}>{option.icon}</span>
+                            )}
+                            <span className="font-medium">{option.label}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {option.count > 0 && (
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${option.bgColor || 'bg-gray-100'} ${option.color}`}>
+                                {option.count}
+                              </span>
+                            )}
+                            {statusFilter === option.value && (
+                              <FiCheck className="w-4 h-4 text-indigo-600" />
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 <button
                   onClick={() => fetchTemplates(true)}
-                  className="p-2.5 text-gray-600 hover:text-indigo-600 hover:bg-white rounded-lg transition-all shadow-sm border border-gray-200 hover:border-indigo-200"
+                  className="p-2.5 text-gray-600 hover:text-indigo-600 hover:bg-white rounded-lg transition-all shadow-sm border border-gray-200 hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={loading}
                   title="Refresh"
                 >
@@ -205,7 +310,7 @@ function Template() {
 
                 <Link
                   to="/template-add"
-                  className="inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 active:bg-indigo-800 transition-all shadow-sm hover:shadow-md"
+                  className="inline-flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-indigo-800 active:scale-95 transition-all shadow-md hover:shadow-lg"
                 >
                   <FiPlus className="mr-2 w-4 h-4" /> 
                   <span className="hidden sm:inline">New Template</span>
