@@ -436,62 +436,12 @@ export default function CampaignSummary({
         const startRow = 0;
         const endRow = Array.isArray(excelData) && excelData.length > 0 ? excelData.length : 0;
 
-        // Build WhatsApp component parameters based on template BODY placeholders
+        // Build WhatsApp component parameters based on template components
         // Map template variables ({{1}}, {{2}}, etc.) to Excel column indices ({{0}}, {{1}}, etc.)
         const formattedComponents = [];
         const templateComponents = selectedTemplate?.template_data?.components || [];
         
-        // Process BODY component
-        const bodyComponent = templateComponents.find((c) => c.type === 'BODY' && c.text);
-        if (bodyComponent?.text) {
-          // Extract all variables from template text in order (e.g., {{1}}, {{2}})
-          const variableMatches = bodyComponent.text.match(/\{\{\d+\}\}/g) || [];
-          const parameters = [];
-          
-          if (variableMatches.length > 0) {
-            variableMatches.forEach((match) => {
-              // Extract the variable number from template (e.g., "1" from "{{1}}")
-              const varNum = match.match(/\d+/)?.[0];
-              const varName = `var_${varNum}`;
-              
-              // Find which Excel column is mapped to this template variable
-              const source = variableSources[varName];
-              if (source?.type === 'excel' && source?.key) {
-                // Find the Excel column index (0-based)
-                const excelColumnIndex = excelHeaders.indexOf(source.key);
-                if (excelColumnIndex >= 0) {
-                  // Use Excel column index in the parameter (e.g., {{0}}, {{1}})
-                  parameters.push({
-                    type: 'text',
-                    text: `{{${excelColumnIndex}}}`
-                  });
-                } else {
-                  // Fallback: if column not found, use empty string
-                  parameters.push({
-                    type: 'text',
-                    text: ''
-                  });
-                }
-              } else {
-                // If not mapped to Excel column, use the manually typed value from variableValues
-                const manualValue = variableValues[varName] || '';
-                parameters.push({
-                  type: 'text',
-                  text: manualValue
-                });
-              }
-            });
-          }
-          
-          if (parameters.length > 0) {
-            formattedComponents.push({
-              type: 'body',
-              parameters
-            });
-          }
-        }
-        
-        // Process HEADER component if it has variables
+        // Process HEADER component (TEXT format)
         const headerComponent = templateComponents.find((c) => c.type === 'HEADER' && c.format === 'TEXT' && c.text);
         if (headerComponent?.text) {
           const variableMatches = headerComponent.text.match(/\{\{\d+\}\}/g) || [];
@@ -517,7 +467,6 @@ export default function CampaignSummary({
                   });
                 }
               } else {
-                // If not mapped to Excel column, use the manually typed value from variableValues
                 const manualValue = variableValues[varName] || '';
                 parameters.push({
                   type: 'text',
@@ -527,12 +476,89 @@ export default function CampaignSummary({
             });
           }
           
-          if (parameters.length > 0) {
-            formattedComponents.push({
-              type: 'header',
-              parameters
+          // Always include header component (with or without parameters)
+          formattedComponents.push({
+            type: 'header',
+            format: 'TEXT',
+            text: headerComponent.text,
+            ...(parameters.length > 0 && { parameters })
+          });
+        }
+        
+        // Process HEADER component (IMAGE/VIDEO/DOCUMENT format)
+        const mediaHeaderComponent = templateComponents.find((c) => c.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(c.format));
+        if (mediaHeaderComponent) {
+          formattedComponents.push({
+            type: 'header',
+            format: mediaHeaderComponent.format
+          });
+        }
+        
+        // Process BODY component
+        const bodyComponent = templateComponents.find((c) => c.type === 'BODY' && c.text);
+        if (bodyComponent?.text) {
+          const variableMatches = bodyComponent.text.match(/\{\{\d+\}\}/g) || [];
+          const parameters = [];
+          
+          if (variableMatches.length > 0) {
+            variableMatches.forEach((match) => {
+              const varNum = match.match(/\d+/)?.[0];
+              const varName = `var_${varNum}`;
+              const source = variableSources[varName];
+              
+              if (source?.type === 'excel' && source?.key) {
+                const excelColumnIndex = excelHeaders.indexOf(source.key);
+                if (excelColumnIndex >= 0) {
+                  parameters.push({
+                    type: 'text',
+                    text: `{{${excelColumnIndex}}}`
+                  });
+                } else {
+                  parameters.push({
+                    type: 'text',
+                    text: ''
+                  });
+                }
+              } else {
+                const manualValue = variableValues[varName] || '';
+                parameters.push({
+                  type: 'text',
+                  text: manualValue
+                });
+              }
             });
           }
+          
+          // Always include body component (with or without parameters)
+          formattedComponents.push({
+            type: 'body',
+            text: bodyComponent.text,
+            ...(parameters.length > 0 && { parameters })
+          });
+        }
+        
+        // Process FOOTER component
+        const footerComponent = templateComponents.find((c) => c.type === 'FOOTER' && c.text);
+        if (footerComponent?.text) {
+          formattedComponents.push({
+            type: 'footer',
+            text: footerComponent.text
+          });
+        }
+        
+        // Process BUTTONS component
+        const buttonsComponent = templateComponents.find((c) => c.type === 'BUTTONS' && c.buttons);
+        if (buttonsComponent?.buttons && buttonsComponent.buttons.length > 0) {
+          formattedComponents.push({
+            type: 'buttons',
+            buttons: buttonsComponent.buttons.map((btn, index) => ({
+              type: btn.type,
+              text: btn.text,
+              ...(btn.url && { url: btn.url }),
+              ...(btn.phone_number && { phone_number: btn.phone_number }),
+              index
+            }))
+          });
         }
 
         const payload = {

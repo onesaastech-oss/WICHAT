@@ -1888,6 +1888,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
         setMessages(prev => [...prev, newMessage]);
         setMessageInput('');
+        // Reset textarea height after sending
+        if (messageInputRef.current) {
+            messageInputRef.current.style.height = 'auto';
+        }
         // Scroll immediately for new messages
         // setTimeout(() => scrollToBottomImmediate(), 50);
 
@@ -2304,6 +2308,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 setMessages(prev => [...prev, tempMessage]);
                 setSelectedFile(null);
                 setMessageInput('');
+                // Reset textarea height after sending
+                if (messageInputRef.current) {
+                    messageInputRef.current.style.height = 'auto';
+                }
                 // Scroll immediately for file uploads
                 // setTimeout(() => scrollToBottomImmediate(), 50);
 
@@ -3052,123 +3060,136 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
                 {/* Input Area */}
 
-                <div className="p-3 sm:p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-800 w-full chat-input-area">
-                    <div className="relative">
-                        <div className={`${(isComposerBlocked || needsUnassignedPrompt) ? 'opacity-0 pointer-events-none select-none' : ''}`}>
-                            <div className="flex items-center space-x-2 sm:space-x-3 w-full overflow-hidden">
+                <div className="p-2 sm:p-4 border-t dark:border-gray-800 bg-white dark:bg-gray-900 w-full">
+                    <div className="max-w-6xl mx-auto relative">
+
+                        {/* --- Input Row --- */}
+                        <div className={`flex items-end space-x-2 ${isComposerBlocked || needsUnassignedPrompt ? 'filter blur-[2px] pointer-events-none select-none' : ''}`}>
+
+                            {/* 1. Attachment Button */}
+                            <button
+                                onClick={() => setShowMediaModal(true)}
+                                className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+                                title="Attach file"
+                            >
+                                <FiPaperclip className="w-5 h-5" />
+                            </button>
+
+                            {/* 2. Main Input Pill */}
+                            <div className="flex-1 flex items-end bg-gray-100 dark:bg-gray-800 rounded-[24px] border border-transparent  focus-within:ring-4 focus-within:ring-blue-500/10 transition-all duration-200">
+
+                                {/* Emoji Trigger */}
                                 <button
-                                    onClick={() => setShowMediaModal(true)}
-                                    className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    ref={emojiButtonRef}
+                                    onMouseDown={handleEmojiButtonMouseDown}
+                                    onClick={handleEmojiButtonClick}
+                                    className="p-3 text-gray-500 hover:text-blue-500 transition-colors hidden sm:block"
                                 >
-                                    <FiPaperclip className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    <FiSmile className="w-5 h-5" />
                                 </button>
 
-                                <div className="flex-1 flex items-center px-3 sm:px-4 py-2 sm:py-3 rounded-full bg-gray-100 dark:bg-gray-700 border border-transparent focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 dark:focus-within:ring-blue-800 transition-all relative">
-                                    <button
-                                        ref={emojiButtonRef}
-                                        onMouseDown={handleEmojiButtonMouseDown}
-                                        onClick={handleEmojiButtonClick}
-                                        aria-label="Toggle emoji picker"
-                                        className="hidden sm:flex sm:mr-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                                    >
-                                        <FiSmile className="w-4 h-4 sm:w-5 sm:h-5" />
-                                    </button>
-                                    <textarea
-                                        autoFocus
-                                        autoComplete="off"
-                                        placeholder="Type a message..."
-                                        className="flex-1 bg-transparent focus:outline-none placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white text-base resize-none overflow-y-auto custom-scrollbar"
-                                        rows={1}
-                                        value={messageInput}
-                                        ref={messageInputRef}
-                                        onChange={(e) => {
-                                            setMessageInput(e.target.value);
-                                            updateSelectionFromInput();
-                                        }}
-                                        onFocus={handleComposerFocus}
-                                        onBlur={handleComposerBlur}
-                                        onClick={updateSelectionFromInput}
-                                        onKeyUp={updateSelectionFromInput}
-                                        onSelect={updateSelectionFromInput}
-                                        onKeyDown={(e) => {
-                                            // Send on Enter (without Shift)
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                handleSendMessage();
-                                            }
-                                        }}
-                                        disabled={isUploading || loadingHistory}
-                                    />
-                                    <EmojiPickerPopover
-                                        open={showEmojiPicker}
-                                        onEmojiClick={(emojiData) => handleEmojiSelect(emojiData.emoji)}
-                                        onClose={() => {
-                                            setShowEmojiPicker(false);
-                                            restoreMessageInputFocus();
-                                        }}
-                                        anchorRef={emojiButtonRef}
-                                        darkMode={darkMode}
-                                        className="m-auto"
-                                    />
-                                    <button
-                                        onClick={handleMicClick}
-                                        className={`ml-2 sm:ml-3 transition-colors ${isRecording
-                                            ? 'text-red-500 hover:text-red-600 animate-pulse'
-                                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                                            }`}
-                                    >
-                                        <FiMic className="w-4 h-4 sm:w-5 sm:h-5" />
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setShowTemplateModal(true);
-                                            // Auto-fetch contact details if not already available
-                                            if (!contactDetails && activeChat?.number && tokens?.token) {
-                                                fetchContactDetails(activeChat.number);
-                                            }
-                                        }}
-                                        className="Templates ml-2 sm:ml-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                                    >
-                                        <FiLayers className="w-4 h-4 sm:w-5 sm:h-5" />
-                                    </button>
-                                </div>
+                                {/* Textarea */}
+                                <textarea
+                                    autoFocus
+                                    autoComplete="off"
+                                    placeholder="Type a message..."
+                                    className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none outline-none py-3 px-3 sm:px-1 text-gray-900 dark:text-white text-[15px] leading-relaxed resize-none max-h-[150px] custom-scrollbar"
+                                    style={{ outline: 'none', boxShadow: 'none' }}
+                                    rows={1}
+                                    value={messageInput}
+                                    ref={messageInputRef}
+                                    onChange={(e) => {
+                                        e.target.style.height = 'auto';
+                                        e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px';
+                                        setMessageInput(e.target.value);
+                                        updateSelectionFromInput();
+                                    }}
+                                    onFocus={handleComposerFocus}
+                                    onBlur={handleComposerBlur}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleSendMessage();
+                                        }
+                                    }}
+                                    disabled={isUploading || loadingHistory}
+                                />
 
+                                {/* Inside-Right Actions (Mic & Templates) - Hide when typing */}
+                                {!messageInput.trim() && (
+                                    <div className="flex items-center pr-2 pb-1.5">
+                                        <button
+                                            onClick={handleMicClick}
+                                            className={`p-2 rounded-full transition-colors ${isRecording ? 'text-red-500 animate-pulse bg-red-50 dark:bg-red-900/20' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                                }`}
+                                        >
+                                            <FiMic className="w-5 h-5" />
+                                        </button>
+
+                                        <button
+                                            onClick={() => {
+                                                setShowTemplateModal(true);
+                                                if (!contactDetails && activeChat?.number && tokens?.token) {
+                                                    fetchContactDetails(activeChat.number);
+                                                }
+                                            }}
+                                            className="p-2 text-gray-500 hover:text-blue-500 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-all"
+                                            title="Templates"
+                                        >
+                                            <FiLayers className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 3. Send Button - Only show when there's content to send */}
+                            {(messageInput.trim() || selectedFile) && (
                                 <button
                                     onClick={handleSendMessage}
-                                    disabled={(!messageInput.trim() && !selectedFile) || isUploading || loadingHistory}
-                                    className={`flex-shrink-0 flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full transition-all duration-200 ${(messageInput.trim() || selectedFile) && !isUploading && !loadingHistory
-                                        ? 'bg-green-500 text-white hover:bg-green-600 shadow-lg hover:shadow-xl transform hover:scale-105'
-                                        : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                        }`}
+                                    disabled={isUploading || loadingHistory}
+                                    className="flex-shrink-0 flex items-center justify-center w-11 h-11 rounded-full transition-all duration-300 bg-blue-600 text-white shadow-md hover:shadow-lg hover:scale-105 active:scale-95 animate-in fade-in zoom-in"
                                 >
-                                    <LuSendHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    <LuSendHorizontal className="w-5 h-5 translate-x-0.5" />
                                 </button>
-                            </div>
+                            )}
                         </div>
 
+                        {/* --- Popovers & Overlays --- */}
+                        <EmojiPickerPopover
+                            open={showEmojiPicker}
+                            onEmojiClick={(emojiData) => handleEmojiSelect(emojiData.emoji)}
+                            onClose={() => {
+                                setShowEmojiPicker(false);
+                                restoreMessageInputFocus();
+                            }}
+                            anchorRef={emojiButtonRef}
+                            darkMode={darkMode}
+                        />
+
+                        {/* Blocked State Overlay */}
                         {isComposerBlocked && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center space-y-1 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-3xl">
-                                <div className="flex items-center justify-center text-sm font-medium text-gray-700 dark:text-gray-200">
-                                    <FiAlertCircle className="w-5 h-5 mr-2 text-amber-500" />
-                                    <span>{assignmentInfo.assigned_user.name} is already assigned for this chat</span>
+                            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-[1px] rounded-xl">
+                                <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 shadow-xl rounded-2xl p-4 flex flex-col items-center animate-in fade-in zoom-in duration-200">
+                                    <div className="flex items-center text-amber-600 dark:text-amber-500 mb-1">
+                                        <FiAlertCircle className="w-5 h-5 mr-2" />
+                                        <span className="font-semibold text-sm">Chat Assigned to {assignmentInfo.assigned_user.name}</span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Request reassignment to send messages.</p>
                                 </div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                    Ask the current owner or admin to reassign it to you before sending messages.
-                                </p>
                             </div>
                         )}
 
+                        {/* Unassigned State Overlay */}
                         {needsUnassignedPrompt && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center space-y-1 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-3xl">
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
-                                    No one has assigned this chat.
-                                </span>
+                            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-[1px]">
                                 <button
-                                    type="button"
                                     onClick={() => setHasAcknowledgedUnassigned(true)}
-                                    className="px-3 py-1 rounded-full bg-green-500 text-white text-xs font-medium hover:bg-green-600 transition-colors"
+                                    className="group flex items-center space-x-3 bg-green-500 hover:bg-green-600 text-white px-6 py-2.5 rounded-full shadow-lg transition-all transform hover:scale-105 active:scale-95"
                                 >
-                                    Continue
+                                    <span className="text-sm font-bold tracking-wide">CLAIM & CONTINUE</span>
+                                    <div className="w-5 h-5 bg-white/20 rounded-full flex items-center justify-center group-hover:translate-x-1 transition-transform">
+                                        →
+                                    </div>
                                 </button>
                             </div>
                         )}

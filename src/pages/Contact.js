@@ -54,6 +54,7 @@ function Contact() {
   const [isExporting, setIsExporting] = useState(false);
   const [sortColumn, setSortColumn] = useState(null); // 'name', 'email', 'firm_name'
   const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
+  const [loadingFavorites, setLoadingFavorites] = useState(false);
   const navigate = useNavigate();
   const permissions = useSelector((state) => state.project.permissions);
 
@@ -854,6 +855,62 @@ function Contact() {
     setShowExportModal(false);
   };
 
+  // Handle toggle favorites only with API sync
+  const handleToggleFavoritesOnly = async () => {
+    const newShowFavoritesOnly = !showFavoritesOnly;
+    setShowFavoritesOnly(newShowFavoritesOnly);
+
+    // If switching to favorites view, fetch from API in background
+    if (newShowFavoritesOnly && tokens?.token && tokens?.username) {
+      setLoadingFavorites(true);
+      try {
+        const payload = {
+          project_id: tokens.selected_project_id || '',
+          page_no: currentPage,
+          query: '',
+          is_favorite_only: true
+        };
+
+        console.log('⭐ Fetching favorites from API:', payload);
+
+        const { data, key } = Encrypt(payload);
+        const data_pass = JSON.stringify({ data, key });
+
+        const response = await axios.post(
+          'https://api.w1chat.com/contact/contact-list',
+          data_pass,
+          {
+            headers: {
+              'token': tokens.token,
+              'username': tokens.username,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (!response?.data?.error) {
+          const apiList = response?.data?.data || [];
+          console.log(`📥 Received ${apiList.length} favorite contacts from API`);
+
+          // Update favorites set from API response
+          const apiFavoriteIds = new Set(apiList.map(c => c.contact_id));
+          setFavoriteContacts(apiFavoriteIds);
+
+          // Save to local database to keep it in sync
+          await contactDbHelper.saveContacts(apiList);
+
+          console.log('✅ Favorites synced from API');
+        } else {
+          console.warn('⚠️ API returned error:', response?.data?.message);
+        }
+      } catch (error) {
+        console.error('❌ Error fetching favorites from API:', error);
+      } finally {
+        setLoadingFavorites(false);
+      }
+    }
+  };
+
   // Handle select all contacts
   const handleSelectAll = () => {
     if (isAllSelected) {
@@ -998,13 +1055,18 @@ function Contact() {
 
               <div className="flex flex-wrap gap-3 mt-4 sm:mt-0">
                 <button
-                  onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+                  onClick={handleToggleFavoritesOnly}
+                  disabled={loadingFavorites}
                   className={`inline-flex items-center px-4 py-2 border rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${showFavoritesOnly
                     ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
                     : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                    }`}
+                    } ${loadingFavorites ? 'opacity-70 cursor-not-allowed' : ''}`}
                 >
-                  <FiFilter className="mr-2 h-4 w-4 text-sm" />
+                  {loadingFavorites ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600 mr-2"></div>
+                  ) : (
+                    <FiFilter className="mr-2 h-4 w-4 text-sm" />
+                  )}
                   {showFavoritesOnly ? 'Show All' : 'Favorites Only'}
                 </button>
 
