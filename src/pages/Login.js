@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Encrypt } from './encryption/payload-encryption';
 import axios from 'axios';
 import toast, { Toaster } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { useDispatch } from 'react-redux';
@@ -13,6 +12,7 @@ import { loginUser } from '../api/auth';
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
   const [formData, setFormData] = useState({
     username: '',
@@ -31,6 +31,30 @@ const Login = () => {
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [projects, setProjects] = useState([]);
   const [selectedProjectIdLocal, setSelectedProjectIdLocal] = useState('');
+
+  // Prefill form from URL query params (?username=...&password=...)
+  useEffect(() => {
+    if (!location?.search) return;
+
+    const params = new URLSearchParams(location.search);
+    const usernameFromUrl = params.get('username') || '';
+    const passwordFromUrl = params.get('password') || '';
+
+    if (usernameFromUrl || passwordFromUrl) {
+      setFormData(prev => ({
+        ...prev,
+        username: usernameFromUrl || prev.username,
+        password: passwordFromUrl || prev.password,
+      }));
+
+      // Clear any existing field errors when URL provides values
+      setErrors(prev => ({
+        ...prev,
+        username: '',
+        password: '',
+      }));
+    }
+  }, [location.search]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
