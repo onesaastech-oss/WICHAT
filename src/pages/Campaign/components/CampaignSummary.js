@@ -429,25 +429,28 @@ export default function CampaignSummary({
           fileUrl = sheetLink.trim();
         }
 
-        // Compute start/end rows (0-based indexing)
-        // startRow = 0 (header row)
-        // endRow = last data row index (0-based)
-        // Example: 4 data rows means indices 0(header), 1, 2, 3, 4 -> endRow = 4
-        const startRow = 0;
-        const endRow = Array.isArray(excelData) && excelData.length > 0 ? excelData.length : 0;
+        // Compute start/end rows (1-based indexing)
+        // startRow = 1 (first data row after header)
+        // endRow = last data row index (1-based)
+        // Example: 4 data rows means rows 1, 2, 3, 4 -> endRow = 4
+        const startRow = 1;
+        const endRow = Array.isArray(excelData) && excelData.length > 0 ? excelData.length : 1;
 
         // Build WhatsApp component parameters based on template components
-        // Map template variables ({{1}}, {{2}}, etc.) to Excel column indices ({{0}}, {{1}}, etc.)
+        // For Excel/Sheet campaigns, only include components that have variables/parameters
+        // BUTTONS and FOOTER are part of the template and should NOT be sent in the component array
         const formattedComponents = [];
         const templateComponents = selectedTemplate?.template_data?.components || [];
         
-        // Process HEADER component (TEXT format)
+        // Process HEADER component (TEXT format) - only if it has variables
         const headerComponent = templateComponents.find((c) => c.type === 'HEADER' && c.format === 'TEXT' && c.text);
         if (headerComponent?.text) {
           const variableMatches = headerComponent.text.match(/\{\{\d+\}\}/g) || [];
-          const parameters = [];
           
+          // Only include HEADER if it has variables
           if (variableMatches.length > 0) {
+            const parameters = [];
+            
             variableMatches.forEach((match) => {
               const varNum = match.match(/\d+/)?.[0];
               const varName = `var_${varNum}`;
@@ -474,27 +477,15 @@ export default function CampaignSummary({
                 });
               }
             });
+            
+            formattedComponents.push({
+              type: 'HEADER',
+              parameters: parameters
+            });
           }
-          
-          // Always include header component (with or without parameters)
-          formattedComponents.push({
-            type: 'header',
-            format: 'TEXT',
-            text: headerComponent.text,
-            ...(parameters.length > 0 && { parameters })
-          });
         }
         
-        // Process HEADER component (IMAGE/VIDEO/DOCUMENT format)
-        const mediaHeaderComponent = templateComponents.find((c) => c.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(c.format));
-        if (mediaHeaderComponent) {
-          formattedComponents.push({
-            type: 'header',
-            format: mediaHeaderComponent.format
-          });
-        }
-        
-        // Process BODY component
+        // Process BODY component - always include (with empty or populated parameters array)
         const bodyComponent = templateComponents.find((c) => c.type === 'BODY' && c.text);
         if (bodyComponent?.text) {
           const variableMatches = bodyComponent.text.match(/\{\{\d+\}\}/g) || [];
@@ -529,53 +520,39 @@ export default function CampaignSummary({
             });
           }
           
-          // Always include body component (with or without parameters)
+          // Always include BODY component with parameters array (empty or populated)
           formattedComponents.push({
-            type: 'body',
-            text: bodyComponent.text,
-            ...(parameters.length > 0 && { parameters })
+            type: 'BODY',
+            parameters: parameters
           });
         }
         
-        // Process FOOTER component
-        const footerComponent = templateComponents.find((c) => c.type === 'FOOTER' && c.text);
-        if (footerComponent?.text) {
-          formattedComponents.push({
-            type: 'footer',
-            text: footerComponent.text
-          });
-        }
-        
-        // Process BUTTONS component
-        const buttonsComponent = templateComponents.find((c) => c.type === 'BUTTONS' && c.buttons);
-        if (buttonsComponent?.buttons && buttonsComponent.buttons.length > 0) {
-          formattedComponents.push({
-            type: 'buttons',
-            buttons: buttonsComponent.buttons.map((btn, index) => ({
-              type: btn.type,
-              text: btn.text,
-              ...(btn.url && { url: btn.url }),
-              ...(btn.phone_number && { phone_number: btn.phone_number }),
-              index
-            }))
-          });
-        }
+        // DO NOT include FOOTER - it's part of the template definition
+        // DO NOT include BUTTONS - they're part of the template definition
+        // DO NOT include media HEADER without variables - it's part of the template definition
 
         const payload = {
           url: fileUrl,
-          phone_index: phoneIndex,
-          start_row: startRow,
-          end_row: endRow,
+          phone_index: phoneIndex.toString(),
+          start_row: startRow.toString(),
+          end_row: endRow.toString(),
+          component: formattedComponents,
           name: campaignName,
           template_id: selectedTemplate.id,
           project_id: tokens?.selected_project_id || tokens?.projects?.[0]?.project_id || '',
-          component: formattedComponents
+          source: 'excel'
         };
 
-        console.log(`${audienceType === 'excel' ? 'Excel' : 'Google Sheet'} Campaign Payload:`, payload);
+        console.log(`${audienceType === 'excel' ? 'Excel' : 'Google Sheet'} Campaign Payload (before encryption):`, payload);
 
-        const { data, key } = Encrypt(payload);
-        const data_pass = JSON.stringify({ data, key });
+        // TEMPORARY: Send unencrypted data for testing (backend has Decrypt commented out)
+        // TODO: Remove this and uncomment the encrypted version once backend Decrypt is fixed
+        const data_pass = JSON.stringify(payload);
+
+        // ORIGINAL ENCRYPTED VERSION (commented out temporarily):
+        // const { data, key } = Encrypt(payload);
+        // const data_pass = JSON.stringify({ data, key });
+        // console.log('Encrypted data being sent:', { data: data.substring(0, 50) + '...', key: key.substring(0, 50) + '...' });
 
         // Determine endpoint based on audience type
         const endpoint = `${campaignCreateUrl}/${audienceType === 'excel' ? 'excel' : 'excel'}`;
