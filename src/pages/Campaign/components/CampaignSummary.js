@@ -109,7 +109,43 @@ export default function CampaignSummary({
           return null;
         };
         
-        // Process BODY component
+        // Process HEADER component - only if it has variables
+        const headerComponent = templateComponents.find((c) => c.type === 'HEADER' && c.format === 'TEXT' && c.text);
+        if (headerComponent?.text) {
+          const variableMatches = headerComponent.text.match(/\{\{\d+\}\}/g) || [];
+          
+          if (variableMatches.length > 0) {
+            const parameters = [];
+            
+            variableMatches.forEach((match) => {
+              const varNum = match.match(/\d+/)?.[0];
+              const varName = `var_${varNum}`;
+              const source = variableSources[varName];
+              
+              const contactVarName = getContactVariableName(varName, source);
+              
+              if (contactVarName) {
+                parameters.push({
+                  type: 'text',
+                  text: `{{${contactVarName}}}`
+                });
+              } else {
+                const manualValue = variableValues[varName] || '';
+                parameters.push({
+                  type: 'text',
+                  text: manualValue
+                });
+              }
+            });
+            
+            formattedComponents.push({
+              type: 'header',
+              parameters
+            });
+          }
+        }
+        
+        // Process BODY component - always include with parameters array
         const bodyComponent = templateComponents.find((c) => c.type === 'BODY' && c.text);
         if (bodyComponent?.text) {
           const variableMatches = bodyComponent.text.match(/\{\{\d+\}\}/g) || [];
@@ -141,49 +177,11 @@ export default function CampaignSummary({
             });
           }
           
-          if (parameters.length > 0) {
-            formattedComponents.push({
-              type: 'body',
-              parameters
-            });
-          }
-        }
-        
-        // Process HEADER component if it has variables
-        const headerComponent = templateComponents.find((c) => c.type === 'HEADER' && c.format === 'TEXT' && c.text);
-        if (headerComponent?.text) {
-          const variableMatches = headerComponent.text.match(/\{\{\d+\}\}/g) || [];
-          const parameters = [];
-          
-          if (variableMatches.length > 0) {
-            variableMatches.forEach((match) => {
-              const varNum = match.match(/\d+/)?.[0];
-              const varName = `var_${varNum}`;
-              const source = variableSources[varName];
-              
-              const contactVarName = getContactVariableName(varName, source);
-              
-              if (contactVarName) {
-                parameters.push({
-                  type: 'text',
-                  text: `{{${contactVarName}}}`
-                });
-              } else {
-                const manualValue = variableValues[varName] || '';
-                parameters.push({
-                  type: 'text',
-                  text: manualValue
-                });
-              }
-            });
-          }
-          
-          if (parameters.length > 0) {
-            formattedComponents.push({
-              type: 'header',
-              parameters
-            });
-          }
+          // Always include body component with parameters array (empty or populated)
+          formattedComponents.push({
+            type: 'body',
+            parameters
+          });
         }
 
         const payload = {
@@ -194,10 +192,15 @@ export default function CampaignSummary({
           component: formattedComponents
         };
 
-        console.log('Contact Campaign Payload:', payload);
+        console.log('Contact Campaign Payload (before encryption):', payload);
 
-        const { data, key } = Encrypt(payload);
-        const data_pass = JSON.stringify({ data, key });
+        // TEMPORARY: Send unencrypted data for testing (backend has Decrypt commented out)
+        // TODO: Remove this and uncomment the encrypted version once backend Decrypt is fixed
+        const data_pass = JSON.stringify(payload);
+
+        // ORIGINAL ENCRYPTED VERSION (commented out temporarily):
+        // const { data, key } = Encrypt(payload);
+        // const data_pass = JSON.stringify({ data, key });
 
         const endpoint = `${campaignCreateUrl}/contact`;
 
@@ -234,8 +237,8 @@ export default function CampaignSummary({
           return;
         }
 
-        // Use the first selected group (API expects a single group_id)
-        const groupId = selectedGroups[0];
+        // Backend expects group_ids as an array
+        const groupIds = selectedGroups; // Send all selected groups as array
 
         // Build WhatsApp component parameters based on template variables
         // Map template variables to contact variables ({{name}}, {{number}}, etc.)
@@ -280,7 +283,43 @@ export default function CampaignSummary({
           return null;
         };
         
-        // Process BODY component
+        // Process HEADER component - only if it has variables
+        const headerComponent = templateComponents.find((c) => c.type === 'HEADER' && c.format === 'TEXT' && c.text);
+        if (headerComponent?.text) {
+          const variableMatches = headerComponent.text.match(/\{\{\d+\}\}/g) || [];
+          
+          if (variableMatches.length > 0) {
+            const parameters = [];
+            
+            variableMatches.forEach((match) => {
+              const varNum = match.match(/\d+/)?.[0];
+              const varName = `var_${varNum}`;
+              const source = variableSources[varName];
+              
+              const contactVarName = getContactVariableName(varName, source);
+              
+              if (contactVarName) {
+                parameters.push({
+                  type: 'text',
+                  text: `{{${contactVarName}}}`
+                });
+              } else {
+                const manualValue = variableValues[varName] || '';
+                parameters.push({
+                  type: 'text',
+                  text: manualValue
+                });
+              }
+            });
+            
+            formattedComponents.push({
+              type: 'header',
+              parameters
+            });
+          }
+        }
+        
+        // Process BODY component - always include with parameters array
         const bodyComponent = templateComponents.find((c) => c.type === 'BODY' && c.text);
         if (bodyComponent?.text) {
           const variableMatches = bodyComponent.text.match(/\{\{\d+\}\}/g) || [];
@@ -312,63 +351,30 @@ export default function CampaignSummary({
             });
           }
           
-          if (parameters.length > 0) {
-            formattedComponents.push({
-              type: 'body',
-              parameters
-            });
-          }
-        }
-        
-        // Process HEADER component if it has variables
-        const headerComponent = templateComponents.find((c) => c.type === 'HEADER' && c.format === 'TEXT' && c.text);
-        if (headerComponent?.text) {
-          const variableMatches = headerComponent.text.match(/\{\{\d+\}\}/g) || [];
-          const parameters = [];
-          
-          if (variableMatches.length > 0) {
-            variableMatches.forEach((match) => {
-              const varNum = match.match(/\d+/)?.[0];
-              const varName = `var_${varNum}`;
-              const source = variableSources[varName];
-              
-              const contactVarName = getContactVariableName(varName, source);
-              
-              if (contactVarName) {
-                parameters.push({
-                  type: 'text',
-                  text: `{{${contactVarName}}}`
-                });
-              } else {
-                const manualValue = variableValues[varName] || '';
-                parameters.push({
-                  type: 'text',
-                  text: manualValue
-                });
-              }
-            });
-          }
-          
-          if (parameters.length > 0) {
-            formattedComponents.push({
-              type: 'header',
-              parameters
-            });
-          }
+          // Always include body component with parameters array (empty or populated)
+          formattedComponents.push({
+            type: 'body',
+            parameters
+          });
         }
 
         const payload = {
-          group_id: groupId,
+          group_ids: groupIds, // Changed from group_id to group_ids (array)
           name: campaignName,
           template_id: selectedTemplate.id,
           project_id: tokens?.selected_project_id || tokens?.projects?.[0]?.project_id || '',
           component: formattedComponents
         };
 
-        console.log('Group Campaign Payload:', payload);
+        console.log('Group Campaign Payload (before encryption):', payload);
 
-        const { data, key } = Encrypt(payload);
-        const data_pass = JSON.stringify({ data, key });
+        // TEMPORARY: Send unencrypted data for testing (backend has Decrypt commented out)
+        // TODO: Remove this and uncomment the encrypted version once backend Decrypt is fixed
+        const data_pass = JSON.stringify(payload);
+
+        // ORIGINAL ENCRYPTED VERSION (commented out temporarily):
+        // const { data, key } = Encrypt(payload);
+        // const data_pass = JSON.stringify({ data, key });
 
         const endpoint = `${campaignCreateUrl}/group`;
 

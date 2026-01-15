@@ -5,6 +5,23 @@ const normalizeSocketMessagePayload = (message = {}) => {
     const isTemplate = message.message_type === 'template' || message.is_template;
     let resolvedMessage = message.message || '';
 
+    // Normalize `component` (socket can deliver array or JSON-stringified array)
+    const normalizedComponent = (() => {
+        const c = message?.component;
+        if (!c) return [];
+        if (Array.isArray(c)) return c;
+        if (typeof c === 'string') {
+            try {
+                const parsed = JSON.parse(c);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+                console.warn('Failed to parse template component JSON (socket):', c);
+                return [];
+            }
+        }
+        return [];
+    })();
+
     if (isTemplate && (!resolvedMessage || resolvedMessage.length === 0)) {
         let bodyText = '';
         if (Array.isArray(message.template?.components)) {
@@ -17,7 +34,7 @@ const normalizeSocketMessagePayload = (message = {}) => {
         }
 
         const params =
-            (message.component || []).find(
+            (normalizedComponent || []).find(
                 (c) => (c.type || '').toLowerCase() === 'body'
             )?.parameters || [];
 
@@ -33,8 +50,8 @@ const normalizeSocketMessagePayload = (message = {}) => {
     let headerMediaName = message.media_name || '';
     let derivedMessageType = message.message_type || '';
 
-    if (isTemplate && Array.isArray(message.component)) {
-        const headerComp = message.component.find(
+    if (isTemplate && Array.isArray(normalizedComponent)) {
+        const headerComp = normalizedComponent.find(
             (c) => (c.type || '').toLowerCase() === 'header'
         );
         const headerParam = headerComp?.parameters?.[0];
@@ -75,6 +92,7 @@ const normalizeSocketMessagePayload = (message = {}) => {
         headerMediaUrl,
         headerMediaName,
         derivedMessageType,
+        normalizedComponent,
     };
 };
 
@@ -158,6 +176,7 @@ class SocketManager {
                 headerMediaUrl,
                 headerMediaName,
                 derivedMessageType,
+                normalizedComponent,
             } = normalizeSocketMessagePayload(messageData.message || {});
 
             // Check if this is a message sent by the current user (outgoing message)
@@ -210,7 +229,7 @@ class SocketManager {
                     timestamp: messageData.message.timestamp || '',
                     retryCount: messageData.message.retryCount || '',
                     template: messageData.message.template || null,
-                    component: messageData.message.component || null
+                    component: (normalizedComponent?.length ? normalizedComponent : (messageData.message.component || null))
                 });
                 return;
             }
@@ -259,7 +278,7 @@ class SocketManager {
                 retryCount: messageData.message.retryCount || '',
                 chat_number: messageData.contact.number,
                 template: messageData.message.template || null,
-                component: messageData.message.component || null
+                component: (normalizedComponent?.length ? normalizedComponent : (messageData.message.component || null))
             }]
 
             // New Chat

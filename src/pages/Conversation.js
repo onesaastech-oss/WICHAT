@@ -1591,12 +1591,30 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const processApiResponse = async (apiMessages, isLoadingPrevious = false, apiLastId = null) => {
         try {
             const messageList = apiMessages.map(apiMessage => {
+                // Normalize `component` (API may send an array OR a JSON-stringified array)
+                const normalizedComponent = (() => {
+                    const c = apiMessage?.component;
+                    if (!c) return [];
+                    if (Array.isArray(c)) return c;
+                    if (typeof c === 'string') {
+                        try {
+                            const parsed = JSON.parse(c);
+                            return Array.isArray(parsed) ? parsed : [];
+                        } catch (e) {
+                            console.warn('Failed to parse template component JSON:', c);
+                            return [];
+                        }
+                    }
+                    return [];
+                })();
+
                 // Build readable text for template if server message is missing/empty
 
 
 
-                let resolvedMessage = apiMessage.message || '';
-                if ((apiMessage.message_type === 'template' || apiMessage.is_template) && (!resolvedMessage || resolvedMessage.length === 0)) {
+                const isTemplate = Boolean(apiMessage?.is_template || apiMessage?.message_type === 'template');
+                let resolvedMessage = (apiMessage.message ?? '');
+                if (isTemplate && (!resolvedMessage || resolvedMessage.length === 0)) {
                     // Prefer template.body if present
                     let bodyText = '';
                     if (apiMessage.template?.components) {
@@ -1605,7 +1623,9 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     } else if (apiMessage.template?.body) {
                         bodyText = apiMessage.template.body;
                     }
-                    const params = (apiMessage.component || []).find(c => c.type?.toLowerCase() === 'body')?.parameters || [];
+                    const params = (normalizedComponent || [])
+                        .find(c => c?.type?.toLowerCase() === 'body')
+                        ?.parameters || [];
                     const matches = bodyText.match(/\{\{\d+\}\}/g) || [];
                     resolvedMessage = matches.reduce((acc, ph, idx) => {
                         const val = params[idx]?.text || `Variable ${idx + 1}`;
@@ -1618,8 +1638,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 let headerMediaName = apiMessage.media_name || '';
                 let derivedMessageType = apiMessage.message_type || '';
 
-                if (apiMessage.is_template && apiMessage.component) {
-                    const headerComp = apiMessage.component.find(c => c.type?.toLowerCase() === 'header');
+                if (isTemplate && normalizedComponent.length > 0) {
+                    const headerComp = normalizedComponent.find(c => c.type?.toLowerCase() === 'header');
                     if (headerComp && headerComp.parameters && headerComp.parameters.length > 0) {
                         const param = headerComp.parameters[0];
                         if (param?.type === 'image' && param.image?.link) {
@@ -1639,7 +1659,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 }
 
                 // Fallback: Determine header media for templates if API provides media_url
-                if (apiMessage.is_template && headerMediaUrl && !derivedMessageType) {
+                if (isTemplate && headerMediaUrl && !derivedMessageType) {
                     const lower = (headerMediaUrl || '').toLowerCase();
                     if (/(\.jpg|\.jpeg|\.png|\.gif|\.webp)$/.test(lower)) derivedMessageType = 'image';
                     else if (/(\.mp4|\.mov|\.avi|\.webm)$/.test(lower)) derivedMessageType = 'video';
@@ -1654,7 +1674,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     type: apiMessage.type || '',
                     message_type: derivedMessageType || apiMessage.message_type || '',
                     message: resolvedMessage,
-                    is_template: apiMessage.is_template || false,
+                    is_template: isTemplate,
                     is_forwarded: apiMessage.is_forwarded || false,
                     is_reply: apiMessage.is_reply || false,
                     status: apiMessage.status || '',
@@ -1684,7 +1704,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     chat_number: activeChat.number,
                     // Store template and component data for rendering
                     template: apiMessage.template || null,
-                    component: apiMessage.component || null
+                    component: normalizedComponent.length ? normalizedComponent : null
                 });
             });
 
