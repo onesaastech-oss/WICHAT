@@ -24,6 +24,7 @@ export default function CampaignBuilder() {
   const [excelData, setExcelData] = useState([]);
   const [excelFileUrl, setExcelFileUrl] = useState('');
   const [campaignName, setCampaignName] = useState('');
+  const [scheduleDate, setScheduleDate] = useState('');
   const [tokens, setTokens] = useState(null);
 
   const [isMinimized, setIsMinimized] = useState(() => {
@@ -158,6 +159,8 @@ export default function CampaignBuilder() {
                   variableSources={variableSources}
                   campaignName={campaignName}
                   setCampaignName={setCampaignName}
+                  scheduleDate={scheduleDate}
+                  setScheduleDate={setScheduleDate}
                   excelFile={excelFile}
                   excelData={excelData}
                   excelHeaders={excelHeaders}

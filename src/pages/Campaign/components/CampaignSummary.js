@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { Encrypt } from '../../encryption/payload-encryption';
-import { Send, ChevronRight } from 'lucide-react';
+import { Send, ChevronRight, Calendar, Clock } from 'lucide-react';
 import { canProceed, getAudienceSummary } from '../utils/campaignHelpers';
 
 export default function CampaignSummary({
@@ -17,16 +17,41 @@ export default function CampaignSummary({
   variableSources = {},
   campaignName,
   setCampaignName,
+  scheduleDate,
+  setScheduleDate,
   excelHeaders = [],
   excelData = [],
   excelFileUrl = '',
   selectedContactDetails = [],
   tokens
 }) {
+  const [isScheduled, setIsScheduled] = useState(false);
+  
   const handleProceed = () => {
     if (activeTab === 'audience') {
       setActiveTab('template');
     }
+  };
+
+  // Helper function to format datetime for backend (YYYY-MM-DD HH:mm:ss)
+  const formatScheduleDate = (dateTimeLocal) => {
+    if (!dateTimeLocal) return null;
+    // dateTimeLocal is in format: "2026-01-15T18:30"
+    // Convert to: "2026-01-15 18:30:00"
+    const [date, time] = dateTimeLocal.split('T');
+    return `${date} ${time}:00`;
+  };
+
+  // Helper function to get minimum datetime (current time + 5 minutes)
+  const getMinDateTime = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 5);
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
   const campaignCreateUrl = 'https://api.w1chat.com/campaign/create';
@@ -191,6 +216,11 @@ export default function CampaignSummary({
           project_id: tokens?.selected_project_id || tokens?.projects?.[0]?.project_id || '',
           component: formattedComponents
         };
+
+        // Add schedule_date if scheduled
+        if (isScheduled && scheduleDate) {
+          payload.schedule_date = formatScheduleDate(scheduleDate);
+        }
 
         console.log('Contact Campaign Payload (before encryption):', payload);
 
@@ -365,6 +395,11 @@ export default function CampaignSummary({
           project_id: tokens?.selected_project_id || tokens?.projects?.[0]?.project_id || '',
           component: formattedComponents
         };
+
+        // Add schedule_date if scheduled
+        if (isScheduled && scheduleDate) {
+          payload.schedule_date = formatScheduleDate(scheduleDate);
+        }
 
         console.log('Group Campaign Payload (before encryption):', payload);
 
@@ -549,6 +584,11 @@ export default function CampaignSummary({
           source: 'excel'
         };
 
+        // Add schedule_date if scheduled
+        if (isScheduled && scheduleDate) {
+          payload.schedule_date = formatScheduleDate(scheduleDate);
+        }
+
         console.log(`${audienceType === 'excel' ? 'Excel' : 'Google Sheet'} Campaign Payload (before encryption):`, payload);
 
         // TEMPORARY: Send unencrypted data for testing (backend has Decrypt commented out)
@@ -631,16 +671,66 @@ export default function CampaignSummary({
         </div>
 
         {activeTab === 'template' && (
-          <div>
-            <label className="block text-sm text-gray-500 mb-1">Campaign Name</label>
-            <input
-              type="text"
-              value={campaignName || ''}
-              onChange={(e) => setCampaignName?.(e.target.value)}
-              placeholder="Enter a campaign name"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
+          <>
+            <div>
+              <label className="block text-sm text-gray-500 mb-1">Campaign Name</label>
+              <input
+                type="text"
+                value={campaignName || ''}
+                onChange={(e) => setCampaignName?.(e.target.value)}
+                placeholder="Enter a campaign name"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+
+            {/* Schedule Campaign Section */}
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-indigo-600" />
+                  <label className="text-sm font-medium text-gray-700">Schedule Campaign</label>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isScheduled}
+                    onChange={(e) => {
+                      setIsScheduled(e.target.checked);
+                      if (!e.target.checked) {
+                        setScheduleDate?.('');
+                      }
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+              </div>
+
+              {isScheduled && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                    <Clock className="w-3 h-3" />
+                    <span>Campaign will be sent at the scheduled time</span>
+                  </div>
+                  <input
+                    type="datetime-local"
+                    value={scheduleDate || ''}
+                    onChange={(e) => setScheduleDate?.(e.target.value)}
+                    min={getMinDateTime()}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                  />
+                  {scheduleDate && (
+                    <div className="text-xs text-indigo-600 bg-indigo-50 px-3 py-2 rounded-lg">
+                      Scheduled for: {new Date(scheduleDate).toLocaleString('en-US', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short'
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         <div className="border-t pt-4">
@@ -669,15 +759,24 @@ export default function CampaignSummary({
               </button>
               <button
                 onClick={handleLaunchCampaign}
-                disabled={!proceedEnabled || !campaignName || campaignName.trim() === ''}
+                disabled={!proceedEnabled || !campaignName || campaignName.trim() === '' || (isScheduled && !scheduleDate)}
                 className={`w-full py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
-                  proceedEnabled && campaignName && campaignName.trim() !== ''
+                  proceedEnabled && campaignName && campaignName.trim() !== '' && (!isScheduled || scheduleDate)
                     ? 'bg-gradient-to-r from-indigo-500 to-indigo-500 text-white hover:from-indigo-600 hover:to-indigo-600 shadow-lg hover:shadow-xl'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }`}
               >
-                <Send className="w-5 h-5" />
-                Launch Campaign
+                {isScheduled ? (
+                  <>
+                    <Calendar className="w-5 h-5" />
+                    Schedule Campaign
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-5 h-5" />
+                    Launch Campaign
+                  </>
+                )}
               </button>
             </div>
           )}
