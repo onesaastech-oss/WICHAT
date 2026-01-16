@@ -19,6 +19,7 @@ import PermissionsList from './pages/PermissionsList';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { Provider } from 'react-redux';
 import store from './store';
+import { Toaster } from 'react-hot-toast';
 import CreateCampaign from './pages/Campaign/CreateCampaign';
 import Transactions from './pages/Transactions';
 import Projects from './pages/Projects';
@@ -41,6 +42,30 @@ root.render(
   <Provider store={store}>
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <BrowserRouter>
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#363636',
+              color: '#fff',
+            },
+            success: {
+              duration: 4000,
+              theme: {
+                primary: '#10b981',
+                secondary: '#fff',
+              },
+            },
+            error: {
+              duration: 5000,
+              theme: {
+                primary: '#ef4444',
+                secondary: '#fff',
+              },
+            },
+          }}
+        />
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/dasboard" element={<Dashboard />} />

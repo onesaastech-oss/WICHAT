@@ -8,22 +8,16 @@ import {
   FiEdit2, 
   FiTrash2, 
   FiX, 
-  FiUsers,
-  FiCalendar,
   FiMoreVertical,
   FiCheck,
   FiEye
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
-import moment from 'moment';
-import { useDispatch } from 'react-redux';
-import { setSelectedProjectId } from '../store/authSlice';
 import toast from 'react-hot-toast';
 import { fetchUserProfile, createProject } from '../api/auth';
 
 const Projects = () => {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(() => {
     const saved = localStorage.getItem('sidebarMinimized');
@@ -39,10 +33,6 @@ const Projects = () => {
 
   const userProjects = Array.isArray(userData?.projects?.list) ? userData.projects.list : [];
   const hasUserProjects = userData && userProjects.length > 0;
-
-  const [selectedUserProjectId, setSelectedUserProjectId] = useState(
-    userData?.selected_project_id || (userProjects[0]?.project_id || '')
-  );
 
   const [formData, setFormData] = useState({
     company_name: '',
@@ -61,54 +51,19 @@ const Projects = () => {
           setUserData(profileData);
           
           
-          // Update localStorage with fresh data
-          // localStorage.setItem('userData', JSON.stringify(profileData));
-          
           // Set projects from API response
           if (Array.isArray(profileData.projects?.list)) {
             setProjects(profileData.projects.list.map(project => ({
               id: project.project_id,
               name: project.name,
-              description: project.description || 'No description',
-              status: project.status || 'Active',
-              members: project.members || 0,
-              createdAt: project.created_at || new Date().toISOString(),
-              updatedAt: project.updated_at || new Date().toISOString()
+              owned: project.owned
             })));
-          }
-          
-          // Set selected project
-          if (profileData.selected_project_id) {
-            setSelectedUserProjectId(profileData.selected_project_id);
-          } else if (profileData.projects?.list && profileData.projects.list.length > 0) {
-            setSelectedUserProjectId(profileData.projects.list[0].project_id);
           }
         }
       } catch (error) {
         console.error('Error fetching user profile:', error);
         toast.error('Failed to load projects');
         
-        // Fallback to localStorage if API fails
-        try {
-          const localData = localStorage.getItem('userData');
-          if (localData) {
-            const parsedData = JSON.parse(localData);
-            setUserData(parsedData);
-            if (Array.isArray(parsedData.projects)) {
-              setProjects(parsedData.projects.map(project => ({
-                id: project.project_id,
-                name: project.name,
-                description: project.description || 'No description',
-                status: project.status || 'Active',
-                members: project.members || 0,
-                createdAt: project.created_at || new Date().toISOString(),
-                updatedAt: project.updated_at || new Date().toISOString()
-              })));
-            }
-          }
-        } catch (localError) {
-          console.error('Error loading from localStorage:', localError);
-        }
       } finally {
         setLoading(false);
       }
@@ -134,8 +89,7 @@ const Projects = () => {
 
   // Filter projects based on search
   const filteredProjects = projects.filter(project =>
-    project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.description.toLowerCase().includes(searchTerm.toLowerCase())
+    project.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleCreateProject = () => {
@@ -206,11 +160,7 @@ const Projects = () => {
               setProjects(profileData.projects.list.map(project => ({
                 id: project.project_id,
                 name: project.name,
-                description: project.description || 'No description',
-                status: project.status || 'Active',
-                members: project.members || 0,
-                createdAt: project.created_at || new Date().toISOString(),
-                updatedAt: project.updated_at || new Date().toISOString()
+                owned: project.owned
               })));
             }
           }
@@ -230,11 +180,6 @@ const Projects = () => {
     }
   };
 
-  const getStatusColor = (status) => {
-    return status === 'Active' 
-      ? 'bg-green-100 text-green-800 border-green-200' 
-      : 'bg-gray-100 text-gray-800 border-gray-200';
-  };
 
   // Prevent background scrolling when modal is open
   useEffect(() => {
@@ -344,80 +289,19 @@ const Projects = () => {
 
                     {/* Stats Summary */}
           {filteredProjects.length > 0 && (
-            <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-white rounded-xl shadow p-4">
                 <p className="text-sm text-gray-600 mb-1">Total Projects</p>
                 <p className="text-2xl font-bold text-gray-900">{filteredProjects.length}</p>
               </div>
               <div className="bg-white rounded-xl shadow p-4">
-                <p className="text-sm text-gray-600 mb-1">Active Projects</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {filteredProjects.filter(p => p.status === 'Active').length}
-                </p>
-              </div>
-              <div className="bg-white rounded-xl shadow p-4">
-                <p className="text-sm text-gray-600 mb-1">Total Members</p>
+                <p className="text-sm text-gray-600 mb-1">Owned Projects</p>
                 <p className="text-2xl font-bold text-indigo-600">
-                  {filteredProjects.reduce((sum, p) => sum + p.members, 0)}
+                  {filteredProjects.filter(p => p.owned).length}
                 </p>
               </div>
             </div>
           )}
-
-          {/* Project selection for logged-in user (from API) */}
-          {/* {userProjects.length > 0 && (
-            <div className="mb-6 bg-white rounded-xl shadow p-4 border border-indigo-100">
-              <h2 className="text-lg font-semibold text-gray-900 mb-3">
-                Select Active Project
-              </h2>
-              {userProjects.length === 1 ? (
-                <p className="text-sm text-gray-700">
-                  You are currently using project{' '}
-                  <span className="font-medium">{userProjects[0].name}</span>.
-                </p>
-              ) : (
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                  <select
-                    value={selectedUserProjectId}
-                    onChange={(e) => setSelectedUserProjectId(e.target.value)}
-                    className="w-full sm:w-72 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {userProjects.map((project) => (
-                      <option key={project.project_id} value={project.project_id}>
-                        {project.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!selectedUserProjectId) return;
-
-                      // Persist in Redux
-                      dispatch(setSelectedProjectId(selectedUserProjectId));
-
-                      // Persist in localStorage for non-Redux code
-                      try {
-                        const updated = {
-                          ...userData,
-                          selected_project_id: selectedUserProjectId
-                        };
-                        localStorage.setItem('userData', JSON.stringify(updated));
-                        setUserData(updated);
-                      } catch (error) {
-                        console.error('Failed to update selected project in localStorage', error);
-                      }
-
-                      toast.success('Active project updated');
-                    }}
-                    className="inline-flex items-center justify-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-                  >
-                    Set as Active
-                  </button>
-                </div>
-              )}
-            </div>
-          )} */}
 
           {/* Projects Grid */}
           {filteredProjects.length === 0 ? (
@@ -510,37 +394,28 @@ const Projects = () => {
 
                   {/* Project Info */}
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">{project.name}</h3>
-                  <p className="text-gray-600 text-sm mb-4 line-clamp-2">{project.description}</p>
 
                   {/* Project Stats */}
                   <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-1 text-gray-600">
-                      <FiUsers size={16} />
-                      <span className="text-sm">{project.members} members</span>
-                    </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(project.status)}`}>
-                      {project.status}
-                    </span>
+                    {project.owned && (
+                      <span className="px-2 py-1 rounded-full text-xs font-medium border bg-indigo-100 text-indigo-800 border-indigo-200">
+                        Owned
+                      </span>
+                    )}
                   </div>
 
-                  {/* Project Dates */}
+                  {/* Project Actions */}
                   <div className="pt-4 border-t border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-1 text-xs text-gray-500">
-                        <FiCalendar size={14} />
-                        <span>Updated {moment(project.updatedAt).fromNow()}</span>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/project-details/${project.id}`);
-                        }}
-                        className="flex items-center space-x-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
-                      >
-                        <FiEye size={14} />
-                        <span>View Details</span>
-                      </button>
-                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/project-details/${project.id}`);
+                      }}
+                      className="flex items-center space-x-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                    >
+                      <FiEye size={14} />
+                      <span>View Details</span>
+                    </button>
                   </div>
                 </motion.div>
               ))}

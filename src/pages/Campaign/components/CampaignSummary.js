@@ -3,6 +3,9 @@ import axios from 'axios';
 import { Encrypt } from '../../encryption/payload-encryption';
 import { Send, ChevronRight, Calendar, Clock } from 'lucide-react';
 import { canProceed, getAudienceSummary } from '../utils/campaignHelpers';
+import DateTimePicker from './DateTimePicker';
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 export default function CampaignSummary({
   activeTab,
@@ -26,6 +29,7 @@ export default function CampaignSummary({
   tokens
 }) {
   const [isScheduled, setIsScheduled] = useState(false);
+  const navigate = useNavigate();
   
   const handleProceed = () => {
     if (activeTab === 'audience') {
@@ -250,8 +254,20 @@ export default function CampaignSummary({
           throw new Error(response?.data?.message || 'Failed to create contact campaign');
         }
 
-        alert('Contact campaign created successfully.');
-        // Optionally navigate or reset UI here
+        toast.success(`Contact campaign "${campaignName}" created successfully!`, {
+          duration: 4000,
+          icon: '🎉',
+          style: {
+            background: '#10b981',
+            color: 'white',
+            fontWeight: '600'
+          }
+        });
+
+        // Redirect to campaign list after a short delay
+        setTimeout(() => {
+          navigate('/campaigns');
+        }, 2000);
       } catch (err) {
         console.error('Failed to create contact campaign:', err);
         alert(err?.message || 'Failed to create contact campaign');
@@ -429,8 +445,20 @@ export default function CampaignSummary({
           throw new Error(response?.data?.message || 'Failed to create group campaign');
         }
 
-        alert('Group campaign created successfully.');
-        // Optionally navigate or reset UI here
+        toast.success(`Group campaign "${campaignName}" created successfully!`, {
+          duration: 4000,
+          icon: '🎉',
+          style: {
+            background: '#10b981',
+            color: 'white',
+            fontWeight: '600'
+          }
+        });
+
+        // Redirect to campaign list after a short delay
+        setTimeout(() => {
+          navigate('/campaigns');
+        }, 2000);
       } catch (err) {
         console.error('Failed to create group campaign:', err);
         alert(err?.message || 'Failed to create group campaign');
@@ -620,8 +648,20 @@ export default function CampaignSummary({
           throw new Error(response?.data?.message || `Failed to create ${sourceType} campaign`);
         }
 
-        alert(`${sourceType} campaign created successfully.`);
-        // Optionally navigate or reset UI here
+        toast.success(`${sourceType} campaign "${campaignName}" created successfully!`, {
+          duration: 4000,
+          icon: '🎉',
+          style: {
+            background: '#10b981',
+            color: 'white',
+            fontWeight: '600'
+          }
+        });
+
+        // Redirect to campaign list after a short delay
+        setTimeout(() => {
+          navigate('/campaigns');
+        }, 2000);
       } catch (err) {
         const sourceType = audienceType === 'excel' ? 'Excel' : 'Google Sheet';
         console.error(`Failed to create ${sourceType} campaign:`, err);
@@ -707,26 +747,17 @@ export default function CampaignSummary({
               </div>
 
               {isScheduled && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                    <Clock className="w-3 h-3" />
-                    <span>Campaign will be sent at the scheduled time</span>
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                    <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Campaign will be automatically sent at the scheduled time in your local timezone.</span>
                   </div>
-                  <input
-                    type="datetime-local"
-                    value={scheduleDate || ''}
-                    onChange={(e) => setScheduleDate?.(e.target.value)}
-                    min={getMinDateTime()}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                  <DateTimePicker
+                    selectedDate={scheduleDate}
+                    onChange={(date) => setScheduleDate?.(date)}
+                    minDate={getMinDateTime()}
+                    placeholder="Select launch date and time"
                   />
-                  {scheduleDate && (
-                    <div className="text-xs text-indigo-600 bg-indigo-50 px-3 py-2 rounded-lg">
-                      Scheduled for: {new Date(scheduleDate).toLocaleString('en-US', {
-                        dateStyle: 'medium',
-                        timeStyle: 'short'
-                      })}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
