@@ -4,15 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   FiCreditCard,
-  FiDollarSign,
-  FiCheck,
   FiX,
   FiShield,
   FiLock,
   FiSmartphone,
   FiChevronRight,
   FiZap,
-  FiGift,
   FiRefreshCw,
   FiCopy
 } from 'react-icons/fi';
@@ -21,7 +18,7 @@ import { MdQrCodeScanner } from 'react-icons/md';
 import { Header, Sidebar } from '../component/Menu';
 import toast from 'react-hot-toast';
 import { fetchProjectInfo } from '../store/projectSlice';
-import { createPaymentOrder, validatePromoCode, checkPaymentStatus } from '../api/auth';
+import { createPaymentOrder, checkPaymentStatus } from '../api/auth';
 import { SiGooglepay, SiPhonepe, SiPaytm, SiAmazonpay } from 'react-icons/si';
 import QRCode from 'react-qr-code';
 
@@ -43,7 +40,6 @@ const WalletRecharge = () => {
   
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const walletBalance = useSelector((state) => state.project.walletBalance);
   const projectInfo = useSelector((state) => state.project.info);
   const projectCharges =
     projectInfo?.project?.charges ||
@@ -335,41 +331,41 @@ const WalletRecharge = () => {
     }
   };
 
-  const applyPromoCode = async () => {
-    try {
-      // Call API to validate promo code
-      const response = await validatePromoCode(promoCode);
-      
-      if (response.success && response.data) {
-        setDiscount(response.data.discount_percentage);
-        setPromoApplied(true);
-        toast.success(`Promo code applied! ${response.data.discount_percentage}% discount`);
-      } else {
-        toast.error('Invalid promo code');
-      }
-    } catch (error) {
-      // Fallback to mock validation for testing
-      const validPromoCodes = {
-        'FIRST10': 10,
-        'SAVE20': 20,
-        'WELCOME15': 15
-      };
+  // const applyPromoCode = async () => {
+  //   try {
+  //     // Call API to validate promo code
+  //     const response = await validatePromoCode(promoCode);
+  //     
+  //     if (response.success && response.data) {
+  //       setDiscount(response.data.discount_percentage);
+  //       setPromoApplied(true);
+  //       toast.success(`Promo code applied! ${response.data.discount_percentage}% discount`);
+  //     } else {
+  //       toast.error('Invalid promo code');
+  //     }
+  //   } catch (error) {
+  //     // Fallback to mock validation for testing
+  //     const validPromoCodes = {
+  //       'FIRST10': 10,
+  //       'SAVE20': 20,
+  //       'WELCOME15': 15
+  //     };
 
-      if (validPromoCodes[promoCode.toUpperCase()]) {
-        setDiscount(validPromoCodes[promoCode.toUpperCase()]);
-        setPromoApplied(true);
-        toast.success(`Promo code applied! ${validPromoCodes[promoCode.toUpperCase()]}% discount`);
-      } else {
-        toast.error('Invalid promo code');
-      }
-    }
-  };
+  //     if (validPromoCodes[promoCode.toUpperCase()]) {
+  //       setDiscount(validPromoCodes[promoCode.toUpperCase()]);
+  //       setPromoApplied(true);
+  //       toast.success(`Promo code applied! ${validPromoCodes[promoCode.toUpperCase()]}% discount`);
+  //     } else {
+  //       toast.error('Invalid promo code');
+  //     }
+  //   }
+  // };
 
-  const removePromoCode = () => {
-    setPromoCode('');
-    setPromoApplied(false);
-    setDiscount(0);
-  };
+  // const removePromoCode = () => {
+  //   setPromoCode('');
+  //   setPromoApplied(false);
+  //   setDiscount(0);
+  // };
 
   // Initialize payment
   const initializePayment = async () => {
@@ -395,7 +391,7 @@ const WalletRecharge = () => {
 
     try {
       // Get current URL for redirect
-      const redirect_url = 'https://wichat-sigma.vercel.app' + '/payment-status';
+      const redirect_url = 'https://wichat-sigma.vercel.app/payment-status';
 
       // Create payment order via API
       const response = await createPaymentOrder({

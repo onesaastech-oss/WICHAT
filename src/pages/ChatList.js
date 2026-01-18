@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiSearch, FiStar, FiImage, FiVideo, FiFile, FiMusic, FiMapPin, FiUser, FiCheck, FiClock, FiAlertCircle } from 'react-icons/fi';
+import { FiSearch, FiStar, FiImage, FiVideo, FiFile, FiMusic, FiUser, FiCheck, FiClock, FiAlertCircle } from 'react-icons/fi';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import { dbHelper } from './db';
@@ -300,7 +300,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
             case 'document':
                 return <FiFile className="w-3 h-3" />;
             case 'location':
-                return <FiMapPin className="w-3 h-3" />;
+                return null;
             case 'contact':
                 return <FiUser className="w-3 h-3" />;
             default:

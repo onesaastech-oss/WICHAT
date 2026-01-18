@@ -130,6 +130,7 @@ const Transactions = () => {
     if (tokens?.token && tokens?.username) {
       fetchTransactions(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokens]);
 
   // Transform API data to match component expectations
