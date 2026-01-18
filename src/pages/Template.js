@@ -425,13 +425,25 @@ function Template() {
                           <td className="px-6 py-4 text-sm text-gray-500">{template.updatedOn}</td>
                           <td className="px-6 py-4">
                             <div className="flex justify-end gap-2">
-                              <Link 
-                                to={`/template-edit/${template.id}`} 
-                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                title="Edit"
-                              >
-                                <FiEdit size={18} />
-                              </Link>
+                              {template.status === 'APPROVED' ? (
+                                <Tooltip
+                                  content="Can not edit for approved Template"
+                                  disabled={false}
+                                  position="top"
+                                >
+                                  <span className="p-2 text-gray-400 cursor-not-allowed rounded-lg opacity-50">
+                                    <FiEdit size={18} />
+                                  </span>
+                                </Tooltip>
+                              ) : (
+                                <Link 
+                                  to={`/template-edit/${template.id}`} 
+                                  className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                  title="Edit"
+                                >
+                                  <FiEdit size={18} />
+                                </Link>
+                              )}
                               <button 
                                 onClick={() => handleDelete(template.id)}
                                 className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
@@ -485,14 +497,27 @@ function Template() {
                           
                           {activeDropdown === template.id && (
                             <div className="absolute right-0 bottom-full mb-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                              <Link
-                                to={`/template-edit/${template.id}`}
-                                className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                                onClick={() => setActiveDropdown(null)}
-                              >
-                                <FiEdit size={16} />
-                                Edit
-                              </Link>
+                              {template.status === 'APPROVED' ? (
+                                <Tooltip
+                                  content="Can not edit for approved Template"
+                                  disabled={false}
+                                  position="left"
+                                >
+                                  <span className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-400 cursor-not-allowed opacity-50">
+                                    <FiEdit size={16} />
+                                    Edit
+                                  </span>
+                                </Tooltip>
+                              ) : (
+                                <Link
+                                  to={`/template-edit/${template.id}`}
+                                  className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                  onClick={() => setActiveDropdown(null)}
+                                >
+                                  <FiEdit size={16} />
+                                  Edit
+                                </Link>
+                              )}
                               <button
                                 onClick={() => {
                                   handleDelete(template.id);

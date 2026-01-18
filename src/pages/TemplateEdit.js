@@ -63,6 +63,7 @@ function TemplateEdit() {
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [successData, setSuccessData] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [templateStatus, setTemplateStatus] = useState(null);
   const textareaRef = useRef(null);
 
   const [isMinimized, setIsMinimized] = useState(() => {
@@ -102,7 +103,6 @@ function TemplateEdit() {
     { code: 'MARKETING', name: 'Marketing' },
     { code: 'TRANSACTIONAL', name: 'Transactional' },
     { code: 'UTILITY', name: 'Utility' },
-    { code: 'AUTHENTICATION', name: 'Authentication' }
   ];
 
   // Header formats
@@ -139,6 +139,8 @@ function TemplateEdit() {
 
           if (template && template.template_data) {
             console.log('Found template in localStorage:', template);
+            // Store template status for error handling
+            setTemplateStatus(template.status);
             populateFormFromTemplate(template);
             templateFound = true;
           }
@@ -185,6 +187,9 @@ function TemplateEdit() {
                 status: templateData.status,
                 template_data: templateObj
               };
+
+              // Store template status for error handling
+              setTemplateStatus(templateData.status);
 
               console.log('Fetched template from API:', template);
               populateFormFromTemplate(template);
@@ -819,28 +824,44 @@ function TemplateEdit() {
         });
       }
 
-      // Prepare payload for template update using your backend API format
-      const templatePayload = {
-        category: formData.category,
-        components: components
+      // Prepare payload for template update
+      const payload = {
+        project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
+        template_id: templateId,
+        template: {
+          category: formData.category,
+          components: components
+        }
       };
 
-      console.log('Updating template payload:', JSON.stringify(templatePayload, null, 2));
+      console.log('Updating template payload:', JSON.stringify(payload, null, 2));
+
+      // Encrypt the payload
+      const { Encrypt } = await import('./encryption/payload-encryption');
+      const { data, key } = Encrypt(payload);
+      const data_pass = JSON.stringify({ data, key });
 
       // Use the correct API endpoint for editing templates
       const response = await axios.post(
-        `https://api.w1chat.com/template/edit-template/${templateId}`,
-        templatePayload,
+        'https://api.w1chat.com/template/template-edit',
+        data_pass,
         {
           headers: {
             'token': tokens.token,
+            'username': tokens.username,
             'Content-Type': 'application/json'
           }
         }
       );
 
-      // Check for successful response (assuming 200/201 status codes indicate success)
-      if (response.status === 200 || response.status === 201) {
+      // Check for successful response - only show success when !error
+      // Exception: If template is REJECTED and error is about category update, allow it
+      const errorMessage = response.data?.error;
+      const isCategoryUpdateError = errorMessage && 
+        (errorMessage.includes('cannot update') || errorMessage.includes('update an approved template category')) && 
+        errorMessage.includes('category');
+      
+      if (!response.data?.error || (isCategoryUpdateError && templateStatus === 'REJECTED')) {
         // Set success data and show popup
         setSuccessData({
           template_name: formData.name,
@@ -853,7 +874,7 @@ function TemplateEdit() {
         // Clear localStorage to force refresh of template list
         localStorage.removeItem('templatesData');
       } else {
-        throw new Error(response.data?.message || 'Failed to update template');
+        throw new Error(response.data?.message || response.data?.error || 'Failed to update template');
       }
 
     } catch (error) {

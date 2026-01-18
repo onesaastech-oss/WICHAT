@@ -90,7 +90,6 @@ function TemplateAdd() {
     { code: 'MARKETING', name: 'Marketing' },
     { code: 'TRANSACTIONAL', name: 'Transactional' },
     { code: 'UTILITY', name: 'Utility' },
-    { code: 'AUTHENTICATION', name: 'Authentication' }
   ];
 
   // Header formats

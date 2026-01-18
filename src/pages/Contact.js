@@ -979,11 +979,107 @@ function Contact() {
   // Handle delete contact - opens confirmation modal
   const handleDeleteContact = (contact) => {
     if (permissions && permissions.delete_contact === false) {
-      alert('You do not have permission to delete contacts.');
+      toast.error('You do not have permission to delete contacts.');
       return;
     }
     setContactToDelete(contact);
     setShowDeleteModal(true);
+  };
+
+  // Confirm and execute delete
+  const confirmDeleteContact = async () => {
+    if (!tokens?.token || !tokens?.username || !contactToDelete) return;
+
+    setIsDeleting(true);
+
+    try {
+      const payload = {
+        all_contact_delete: false,
+        contact_ids: [contactToDelete.id],
+        numbers: [contactToDelete.mobile],
+        project_id: tokens.selected_project_id || ''
+      };
+
+      console.log('🗑️ Deleting contact:', payload);
+
+      const { data, key } = Encrypt(payload);
+      const data_pass = JSON.stringify({ data, key });
+
+      const response = await axios.post(
+        'https://api.w1chat.com/contact/delete-contact',
+        data_pass,
+        {
+          headers: {
+            'token': tokens.token,
+            'username': tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response?.data?.error) {
+        // Delete from local database using both id and number for reliability
+        await contactDbHelper.deleteContact(contactToDelete.id, contactToDelete.mobile);
+
+        if (USE_INFINITE_CONTACTS_LIST) {
+          setReloadTick((t) => t + 1);
+        } else {
+          // Refresh the contacts list
+          const refreshedResult = await contactDbHelper.getContacts(currentPage, pageSize);
+          const mappedRefreshed = refreshedResult.contacts.map(c => ({
+            id: c.contact_id,
+            name: c.name,
+            mobile: c.number,
+            email: c.email,
+            firm_name: c.firm_name,
+            website: c.website,
+            remark: c.remark,
+            languageCode: c.language_code,
+            country: c.country,
+            createdOn: c.create_date,
+            is_favorite: c.is_favorite || false
+          }));
+
+          // Update favorites from refreshed data
+          const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
+          setFavoriteContacts(refreshedFavorites);
+
+          setContacts(mappedRefreshed);
+          setTotalPages(refreshedResult.totalPages);
+          setTotalRecords(refreshedResult.totalCount || 0);
+
+          // If current page is empty and not the first page, go to previous page
+          if (mappedRefreshed.length === 0 && currentPage > 1) {
+            setCurrentPage(currentPage - 1);
+          }
+        }
+
+        // Update selected contacts
+        setSelectedContacts(prev => prev.filter(id => id !== contactToDelete.id));
+        setIsAllSelected(false);
+
+        // Close modal
+        setShowDeleteModal(false);
+        setContactToDelete(null);
+
+        // Show success toast
+        const successMsg = response?.data?.msg || 'Contact deleted successfully';
+        toast.success(successMsg);
+      } else {
+        toast.error('Failed to delete contact: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Failed to delete contact:', error);
+      toast.error('Failed to delete contact. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Cancel delete
+  const cancelDeleteContact = () => {
+    setShowDeleteModal(false);
+    setContactToDelete(null);
   };
 
   const handleOpenBulkDeleteAllContacts = () => {
@@ -1062,101 +1158,6 @@ function Contact() {
     }
   };
 
-  // Confirm and execute delete
- // Confirm and execute delete (single contact)
- const confirmDeleteContact = async () => {
-  if (!tokens?.token || !tokens?.username || !contactToDelete) return;
-
-  setIsDeleting(true);
-
-  try {
-    const payload = {
-      all_contact_delete: false,
-      contact_ids: [contactToDelete.id],
-      numbers: [contactToDelete.mobile],
-      project_id: tokens.selected_project_id || ''
-    };
-
-    console.log('🗑️ Deleting contact:', payload);
-
-    const { data, key } = Encrypt(payload);
-    const data_pass = JSON.stringify({ data, key });
-
-    const response = await axios.post(
-      'https://api.w1chat.com/contact/delete-contact',
-      data_pass,
-      {
-        headers: {
-          'token': tokens.token,
-          'username': tokens.username,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    if (!response?.data?.error) {
-      // Delete from local database using both id and number for reliability
-      await contactDbHelper.deleteContact(contactToDelete.id, contactToDelete.mobile);
-
-      if (USE_INFINITE_CONTACTS_LIST) {
-        setReloadTick((t) => t + 1);
-      } else {
-        // Refresh the contacts list
-        const refreshedResult = await contactDbHelper.getContacts(currentPage, pageSize);
-        const mappedRefreshed = refreshedResult.contacts.map(c => ({
-          id: c.contact_id,
-          name: c.name,
-          mobile: c.number,
-          email: c.email,
-          firm_name: c.firm_name,
-          website: c.website,
-          remark: c.remark,
-          languageCode: c.language_code,
-          country: c.country,
-          createdOn: c.create_date,
-          is_favorite: c.is_favorite || false
-        }));
-
-        // Update favorites from refreshed data
-        const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
-        setFavoriteContacts(refreshedFavorites);
-
-        setContacts(mappedRefreshed);
-        setTotalPages(refreshedResult.totalPages);
-        setTotalRecords(refreshedResult.totalCount || 0);
-
-        // If current page is empty and not the first page, go to previous page
-        if (mappedRefreshed.length === 0 && currentPage > 1) {
-          setCurrentPage(currentPage - 1);
-        }
-      }
-
-      // Close delete modal
-      setShowDeleteModal(false);
-      setContactToDelete(null);
-      setSelectedContacts(prev => prev.filter(id => id !== contactToDelete.id));
-      setIsAllSelected(false);
-
-      // Show success message
-      const successMsg = response?.data?.msg || 'Contact deleted successfully';
-      setSuccessMessage(successMsg);
-      setShowSuccessModal(true);
-    } else {
-      alert('Failed to delete contact: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
-    }
-  } catch (error) {
-    console.error('Failed to delete contact:', error);
-    alert('Failed to delete contact. Please try again.');
-  } finally {
-    setIsDeleting(false);
-  }
-};
-
-  // Cancel delete
-  const cancelDeleteContact = () => {
-    setShowDeleteModal(false);
-    setContactToDelete(null);
-  };
 
   // Handle export to Excel - opens confirmation modal
   const handleExportToExcel = () => {
