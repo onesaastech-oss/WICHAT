@@ -161,7 +161,7 @@ function TemplateEdit() {
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-              'https://api.w1chat.com/template/template-detail', // Assuming this endpoint exists
+              'https://api.w1chat.com/template/template-details', // Assuming this endpoint exists
               data_pass,
               {
                 headers: {
