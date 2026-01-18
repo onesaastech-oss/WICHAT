@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
 import Tooltip from '../component/Tooltip';
+import Pagination from '../component/Pagination';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import { useNavigate } from 'react-router-dom';
 import { contactDbHelper } from './db';
 import { useSelector } from 'react-redux';
+import toast from 'react-hot-toast';
 import {
   FiPlus,
   FiDownload,
@@ -34,6 +36,8 @@ function Contact() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [pageSize, setPageSize] = useState(20); // Default 20 items per page
   const [tokens, setTokens] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -144,7 +148,7 @@ function Contact() {
         console.log('📱 Step 1: Loading contacts from local database...');
         setLoading(true);
 
-        const localResult = await contactDbHelper.getContacts(currentPage, 10);
+        const localResult = await contactDbHelper.getContacts(currentPage, pageSize);
         if (localResult.contacts.length > 0) {
           const mappedLocal = localResult.contacts.map(c => ({
             id: c.contact_id, // Use contact_id as the main ID
@@ -165,6 +169,7 @@ function Contact() {
           setFavoriteContacts(favorites);
           setContacts(mappedLocal);
           setTotalPages(localResult.totalPages);
+          setTotalRecords(localResult.totalCount || 0);
           setLoading(false);
           console.log(`✅ Loaded ${mappedLocal.length} contacts from local DB`);
         } else {
@@ -178,6 +183,7 @@ function Contact() {
         const payload = {
           project_id: tokens.selected_project_id || '',
           page_no: currentPage,
+          limit: pageSize,
           query: ''
         };
 
@@ -198,14 +204,15 @@ function Contact() {
 
         if (!response?.data?.error) {
           const apiList = response?.data?.data || [];
-          console.log(`📥 Received ${apiList.length} contacts from API`);
+          const apiMeta = response?.data?.meta || null;
+          console.log(`📥 Received ${apiList.length} contacts from API`, apiMeta);
 
           // Save to local database
           await contactDbHelper.saveContacts(apiList);
 
           // 3️⃣ After API updates DB, re-fetch from local DB again
           console.log('🔄 Step 3: Refreshing from updated local database...');
-          const refreshedResult = await contactDbHelper.getContacts(currentPage, 10);
+          const refreshedResult = await contactDbHelper.getContacts(currentPage, pageSize);
 
           const mappedRefreshed = refreshedResult.contacts.map(c => ({
             id: c.contact_id, // Use contact_id as the main ID
@@ -226,21 +233,32 @@ function Contact() {
           setFavoriteContacts(refreshedFavorites);
 
           setContacts(mappedRefreshed);
-          setTotalPages(refreshedResult.totalPages);
-          console.log(`✅ Final result: ${mappedRefreshed.length} contacts displayed`);
+          
+          // Use API meta if available, otherwise fall back to local DB count
+          if (apiMeta) {
+            const metaTotalPages = apiMeta.total_pages > 0 ? apiMeta.total_pages : (apiMeta.total_records > 0 ? 1 : 0);
+            setTotalPages(metaTotalPages);
+            setTotalRecords(apiMeta.total_records || 0);
+          } else {
+            setTotalPages(refreshedResult.totalPages || 0);
+            setTotalRecords(refreshedResult.totalCount || 0);
+          }
+          
+          console.log(`✅ Final result: ${mappedRefreshed.length} contacts displayed, Total: ${apiMeta?.total_records || refreshedResult.totalCount}`);
         } else {
           console.warn('⚠️ API returned error:', response?.data?.message);
           // If API fails but we have local data, keep showing local data
           if (localResult.contacts.length === 0) {
             setContacts([]);
             setTotalPages(1);
+            setTotalRecords(0);
           }
         }
       } catch (error) {
         console.error('❌ Error in loadAndSyncContacts:', error);
         // If everything fails, try to show local data or empty state
         try {
-          const fallbackResult = await contactDbHelper.getContacts(currentPage, 10);
+          const fallbackResult = await contactDbHelper.getContacts(currentPage, pageSize);
           if (fallbackResult.contacts.length > 0) {
             const mappedFallback = fallbackResult.contacts.map(c => ({
               id: c.contact_id, // Use contact_id as the main ID
@@ -261,14 +279,17 @@ function Contact() {
             setFavoriteContacts(fallbackFavorites);
             setContacts(mappedFallback);
             setTotalPages(fallbackResult.totalPages);
+            setTotalRecords(fallbackResult.totalCount || 0);
           } else {
             setContacts([]);
             setTotalPages(1);
+            setTotalRecords(0);
           }
         } catch (fallbackError) {
           console.error('❌ Fallback also failed:', fallbackError);
           setContacts([]);
           setTotalPages(1);
+          setTotalRecords(0);
         }
       } finally {
         setLoading(false);
@@ -279,7 +300,7 @@ function Contact() {
     };
 
     loadAndSyncContacts();
-  }, [tokens?.token, tokens?.username, tokens?.projects, currentPage, dbInitialized, permissions]);
+  }, [tokens?.token, tokens?.username, tokens?.projects, currentPage, pageSize, dbInitialized, permissions]);
 
   // Validation functions
   const validatePhoneNumber = (phone) => {
@@ -456,7 +477,7 @@ function Contact() {
         setCurrentPage(1);
         
         // Directly refresh the contacts list from local database
-        const refreshedResult = await contactDbHelper.getContacts(1, 10);
+        const refreshedResult = await contactDbHelper.getContacts(1, pageSize);
         const mappedRefreshed = refreshedResult.contacts.map(c => ({
           id: c.contact_id,
           name: c.name,
@@ -477,6 +498,7 @@ function Contact() {
 
         setContacts(mappedRefreshed);
         setTotalPages(refreshedResult.totalPages);
+        setTotalRecords(refreshedResult.totalCount || 0);
 
         // Show success message
         const successMsg = response?.data?.msg || 'Contact created successfully';
@@ -596,7 +618,7 @@ function Contact() {
         });
 
         // Refresh the contacts list to show updated data
-        const refreshedResult = await contactDbHelper.getContacts(currentPage, 10);
+        const refreshedResult = await contactDbHelper.getContacts(currentPage, pageSize);
         const mappedRefreshed = refreshedResult.contacts.map(c => ({
           id: c.contact_id,
           name: c.name,
@@ -617,6 +639,7 @@ function Contact() {
 
         setContacts(mappedRefreshed);
         setTotalPages(refreshedResult.totalPages);
+        setTotalRecords(refreshedResult.totalCount || 0);
 
         // Show success message
         const successMsg = response?.data?.msg || 'Contact updated successfully';
@@ -665,25 +688,29 @@ function Contact() {
       if (!response?.data?.error) {
         // Update local favorite state
         const newFavorites = new Set(favoriteContacts);
-        if (action === 'add') {
+        const isFavorite = response?.data?.is_favorite || action === 'add';
+        
+        if (isFavorite) {
           newFavorites.add(contact.id);
+          toast.success(`${contact.name} added to favorites`);
         } else {
           newFavorites.delete(contact.id);
+          toast.success(`${contact.name} removed from favorites`);
         }
         setFavoriteContacts(newFavorites);
 
         // Update local database
         await contactDbHelper.updateContact(contact.id, {
-          is_favorite: action === 'add'
+          is_favorite: isFavorite
         });
 
-        console.log(`✅ Contact ${action === 'add' ? 'added to' : 'removed from'} favorites`);
+        console.log(`✅ Contact ${isFavorite ? 'added to' : 'removed from'} favorites`);
       } else {
-        alert('Failed to update favorite status: ' + (response?.data?.message || 'Unknown error'));
+        toast.error('Failed to update favorite status: ' + (response?.data?.message || 'Unknown error'));
       }
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
-      alert('Failed to update favorite status. Please try again.');
+      toast.error('Failed to update favorite status. Please try again.');
     }
   };
 
@@ -731,7 +758,7 @@ function Contact() {
         await contactDbHelper.deleteContact(contactToDelete.id, contactToDelete.mobile);
 
         // Refresh the contacts list
-        const refreshedResult = await contactDbHelper.getContacts(currentPage, 10);
+        const refreshedResult = await contactDbHelper.getContacts(currentPage, pageSize);
         const mappedRefreshed = refreshedResult.contacts.map(c => ({
           id: c.contact_id,
           name: c.name,
@@ -752,6 +779,7 @@ function Contact() {
 
         setContacts(mappedRefreshed);
         setTotalPages(refreshedResult.totalPages);
+        setTotalRecords(refreshedResult.totalCount || 0);
 
         // If current page is empty and not the first page, go to previous page
         if (mappedRefreshed.length === 0 && currentPage > 1) {
@@ -867,6 +895,7 @@ function Contact() {
         const payload = {
           project_id: tokens.selected_project_id || '',
           page_no: currentPage,
+          limit: pageSize,
           query: '',
           is_favorite_only: true
         };
@@ -945,6 +974,12 @@ function Contact() {
     if (currentPage < totalPages) {
       setCurrentPage(currentPage + 1);
     }
+  };
+
+  // Handle page size change
+  const handlePageSizeChange = (newPageSize) => {
+    setPageSize(newPageSize);
+    setCurrentPage(1); // Reset to first page when changing page size
   };
 
   // Handle column sorting
@@ -1296,51 +1331,18 @@ function Contact() {
                   </div>
 
                   {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200 sm:px-6">
-                      <div className="flex justify-between flex-1 sm:hidden">
-                        <button
-                          onClick={handlePreviousPage}
-                          disabled={currentPage === 1}
-                          className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Previous
-                        </button>
-                        <button
-                          onClick={handleNextPage}
-                          disabled={currentPage === totalPages}
-                          className="relative ml-3 inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Next
-                        </button>
-                      </div>
-                      <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                        <div>
-                          <p className="text-sm text-gray-700">
-                            Page <span className="font-medium">{currentPage}</span> of{' '}
-                            <span className="font-medium">{totalPages}</span>
-                          </p>
-                        </div>
-                        <div>
-                          <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                            <button
-                              onClick={handlePreviousPage}
-                              disabled={currentPage === 1}
-                              className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <FiChevronLeft className="h-5 w-5" />
-                            </button>
-                            <button
-                              onClick={handleNextPage}
-                              disabled={currentPage === totalPages}
-                              className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <FiChevronRight className="h-5 w-5" />
-                            </button>
-                          </nav>
-                        </div>
-                      </div>
-                    </div>
+                  {totalRecords >= 0 && (
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      totalRecords={totalRecords}
+                      pageSize={pageSize}
+                      onPageChange={(page) => setCurrentPage(page)}
+                      onPageSizeChange={handlePageSizeChange}
+                      pageSizeOptions={[10, 20, 50, 100]}
+                      showPageSizeSelector={true}
+                      showGoToPage={true}
+                    />
                   )}
                 </>
               )}

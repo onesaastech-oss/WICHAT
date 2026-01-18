@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
+import Pagination from '../component/Pagination';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
@@ -22,6 +23,16 @@ function ContactGroup() {
   const [totalGroupCount, setTotalGroupCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [tokens, setTokens] = useState(null);
+  const [pageNo, setPageNo] = useState(1);
+  const [pageSize, setPageSize] = useState(20); // Default 20 items per page
+  const [reloadTick, setReloadTick] = useState(0);
+  const [groupsMeta, setGroupsMeta] = useState({
+    page_no: 1,
+    limit: 20,
+    total_records: 0,
+    total_pages: 1,
+    has_more: false
+  });
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [isAllSelected, setIsAllSelected] = useState(false);
@@ -92,14 +103,17 @@ function ContactGroup() {
   useEffect(() => {
     if (!tokens?.token || !tokens?.username) return;
 
-    const loadGroups = async () => {
+    const projectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
+
+    const loadGroups = async (requestedPageNo = pageNo) => {
       try {
         setLoading(true);
         console.log('🌐 Loading groups from API...');
 
         const payload = {
-          project_id: tokens.selected_project_id || '',
-          last_id: 0
+          project_id: projectId,
+          page_no: requestedPageNo,
+          limit: pageSize
         };
 
         const { data, key } = Encrypt(payload);
@@ -122,7 +136,8 @@ function ContactGroup() {
 
         if (!response?.data?.error) {
           const apiList = response?.data?.data || [];
-          const totalCount = response?.data?.count || 0;
+          const meta = response?.data?.meta || null;
+          const totalCount = meta?.total_records ?? response?.data?.count ?? 0;
           console.log(`📥 Received ${apiList.length} groups from API, total count: ${totalCount}`);
 
           const mappedGroups = apiList.map(g => ({
@@ -135,6 +150,21 @@ function ContactGroup() {
 
           setGroups(mappedGroups);
           setTotalGroupCount(totalCount);
+          if (meta) {
+            setGroupsMeta(prev => ({
+              page_no: meta?.page_no ?? requestedPageNo,
+              limit: meta?.limit ?? prev?.limit ?? 20,
+              total_records: meta?.total_records ?? totalCount,
+              total_pages: meta?.total_pages ?? prev?.total_pages ?? 1,
+              has_more: meta?.has_more ?? false
+            }));
+          } else {
+            setGroupsMeta(prev => ({
+              ...prev,
+              page_no: requestedPageNo,
+              total_records: totalCount
+            }));
+          }
           console.log(`✅ Loaded ${mappedGroups.length} groups, total: ${totalCount}`);
         } else {
           console.warn('⚠️ API returned error:', response?.data?.message);
@@ -151,7 +181,7 @@ function ContactGroup() {
     };
 
     loadGroups();
-  }, [tokens?.token, tokens?.username, tokens?.projects]);
+  }, [tokens?.token, tokens?.username, tokens?.selected_project_id, tokens?.projects, pageNo, pageSize, reloadTick]);
 
   // Validation functions
   const validateGroupName = (name) => {
@@ -246,39 +276,8 @@ function ContactGroup() {
         });
 
         // Refresh groups list
-        const refreshPayload = {
-          project_id: tokens.selected_project_id || '',
-          last_id: 0
-        };
-
-        const { data: refreshData, key: refreshKey } = Encrypt(refreshPayload);
-        const refresh_data_pass = JSON.stringify({ data: refreshData, key: refreshKey });
-
-        const refreshResponse = await axios.post(
-          'https://api.w1chat.com/contact/group-list',
-          refresh_data_pass,
-          {
-            headers: {
-              'token': tokens.token,
-              'username': tokens.username,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-
-        if (!refreshResponse?.data?.error) {
-          const apiList = refreshResponse?.data?.data || [];
-          const totalCount = refreshResponse?.data?.count || 0;
-          const mappedGroups = apiList.map(g => ({
-            id: g.group_id,
-            name: g.name,
-            contact_count: g.contact_count || 0,
-            remark: g.remark,
-            createdOn: g.create_date
-          }));
-          setGroups(mappedGroups);
-          setTotalGroupCount(totalCount);
-        }
+        setPageNo(1);
+        setReloadTick(t => t + 1);
 
         // Show success message
         const successMsg = response?.data?.msg || 'Group created successfully';
@@ -358,39 +357,8 @@ function ContactGroup() {
         });
 
         // Refresh groups list
-        const refreshPayload = {
-          project_id: tokens.selected_project_id || '',
-          last_id: 0
-        };
-
-        const { data: refreshData, key: refreshKey } = Encrypt(refreshPayload);
-        const refresh_data_pass = JSON.stringify({ data: refreshData, key: refreshKey });
-
-        const refreshResponse = await axios.post(
-          'https://api.w1chat.com/contact/group-list',
-          refresh_data_pass,
-          {
-            headers: {
-              'token': tokens.token,
-              'username': tokens.username,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-
-        if (!refreshResponse?.data?.error) {
-          const apiList = refreshResponse?.data?.data || [];
-          const totalCount = refreshResponse?.data?.count || 0;
-          const mappedGroups = apiList.map(g => ({
-            id: g.group_id,
-            name: g.name,
-            contact_count: g.contact_count || 0,
-            remark: g.remark,
-            createdOn: g.create_date
-          }));
-          setGroups(mappedGroups);
-          setTotalGroupCount(totalCount);
-        }
+        setPageNo(1);
+        setReloadTick(t => t + 1);
 
         // Show success message
         const successMsg = response?.data?.msg || 'Group updated successfully';
@@ -438,39 +406,8 @@ function ContactGroup() {
         setDeletingGroup(null);
 
         // Refresh groups list
-        const refreshPayload = {
-          project_id: tokens.selected_project_id || '',
-          last_id: 0
-        };
-
-        const { data: refreshData, key: refreshKey } = Encrypt(refreshPayload);
-        const refresh_data_pass = JSON.stringify({ data: refreshData, key: refreshKey });
-
-        const refreshResponse = await axios.post(
-          'https://api.w1chat.com/contact/group-list',
-          refresh_data_pass,
-          {
-            headers: {
-              'token': tokens.token,
-              'username': tokens.username,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-
-        if (!refreshResponse?.data?.error) {
-          const apiList = refreshResponse?.data?.data || [];
-          const totalCount = refreshResponse?.data?.count || 0;
-          const mappedGroups = apiList.map(g => ({
-            id: g.group_id,
-            name: g.name,
-            contact_count: g.contact_count || 0,
-            remark: g.remark,
-            createdOn: g.create_date
-          }));
-          setGroups(mappedGroups);
-          setTotalGroupCount(totalCount);
-        }
+        setPageNo(1);
+        setReloadTick(t => t + 1);
 
         // Show success message
         const successMsg = response?.data?.msg || 'Group deleted successfully';
@@ -555,6 +492,16 @@ function ContactGroup() {
       setSortColumn(column);
       setSortDirection('asc');
     }
+  };
+
+  // Handle page size change
+  const handlePageSizeChange = (newPageSize) => {
+    setPageSize(newPageSize);
+    setPageNo(1); // Reset to first page when changing page size
+    setGroupsMeta(prev => ({
+      ...prev,
+      limit: newPageSize
+    }));
   };
 
   // Apply sorting to groups if a sort column is selected
@@ -805,6 +752,19 @@ function ContactGroup() {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Pagination */}
+                  <Pagination
+                    currentPage={groupsMeta.page_no}
+                    totalPages={groupsMeta.total_pages}
+                    totalRecords={totalGroupCount}
+                    pageSize={pageSize}
+                    onPageChange={(page) => setPageNo(page)}
+                    onPageSizeChange={handlePageSizeChange}
+                    pageSizeOptions={[10, 20, 50, 100]}
+                    showPageSizeSelector={true}
+                    showGoToPage={true}
+                  />
 
                 </>
               )}

@@ -54,51 +54,67 @@ export default function GroupsSelector({ selectedGroups, setSelectedGroups }) {
   useEffect(() => {
     if (!tokens?.token || !tokens?.username) return;
 
+    const projectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
+
     const loadGroups = async () => {
       try {
         setLoading(true);
         console.log('🌐 Loading groups from API...');
 
-        const payload = {
-          project_id: tokens.projects?.[0]?.project_id || '',
-          last_id: 0
-        };
+        // Campaign needs all groups available; fetch pages until meta.has_more is false
+        let page = 1;
+        const allGroups = [];
+        const maxPages = 50; // safety valve
 
-        const { data, key } = Encrypt(payload);
-        const data_pass = JSON.stringify({ data, key });
+        while (page <= maxPages) {
+          const payload = {
+            project_id: projectId,
+            page_no: page
+          };
 
-        const response = await axios.post(
-          'https://api.w1chat.com/contact/group-list',
-          data_pass,
-          {
-            headers: {
-              'token': tokens.token,
-              'username': tokens.username,
-              'Content-Type': 'application/json'
+          const { data, key } = Encrypt(payload);
+          const data_pass = JSON.stringify({ data, key });
+
+          const response = await axios.post(
+            'https://api.w1chat.com/contact/group-list',
+            data_pass,
+            {
+              headers: {
+                'token': tokens.token,
+                'username': tokens.username,
+                'Content-Type': 'application/json'
+              }
             }
+          );
+
+          if (response?.data?.error) {
+            console.warn('⚠️ API returned error:', response?.data?.message);
+            break;
           }
-        );
 
-        if (!response?.data?.error) {
           const apiList = response?.data?.data || [];
-          console.log(`📥 Received ${apiList.length} groups from API`);
+          const meta = response?.data?.meta || null;
+          allGroups.push(...apiList);
 
-          // Map API response to component format with colors
-          const mappedGroups = apiList.map((g, index) => ({
-            id: g.group_id,
-            name: g.name,
-            count: g.contact_count || 0,
-            color: GROUP_COLORS[index % GROUP_COLORS.length], // Cycle through colors
-            remark: g.remark,
-            createdOn: g.create_date
-          }));
-
-          setGroups(mappedGroups);
-          console.log(`✅ Loaded ${mappedGroups.length} groups`);
-        } else {
-          console.warn('⚠️ API returned error:', response?.data?.message);
-          setGroups([]);
+          const hasMore = meta?.has_more ?? false;
+          if (!hasMore) break;
+          page += 1;
         }
+
+        console.log(`📥 Received ${allGroups.length} groups from API (paged)`);
+
+        // Map API response to component format with colors
+        const mappedGroups = allGroups.map((g, index) => ({
+          id: g.group_id,
+          name: g.name,
+          count: g.contact_count || 0,
+          color: GROUP_COLORS[index % GROUP_COLORS.length], // Cycle through colors
+          remark: g.remark,
+          createdOn: g.create_date
+        }));
+
+        setGroups(mappedGroups);
+        console.log(`✅ Loaded ${mappedGroups.length} groups`);
       } catch (error) {
         console.error('❌ Error loading groups:', error);
         setGroups([]);
@@ -108,7 +124,7 @@ export default function GroupsSelector({ selectedGroups, setSelectedGroups }) {
     };
 
     loadGroups();
-  }, [tokens?.token, tokens?.username, tokens?.projects]);
+  }, [tokens?.token, tokens?.username, tokens?.selected_project_id, tokens?.projects]);
 
   const handleToggleGroup = (groupId) => {
     setSelectedGroups(prev =>
