@@ -415,14 +415,8 @@ export default function CampaignSummary({
 
         console.log('Group Campaign Payload (before encryption):', payload);
 
-        // TEMPORARY: Send unencrypted data for testing (backend has Decrypt commented out)
-        // TODO: Remove this and uncomment the encrypted version once backend Decrypt is fixed
-        const data_pass = JSON.stringify(payload);
-
-        // ORIGINAL ENCRYPTED VERSION (commented out temporarily):
-        // const { data, key } = Encrypt(payload);
-        // const data_pass = JSON.stringify({ data, key });
-
+        const { data, key } = Encrypt(payload);
+        const data_pass = JSON.stringify({ data, key })
         const endpoint = `${campaignCreateUrl}/group`;
 
         const response = await axios.post(

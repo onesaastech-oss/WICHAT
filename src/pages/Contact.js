@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Header, Sidebar } from '../component/Menu';
 import Tooltip from '../component/Tooltip';
 import Pagination from '../component/Pagination';
@@ -27,6 +27,7 @@ import {
   FiFileText,
   FiStar,
   FiFilter,
+  FiSearch,
   FiCheckCircle
 } from 'react-icons/fi';
 
@@ -39,6 +40,8 @@ function Contact() {
   const [totalRecords, setTotalRecords] = useState(0);
   const [pageSize, setPageSize] = useState(20); // Default 20 items per page
   const [tokens, setTokens] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [reloadTick, setReloadTick] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [selectedContacts, setSelectedContacts] = useState([]);
@@ -54,6 +57,11 @@ function Contact() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [contactToDelete, setContactToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteMode, setBulkDeleteMode] = useState(null); // 'selected' | 'all'
+  const [bulkDeletePhrase, setBulkDeletePhrase] = useState('');
+  const [bulkDeleteError, setBulkDeleteError] = useState('');
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [sortColumn, setSortColumn] = useState(null); // 'name', 'email', 'firm_name'
@@ -61,6 +69,24 @@ function Contact() {
   const [loadingFavorites, setLoadingFavorites] = useState(false);
   const navigate = useNavigate();
   const permissions = useSelector((state) => state.project.permissions);
+
+  // Infinite list (modal-style) state (smooth scroll + accurate scrollbar using API meta)
+  const USE_INFINITE_CONTACTS_LIST = true;
+  const CONTACT_LIST_ROW_HEIGHT = 64; // approximate row height for spacer calculation
+  const [contactsMeta, setContactsMeta] = useState({
+    page_no: 1,
+    limit: 20,
+    total_records: 0,
+    total_pages: 1,
+    has_more: false
+  });
+  const [contactsPageNo, setContactsPageNo] = useState(1);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const contactsReqIdRef = useRef(0);
+  const contactsLoadingRef = useRef(false);
+  const contactsLastRequestedPageRef = useRef(0);
+  const contactsHasUserScrolledRef = useRef(false);
+  const contactsIgnoreNextSearchEffectRef = useRef(false);
 
   // Form state for creating new contact
   const [newContact, setNewContact] = useState({
@@ -139,6 +165,7 @@ function Contact() {
 
   // 3-Step Process: Load local DB → Sync with API → Refresh local DB
   useEffect(() => {
+    if (USE_INFINITE_CONTACTS_LIST) return;
     if (!tokens?.token || !tokens?.username || !dbInitialized) return;
     if (permissions && permissions.view_contact === false) return;
 
@@ -300,7 +327,229 @@ function Contact() {
     };
 
     loadAndSyncContacts();
-  }, [tokens?.token, tokens?.username, tokens?.projects, currentPage, pageSize, dbInitialized, permissions]);
+  }, [USE_INFINITE_CONTACTS_LIST, tokens?.token, tokens?.username, tokens?.projects, currentPage, pageSize, dbInitialized, permissions]);
+
+  const loadContactsPage = useCallback(
+    async ({ requestedPageNo, query, append, isFavoriteOnly }) => {
+      if (!tokens?.token || !tokens?.username) return;
+      if (permissions && permissions.view_contact === false) return;
+      if (contactsLoadingRef.current) return;
+
+      const projectId = tokens.selected_project_id || '';
+      const reqId = ++contactsReqIdRef.current;
+
+      try {
+        contactsLoadingRef.current = true;
+        setContactsLoading(true);
+
+        const payload = {
+          project_id: projectId,
+          page_no: requestedPageNo,
+          limit: pageSize,
+          query: query || '',
+          ...(isFavoriteOnly ? { is_favorite_only: true } : {})
+        };
+
+        const { data, key } = Encrypt(payload);
+        const data_pass = JSON.stringify({ data, key });
+
+        const response = await axios.post(
+          'https://api.w1chat.com/contact/contact-list',
+          data_pass,
+          {
+            headers: {
+              token: tokens.token,
+              username: tokens.username,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        // ignore stale results
+        if (reqId !== contactsReqIdRef.current) return;
+
+        if (!response?.data?.error) {
+          const apiList = response?.data?.data || [];
+          const meta = response?.data?.meta || null;
+
+          // best-effort local DB warm-up (non-blocking for UI)
+          try {
+            if (dbInitialized) await contactDbHelper.saveContacts(apiList);
+          } catch (e) {
+            console.warn('Contact DB save failed (non-blocking):', e);
+          }
+
+          const mapped = apiList.map((c) => ({
+            id: c.contact_id,
+            name: c.name,
+            mobile: c.number,
+            email: c.email,
+            firm_name: c.firm_name,
+            website: c.website,
+            remark: c.remark,
+            languageCode: c.language_code,
+            country: c.country,
+            createdOn: c.create_date,
+            is_favorite: c.is_favorite || false
+          }));
+
+          setContacts((prev) => {
+            const next = append ? [...prev, ...mapped] : mapped;
+            const seen = new Set();
+            return next.filter((row) => {
+              if (!row?.id) return false;
+              if (seen.has(row.id)) return false;
+              seen.add(row.id);
+              return true;
+            });
+          });
+
+          setFavoriteContacts((prev) => {
+            const next = new Set(prev);
+            for (const row of mapped) {
+              if (row?.id && row.is_favorite) next.add(row.id);
+            }
+            return next;
+          });
+
+          const fallbackTotalRecords =
+            meta?.total_records ??
+            response?.data?.count ??
+            (append ? undefined : mapped.length);
+
+          const totalPagesFallback =
+            meta?.total_pages ??
+            (typeof fallbackTotalRecords === 'number'
+              ? Math.max(1, Math.ceil(fallbackTotalRecords / pageSize))
+              : 1);
+
+          const hasMoreFallback =
+            meta?.has_more ??
+            (meta?.page_no
+              ? meta.page_no < (meta.total_pages || totalPagesFallback)
+              : requestedPageNo < totalPagesFallback);
+
+          setContactsMeta({
+            page_no: meta?.page_no ?? requestedPageNo,
+            limit: meta?.limit ?? pageSize,
+            total_records: meta?.total_records ?? (fallbackTotalRecords || 0),
+            total_pages: totalPagesFallback,
+            has_more: hasMoreFallback
+          });
+          setContactsPageNo(meta?.page_no ?? requestedPageNo);
+          setCurrentPage(meta?.page_no ?? requestedPageNo); // keep legacy state aligned
+          setTotalRecords(meta?.total_records ?? (fallbackTotalRecords || 0));
+          setTotalPages(totalPagesFallback);
+        } else {
+          console.warn('⚠️ contact-list API returned error:', response?.data?.message);
+          if (!append) {
+            setContacts([]);
+            setContactsMeta({
+              page_no: 1,
+              limit: pageSize,
+              total_records: 0,
+              total_pages: 1,
+              has_more: false
+            });
+            setContactsPageNo(1);
+            setCurrentPage(1);
+            setTotalRecords(0);
+            setTotalPages(1);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error loading contacts:', error);
+        if (!append) {
+          setContacts([]);
+          setContactsMeta({
+            page_no: 1,
+            limit: pageSize,
+            total_records: 0,
+            total_pages: 1,
+            has_more: false
+          });
+          setContactsPageNo(1);
+          setCurrentPage(1);
+          setTotalRecords(0);
+          setTotalPages(1);
+        }
+      } finally {
+        if (reqId === contactsReqIdRef.current) {
+          setContactsLoading(false);
+          contactsLoadingRef.current = false;
+          setLoading(false);
+        }
+      }
+    },
+    [
+      tokens?.token,
+      tokens?.username,
+      tokens?.selected_project_id,
+      permissions,
+      pageSize,
+      dbInitialized
+    ]
+  );
+
+  const resetAndLoadContacts = useCallback(
+    async (query, isFavoriteOnly) => {
+      contactsReqIdRef.current += 1; // invalidate any in-flight
+      contactsLoadingRef.current = false;
+      contactsLastRequestedPageRef.current = 1;
+      contactsHasUserScrolledRef.current = false;
+      setContacts([]);
+      setContactsMeta({
+        page_no: 1,
+        limit: pageSize,
+        total_records: 0,
+        total_pages: 1,
+        has_more: false
+      });
+      setContactsPageNo(1);
+      setCurrentPage(1);
+      setSelectedContacts([]);
+      setIsAllSelected(false);
+      setLoading(true);
+      await loadContactsPage({
+        requestedPageNo: 1,
+        query,
+        append: false,
+        isFavoriteOnly
+      });
+    },
+    [loadContactsPage, pageSize]
+  );
+
+  // Initial load (infinite list mode)
+  useEffect(() => {
+    if (!USE_INFINITE_CONTACTS_LIST) return;
+    if (!tokens?.token || !tokens?.username) return;
+    if (!dbInitialized) return;
+    if (permissions && permissions.view_contact === false) return;
+    contactsIgnoreNextSearchEffectRef.current = true;
+    resetAndLoadContacts('', showFavoritesOnly);
+  }, [
+    USE_INFINITE_CONTACTS_LIST,
+    tokens?.token,
+    tokens?.username,
+    dbInitialized,
+    permissions,
+    pageSize,
+    reloadTick
+  ]);
+
+  // Debounced server-side search
+  useEffect(() => {
+    if (!USE_INFINITE_CONTACTS_LIST) return;
+    if (contactsIgnoreNextSearchEffectRef.current) {
+      contactsIgnoreNextSearchEffectRef.current = false;
+      return;
+    }
+    const t = setTimeout(() => {
+      resetAndLoadContacts(searchTerm, showFavoritesOnly);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [USE_INFINITE_CONTACTS_LIST, searchTerm, showFavoritesOnly, resetAndLoadContacts]);
 
   // Validation functions
   const validatePhoneNumber = (phone) => {
@@ -475,30 +724,33 @@ function Contact() {
 
         // Refresh contacts list immediately - go to page 1 to show new contact
         setCurrentPage(1);
-        
-        // Directly refresh the contacts list from local database
-        const refreshedResult = await contactDbHelper.getContacts(1, pageSize);
-        const mappedRefreshed = refreshedResult.contacts.map(c => ({
-          id: c.contact_id,
-          name: c.name,
-          mobile: c.number,
-          email: c.email,
-          firm_name: c.firm_name,
-          website: c.website,
-          remark: c.remark,
-          languageCode: c.language_code,
-          country: c.country,
-          createdOn: c.create_date,
-          is_favorite: c.is_favorite || false
-        }));
+        if (USE_INFINITE_CONTACTS_LIST) {
+          setReloadTick((t) => t + 1);
+        } else {
+          // Directly refresh the contacts list from local database
+          const refreshedResult = await contactDbHelper.getContacts(1, pageSize);
+          const mappedRefreshed = refreshedResult.contacts.map(c => ({
+            id: c.contact_id,
+            name: c.name,
+            mobile: c.number,
+            email: c.email,
+            firm_name: c.firm_name,
+            website: c.website,
+            remark: c.remark,
+            languageCode: c.language_code,
+            country: c.country,
+            createdOn: c.create_date,
+            is_favorite: c.is_favorite || false
+          }));
 
-        // Update favorites from refreshed data
-        const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
-        setFavoriteContacts(refreshedFavorites);
+          // Update favorites from refreshed data
+          const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
+          setFavoriteContacts(refreshedFavorites);
 
-        setContacts(mappedRefreshed);
-        setTotalPages(refreshedResult.totalPages);
-        setTotalRecords(refreshedResult.totalCount || 0);
+          setContacts(mappedRefreshed);
+          setTotalPages(refreshedResult.totalPages);
+          setTotalRecords(refreshedResult.totalCount || 0);
+        }
 
         // Show success message
         const successMsg = response?.data?.msg || 'Contact created successfully';
@@ -617,29 +869,33 @@ function Contact() {
           remark: ''
         });
 
-        // Refresh the contacts list to show updated data
-        const refreshedResult = await contactDbHelper.getContacts(currentPage, pageSize);
-        const mappedRefreshed = refreshedResult.contacts.map(c => ({
-          id: c.contact_id,
-          name: c.name,
-          mobile: c.number,
-          email: c.email,
-          firm_name: c.firm_name,
-          website: c.website,
-          remark: c.remark,
-          languageCode: c.language_code,
-          country: c.country,
-          createdOn: c.create_date,
-          is_favorite: c.is_favorite || false
-        }));
+        if (USE_INFINITE_CONTACTS_LIST) {
+          setReloadTick((t) => t + 1);
+        } else {
+          // Refresh the contacts list to show updated data
+          const refreshedResult = await contactDbHelper.getContacts(currentPage, pageSize);
+          const mappedRefreshed = refreshedResult.contacts.map(c => ({
+            id: c.contact_id,
+            name: c.name,
+            mobile: c.number,
+            email: c.email,
+            firm_name: c.firm_name,
+            website: c.website,
+            remark: c.remark,
+            languageCode: c.language_code,
+            country: c.country,
+            createdOn: c.create_date,
+            is_favorite: c.is_favorite || false
+          }));
 
-        // Update favorites from refreshed data
-        const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
-        setFavoriteContacts(refreshedFavorites);
+          // Update favorites from refreshed data
+          const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
+          setFavoriteContacts(refreshedFavorites);
 
-        setContacts(mappedRefreshed);
-        setTotalPages(refreshedResult.totalPages);
-        setTotalRecords(refreshedResult.totalCount || 0);
+          setContacts(mappedRefreshed);
+          setTotalPages(refreshedResult.totalPages);
+          setTotalRecords(refreshedResult.totalCount || 0);
+        }
 
         // Show success message
         const successMsg = response?.data?.msg || 'Contact updated successfully';
@@ -724,19 +980,73 @@ function Contact() {
     setShowDeleteModal(true);
   };
 
-  // Confirm and execute delete
-  const confirmDeleteContact = async () => {
-    if (!tokens?.token || !tokens?.username || !contactToDelete) return;
+  const handleOpenBulkDeleteSelectedPage = () => {
+    if (permissions && permissions.delete_contact === false) {
+      alert('You do not have permission to delete contacts.');
+      return;
+    }
+    if (selectedContacts.length === 0) return;
+    setBulkDeleteMode('selected');
+    setBulkDeletePhrase('');
+    setBulkDeleteError('');
+    setShowBulkDeleteModal(true);
+  };
 
-    setIsDeleting(true);
+  const handleOpenBulkDeleteAllContacts = () => {
+    if (permissions && permissions.delete_contact === false) {
+      alert('You do not have permission to delete contacts.');
+      return;
+    }
+    if (!isAllSelected) return;
+    setBulkDeleteMode('all');
+    setBulkDeletePhrase('');
+    setBulkDeleteError('');
+    setShowBulkDeleteModal(true);
+  };
 
+  const cancelBulkDelete = () => {
+    setShowBulkDeleteModal(false);
+    setBulkDeleteMode(null);
+    setBulkDeletePhrase('');
+    setBulkDeleteError('');
+  };
+
+  const confirmBulkDelete = async () => {
+    if (!tokens?.token || !tokens?.username || !tokens?.selected_project_id) return;
+    if (!bulkDeleteMode) return;
+
+    if (bulkDeleteMode === 'all' && bulkDeletePhrase.trim() !== 'all-delete') {
+      setBulkDeleteError("Type 'all-delete' to confirm deleting ALL contacts.");
+      return;
+    }
+
+    // Visible contacts = what user is currently seeing in the table
+    const visibleContacts = showFavoritesOnly
+      ? contacts.filter(c => favoriteContacts.has(c.id))
+      : contacts;
+
+    const selectedList = visibleContacts.filter(c => selectedContacts.includes(c.id));
+    const selectedIds = selectedList.map(c => c.id);
+    const selectedNumbers = selectedList.map(c => c.mobile);
+
+    if (bulkDeleteMode === 'selected' && selectedIds.length === 0) return;
+
+    setIsBulkDeleting(true);
     try {
-      const payload = {
-        contact_id: contactToDelete.id,
-        project_id: tokens.selected_project_id || ''
-      };
+      const payload =
+        bulkDeleteMode === 'all'
+          ? {
+              project_id: tokens.selected_project_id || '',
+              all_contact_delete: true
+            }
+          : {
+              project_id: tokens.selected_project_id || '',
+              all_contact_delete: false,
+              contact_ids: selectedIds,
+              numbers: selectedNumbers
+            };
 
-      console.log('🗑️ Deleting contact:', payload);
+      console.log('🗑️ Bulk delete payload:', payload);
 
       const { data, key } = Encrypt(payload);
       const data_pass = JSON.stringify({ data, key });
@@ -746,17 +1056,118 @@ function Contact() {
         data_pass,
         {
           headers: {
-            'token': tokens.token,
-            'username': tokens.username,
+            token: tokens.token,
+            username: tokens.username,
             'Content-Type': 'application/json'
           }
         }
       );
 
       if (!response?.data?.error) {
-        // Delete from local database using both id and number for reliability
-        await contactDbHelper.deleteContact(contactToDelete.id, contactToDelete.mobile);
+        if (bulkDeleteMode === 'all') {
+          await contactDbHelper.clearContacts();
+          setContacts([]);
+          setTotalPages(1);
+          setTotalRecords(0);
+          setCurrentPage(1);
+          setFavoriteContacts(new Set());
+        } else {
+          await Promise.all(
+            selectedList.map(c => contactDbHelper.deleteContact(c.id, c.mobile))
+          );
 
+          const refreshedResult = await contactDbHelper.getContacts(currentPage, pageSize);
+          const mappedRefreshed = refreshedResult.contacts.map(c => ({
+            id: c.contact_id,
+            name: c.name,
+            mobile: c.number,
+            email: c.email,
+            firm_name: c.firm_name,
+            website: c.website,
+            remark: c.remark,
+            languageCode: c.language_code,
+            country: c.country,
+            createdOn: c.create_date,
+            is_favorite: c.is_favorite || false
+          }));
+
+          const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
+          setFavoriteContacts(refreshedFavorites);
+
+          setContacts(mappedRefreshed);
+          setTotalPages(refreshedResult.totalPages);
+          setTotalRecords(refreshedResult.totalCount || 0);
+
+          if (mappedRefreshed.length === 0 && currentPage > 1) {
+            setCurrentPage(currentPage - 1);
+          }
+        }
+
+        setSelectedContacts([]);
+        setIsAllSelected(false);
+
+        setShowBulkDeleteModal(false);
+        setBulkDeleteMode(null);
+        setBulkDeletePhrase('');
+        setBulkDeleteError('');
+
+        const successMsg =
+          response?.data?.msg ||
+          (bulkDeleteMode === 'all'
+            ? 'All contacts deleted successfully'
+            : 'Selected contacts deleted successfully');
+        setSuccessMessage(successMsg);
+        setShowSuccessModal(true);
+      } else {
+        alert('Failed to delete contacts: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Failed to bulk delete contacts:', error);
+      alert('Failed to delete contacts. Please try again.');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  // Confirm and execute delete
+ // Confirm and execute delete (single contact)
+ const confirmDeleteContact = async () => {
+  if (!tokens?.token || !tokens?.username || !contactToDelete) return;
+
+  setIsDeleting(true);
+
+  try {
+    const payload = {
+      all_contact_delete: false,
+      contact_ids: [contactToDelete.id],
+      numbers: [contactToDelete.mobile],
+      project_id: tokens.selected_project_id || ''
+    };
+
+    console.log('🗑️ Deleting contact:', payload);
+
+    const { data, key } = Encrypt(payload);
+    const data_pass = JSON.stringify({ data, key });
+
+    const response = await axios.post(
+      'https://api.w1chat.com/contact/delete-contact',
+      data_pass,
+      {
+        headers: {
+          'token': tokens.token,
+          'username': tokens.username,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    if (!response?.data?.error) {
+      // Delete from local database using both id and number for reliability
+      await contactDbHelper.deleteContact(contactToDelete.id, contactToDelete.mobile);
+
+      if (USE_INFINITE_CONTACTS_LIST) {
+        setReloadTick((t) => t + 1);
+      } else {
         // Refresh the contacts list
         const refreshedResult = await contactDbHelper.getContacts(currentPage, pageSize);
         const mappedRefreshed = refreshedResult.contacts.map(c => ({
@@ -785,25 +1196,28 @@ function Contact() {
         if (mappedRefreshed.length === 0 && currentPage > 1) {
           setCurrentPage(currentPage - 1);
         }
-
-        // Close delete modal
-        setShowDeleteModal(false);
-        setContactToDelete(null);
-
-        // Show success message
-        const successMsg = response?.data?.msg || 'Contact deleted successfully';
-        setSuccessMessage(successMsg);
-        setShowSuccessModal(true);
-      } else {
-        alert('Failed to delete contact: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
       }
-    } catch (error) {
-      console.error('Failed to delete contact:', error);
-      alert('Failed to delete contact. Please try again.');
-    } finally {
-      setIsDeleting(false);
+
+      // Close delete modal
+      setShowDeleteModal(false);
+      setContactToDelete(null);
+      setSelectedContacts(prev => prev.filter(id => id !== contactToDelete.id));
+      setIsAllSelected(false);
+
+      // Show success message
+      const successMsg = response?.data?.msg || 'Contact deleted successfully';
+      setSuccessMessage(successMsg);
+      setShowSuccessModal(true);
+    } else {
+      alert('Failed to delete contact: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
     }
-  };
+  } catch (error) {
+    console.error('Failed to delete contact:', error);
+    alert('Failed to delete contact. Please try again.');
+  } finally {
+    setIsDeleting(false);
+  }
+};
 
   // Cancel delete
   const cancelDeleteContact = () => {
@@ -888,6 +1302,18 @@ function Contact() {
     const newShowFavoritesOnly = !showFavoritesOnly;
     setShowFavoritesOnly(newShowFavoritesOnly);
 
+    if (USE_INFINITE_CONTACTS_LIST) {
+      setLoadingFavorites(true);
+      try {
+        // Avoid double-fetch with the debounced search effect
+        contactsIgnoreNextSearchEffectRef.current = true;
+        await resetAndLoadContacts(searchTerm, newShowFavoritesOnly);
+      } finally {
+        setLoadingFavorites(false);
+      }
+      return;
+    }
+
     // If switching to favorites view, fetch from API in background
     if (newShowFavoritesOnly && tokens?.token && tokens?.username) {
       setLoadingFavorites(true);
@@ -942,24 +1368,32 @@ function Contact() {
 
   // Handle select all contacts
   const handleSelectAll = () => {
+    const visibleContacts = showFavoritesOnly
+      ? contacts.filter(c => favoriteContacts.has(c.id))
+      : contacts;
+
     if (isAllSelected) {
       setSelectedContacts([]);
       setIsAllSelected(false);
     } else {
-      setSelectedContacts(contacts.map(c => c.id));
-      setIsAllSelected(true);
+      setSelectedContacts(visibleContacts.map(c => c.id));
+      setIsAllSelected(visibleContacts.length > 0);
     }
   };
 
   // Handle individual contact selection
   const handleSelectContact = (contactId) => {
+    const visibleContacts = showFavoritesOnly
+      ? contacts.filter(c => favoriteContacts.has(c.id))
+      : contacts;
+
     if (selectedContacts.includes(contactId)) {
       setSelectedContacts(selectedContacts.filter(id => id !== contactId));
       setIsAllSelected(false);
     } else {
       const newSelected = [...selectedContacts, contactId];
       setSelectedContacts(newSelected);
-      setIsAllSelected(newSelected.length === contacts.length);
+      setIsAllSelected(visibleContacts.length > 0 && newSelected.length === visibleContacts.length);
     }
   };
 
@@ -994,14 +1428,16 @@ function Contact() {
     }
   };
 
-  // Filter contacts based on favorites filter
-  let filteredContacts = showFavoritesOnly
-    ? contacts.filter(contact => favoriteContacts.has(contact.id))
-    : contacts;
+  const filteredContacts = useMemo(() => {
+    // Safety net filter (in infinite mode, API may already return favorites-only)
+    return showFavoritesOnly
+      ? contacts.filter((contact) => favoriteContacts.has(contact.id))
+      : contacts;
+  }, [contacts, favoriteContacts, showFavoritesOnly]);
 
-  // Apply sorting if a sort column is selected
-  if (sortColumn) {
-    filteredContacts = [...filteredContacts].sort((a, b) => {
+  const sortedContacts = useMemo(() => {
+    if (!sortColumn) return filteredContacts;
+    return [...filteredContacts].sort((a, b) => {
       let aValue = a[sortColumn] || '';
       let bValue = b[sortColumn] || '';
 
@@ -1023,7 +1459,56 @@ function Contact() {
       }
       return 0;
     });
-  }
+  }, [filteredContacts, sortColumn, sortDirection]);
+
+  const totalFromApi = contactsMeta?.total_records || 0;
+  const loadedCount = sortedContacts.length;
+  const remainingCount = Math.max(0, totalFromApi - loadedCount);
+  const contactsSpacerHeight = remainingCount * CONTACT_LIST_ROW_HEIGHT;
+
+  const handleContactsScroll = useCallback(
+    (e) => {
+      if (!USE_INFINITE_CONTACTS_LIST) return;
+      const el = e.currentTarget;
+      if (!el) return;
+
+      if (el.scrollTop > 0) contactsHasUserScrolledRef.current = true;
+      if (!contactsHasUserScrolledRef.current) return;
+
+      // Avoid autoload loops when list doesn't overflow yet
+      const scrollable = el.scrollHeight > el.clientHeight + 8;
+      if (!scrollable) return;
+
+      // Trigger when near bottom of LOADED content (not spacer)
+      const loadedContentHeight = loadedCount * CONTACT_LIST_ROW_HEIGHT;
+      const scrolledTo = el.scrollTop + el.clientHeight;
+      const nearBottomOfLoaded = scrolledTo >= (loadedContentHeight - 150);
+
+      if (!nearBottomOfLoaded) return;
+      if (contactsLoadingRef.current) return;
+      if (!contactsMeta?.has_more) return;
+
+      const nextPage = (contactsPageNo || 1) + 1;
+      if (nextPage <= contactsLastRequestedPageRef.current) return;
+      contactsLastRequestedPageRef.current = nextPage;
+
+      loadContactsPage({
+        requestedPageNo: nextPage,
+        query: searchTerm,
+        append: true,
+        isFavoriteOnly: showFavoritesOnly
+      });
+    },
+    [
+      USE_INFINITE_CONTACTS_LIST,
+      contactsMeta?.has_more,
+      contactsPageNo,
+      loadContactsPage,
+      searchTerm,
+      showFavoritesOnly,
+      loadedCount
+    ]
+  );
 
   // If user lacks permission to view contacts, show an access message
   if (permissions && permissions.view_contact === false) {
@@ -1139,6 +1624,33 @@ function Contact() {
             </div>
           </div>
 
+          {/* Search Bar */}
+          <div className="mb-6">
+            <div className="relative">
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <input
+                type="text"
+                placeholder="Search contacts..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+            {USE_INFINITE_CONTACTS_LIST && (
+              <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                <span>
+                  Showing {sortedContacts.length} of {contactsMeta?.total_records || 0} contacts
+                </span>
+                {(contactsLoading && sortedContacts.length > 0) && (
+                  <span className="flex items-center">
+                    <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-indigo-600 mr-2"></span>
+                    Loading…
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Contacts Table */}
           <div className="bg-white shadow rounded-lg overflow-hidden">
             <div className="px-4 py-5 sm:p-6">
@@ -1149,19 +1661,78 @@ function Contact() {
                 </div>
               ) : (
                 <>
+                  {/* Bulk Actions */}
+                  {selectedContacts.length > 0 && (
+                    <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                      <div className="text-sm text-gray-700">
+                        {isAllSelected
+                          ? 'All contacts on this page are selected.'
+                          : `${selectedContacts.length} contact(s) selected on this page.`}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Tooltip
+                          content="Not authorized"
+                          disabled={permissions && permissions.delete_contact === false}
+                          position="top"
+                        >
+                          <button
+                            onClick={() => { if (!permissions || permissions.delete_contact) handleOpenBulkDeleteSelectedPage(); }}
+                            disabled={permissions && permissions.delete_contact === false}
+                            className={`inline-flex items-center px-3 py-2 rounded-md text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                              permissions && permissions.delete_contact === false
+                                ? 'bg-orange-300 cursor-not-allowed opacity-60'
+                                : 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500'
+                            }`}
+                          >
+                            <FiTrash2 className="mr-2 h-4 w-4" />
+                            Delete selected (this page)
+                          </button>
+                        </Tooltip>
+
+                        {isAllSelected && (
+                          <Tooltip
+                            content="Not authorized"
+                            disabled={permissions && permissions.delete_contact === false}
+                            position="top"
+                          >
+                            <button
+                              onClick={() => { if (!permissions || permissions.delete_contact) handleOpenBulkDeleteAllContacts(); }}
+                              disabled={permissions && permissions.delete_contact === false}
+                              className={`inline-flex items-center px-3 py-2 rounded-md text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                                permissions && permissions.delete_contact === false
+                                  ? 'bg-red-300 cursor-not-allowed opacity-60'
+                                  : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+                              }`}
+                            >
+                              <FiTrash2 className="mr-2 h-4 w-4" />
+                              Delete ALL contacts
+                            </button>
+                          </Tooltip>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Table Header */}
                   <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            <input
-                              type="checkbox"
-                              checked={isAllSelected}
-                              onChange={handleSelectAll}
-                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                            />
-                          </th>
+                    <div
+                      className="relative max-h-[65vh] overflow-y-auto overscroll-contain"
+                      onScroll={handleContactsScroll}
+                    >
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50 sticky top-0 z-10">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <input
+                                type="checkbox"
+                                checked={isAllSelected}
+                                onChange={handleSelectAll}
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                              />
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              S.No.
+                            </th>
                           <th 
                             className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                             onClick={() => handleSort('name')}
@@ -1228,10 +1799,10 @@ function Contact() {
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Actions
                           </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredContacts.length === 0 ? (
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {sortedContacts.length === 0 ? (
                           <tr>
                             <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
                               {showFavoritesOnly
@@ -1241,7 +1812,7 @@ function Contact() {
                             </td>
                           </tr>
                         ) : (
-                          filteredContacts.map((contact) => (
+                          sortedContacts.map((contact, idx) => (
                             <tr key={contact.id} className="hover:bg-gray-50">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <input
@@ -1250,6 +1821,9 @@ function Contact() {
                                   onChange={() => handleSelectContact(contact.id)}
                                   className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                                 />
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {idx + 1}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
@@ -1326,12 +1900,42 @@ function Contact() {
                             </tr>
                           ))
                         )}
-                      </tbody>
-                    </table>
+                          {(USE_INFINITE_CONTACTS_LIST && contactsLoading && sortedContacts.length > 0) && (
+                            <tr>
+                              <td colSpan="7" className="px-6 py-3 text-center text-xs text-gray-500">
+                                <span className="inline-flex items-center">
+                                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600 mr-2"></span>
+                                  Loading more…
+                                </span>
+                              </td>
+                            </tr>
+                          )}
+
+                          {(USE_INFINITE_CONTACTS_LIST && contactsSpacerHeight > 0) && (
+                            <tr aria-hidden="true">
+                              <td colSpan="7" className="p-0">
+                                <div
+                                  style={{ height: contactsSpacerHeight, minHeight: contactsSpacerHeight }}
+                                  className="pointer-events-none"
+                                />
+                              </td>
+                            </tr>
+                          )}
+
+                          {(USE_INFINITE_CONTACTS_LIST && !contactsLoading && !contactsMeta?.has_more && contactsSpacerHeight === 0 && sortedContacts.length > 0) && (
+                            <tr>
+                              <td colSpan="7" className="px-6 py-3 text-center text-xs text-gray-400">
+                                End of contacts
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
 
                   {/* Pagination */}
-                  {totalRecords >= 0 && (
+                  {!USE_INFINITE_CONTACTS_LIST && totalRecords >= 0 && (
                     <Pagination
                       currentPage={currentPage}
                       totalPages={totalPages}
@@ -1876,6 +2480,96 @@ function Contact() {
                       <FiDownload className="h-4 w-4" />
                       Download
                     </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+          <div className="relative mx-auto p-6 border w-5/6 sm:w-3/6 md:w-2/6 lg:w-2/6 xl:w-1/4 shadow-xl rounded-lg bg-white transform transition-all">
+            <div className="mt-2">
+              <div className="flex items-center justify-center mb-4">
+                <div
+                  className={`mx-auto flex items-center justify-center h-14 w-14 rounded-full ${
+                    bulkDeleteMode === 'all' ? 'bg-red-100' : 'bg-orange-100'
+                  }`}
+                >
+                  <FiTrash2
+                    className={`h-7 w-7 ${
+                      bulkDeleteMode === 'all' ? 'text-red-600' : 'text-orange-600'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  {bulkDeleteMode === 'all' ? 'Delete All Contacts' : 'Delete Selected Contacts'}
+                </h3>
+                <p className="text-sm text-gray-500 mb-2">
+                  {bulkDeleteMode === 'all'
+                    ? 'This will delete ALL contacts from this project.'
+                    : 'This will delete all selected contacts from this page.'}
+                </p>
+                <p className="text-xs text-gray-400 mb-4">This action cannot be undone.</p>
+
+                {bulkDeleteMode === 'all' && (
+                  <div className="text-left">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Type <span className="font-semibold">all-delete</span> to confirm
+                    </label>
+                    <input
+                      type="text"
+                      value={bulkDeletePhrase}
+                      onChange={(e) => {
+                        setBulkDeletePhrase(e.target.value);
+                        if (bulkDeleteError) setBulkDeleteError('');
+                      }}
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                        bulkDeleteError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500'
+                      }`}
+                      placeholder="all-delete"
+                      autoFocus
+                    />
+                    {bulkDeleteError && (
+                      <p className="mt-1 text-sm text-red-600">{bulkDeleteError}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={cancelBulkDelete}
+                  disabled={isBulkDeleting}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmBulkDelete}
+                  disabled={isBulkDeleting || (bulkDeleteMode === 'all' && bulkDeletePhrase.trim() !== 'all-delete')}
+                  className={`flex-1 px-4 py-2.5 text-sm font-medium text-white border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
+                    bulkDeleteMode === 'all'
+                      ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+                      : 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500'
+                  }`}
+                >
+                  {isBulkDeleting ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete'
                   )}
                 </button>
               </div>

@@ -655,9 +655,6 @@ const Transactions = () => {
                       S.No
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Transaction ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Date
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -680,7 +677,7 @@ const Transactions = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {transformedTransactions.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                      <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
                         No transactions found
                       </td>
                     </tr>
@@ -689,10 +686,6 @@ const Transactions = () => {
                       <tr key={transaction.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">{transaction.serialNumber}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{transaction.id}</div>
-                          <div className="text-xs text-gray-500">{transaction.invoiceNumber}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">
