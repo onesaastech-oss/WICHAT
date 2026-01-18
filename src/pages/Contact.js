@@ -58,7 +58,6 @@ function Contact() {
   const [contactToDelete, setContactToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
-  const [bulkDeleteMode, setBulkDeleteMode] = useState(null); // 'selected' | 'all'
   const [bulkDeletePhrase, setBulkDeletePhrase] = useState('');
   const [bulkDeleteError, setBulkDeleteError] = useState('');
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
@@ -987,25 +986,12 @@ function Contact() {
     setShowDeleteModal(true);
   };
 
-  const handleOpenBulkDeleteSelectedPage = () => {
-    if (permissions && permissions.delete_contact === false) {
-      alert('You do not have permission to delete contacts.');
-      return;
-    }
-    if (selectedContacts.length === 0) return;
-    setBulkDeleteMode('selected');
-    setBulkDeletePhrase('');
-    setBulkDeleteError('');
-    setShowBulkDeleteModal(true);
-  };
-
   const handleOpenBulkDeleteAllContacts = () => {
     if (permissions && permissions.delete_contact === false) {
       alert('You do not have permission to delete contacts.');
       return;
     }
     if (!isAllSelected) return;
-    setBulkDeleteMode('all');
     setBulkDeletePhrase('');
     setBulkDeleteError('');
     setShowBulkDeleteModal(true);
@@ -1013,45 +999,23 @@ function Contact() {
 
   const cancelBulkDelete = () => {
     setShowBulkDeleteModal(false);
-    setBulkDeleteMode(null);
     setBulkDeletePhrase('');
     setBulkDeleteError('');
   };
 
   const confirmBulkDelete = async () => {
     if (!tokens?.token || !tokens?.username || !tokens?.selected_project_id) return;
-    if (!bulkDeleteMode) return;
-
-    if (bulkDeleteMode === 'all' && bulkDeletePhrase.trim() !== 'all-delete') {
+    if (bulkDeletePhrase.trim() !== 'all-delete') {
       setBulkDeleteError("Type 'all-delete' to confirm deleting ALL contacts.");
       return;
     }
 
-    // Visible contacts = what user is currently seeing in the table
-    const visibleContacts = showFavoritesOnly
-      ? contacts.filter(c => favoriteContacts.has(c.id))
-      : contacts;
-
-    const selectedList = visibleContacts.filter(c => selectedContacts.includes(c.id));
-    const selectedIds = selectedList.map(c => c.id);
-    const selectedNumbers = selectedList.map(c => c.mobile);
-
-    if (bulkDeleteMode === 'selected' && selectedIds.length === 0) return;
-
     setIsBulkDeleting(true);
     try {
-      const payload =
-        bulkDeleteMode === 'all'
-          ? {
-              project_id: tokens.selected_project_id || '',
-              all_contact_delete: true
-            }
-          : {
-              project_id: tokens.selected_project_id || '',
-              all_contact_delete: false,
-              contact_ids: selectedIds,
-              numbers: selectedNumbers
-            };
+      const payload = {
+        project_id: tokens.selected_project_id || '',
+        all_contact_delete: true
+      };
 
       console.log('🗑️ Bulk delete payload:', payload);
 
@@ -1071,58 +1035,20 @@ function Contact() {
       );
 
       if (!response?.data?.error) {
-        if (bulkDeleteMode === 'all') {
-          await contactDbHelper.clearContacts();
-          setContacts([]);
-          setTotalPages(1);
-          setTotalRecords(0);
-          setCurrentPage(1);
-          setFavoriteContacts(new Set());
-        } else {
-          await Promise.all(
-            selectedList.map(c => contactDbHelper.deleteContact(c.id, c.mobile))
-          );
-
-          const refreshedResult = await contactDbHelper.getContacts(currentPage, pageSize);
-          const mappedRefreshed = refreshedResult.contacts.map(c => ({
-            id: c.contact_id,
-            name: c.name,
-            mobile: c.number,
-            email: c.email,
-            firm_name: c.firm_name,
-            website: c.website,
-            remark: c.remark,
-            languageCode: c.language_code,
-            country: c.country,
-            createdOn: c.create_date,
-            is_favorite: c.is_favorite || false
-          }));
-
-          const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
-          setFavoriteContacts(refreshedFavorites);
-
-          setContacts(mappedRefreshed);
-          setTotalPages(refreshedResult.totalPages);
-          setTotalRecords(refreshedResult.totalCount || 0);
-
-          if (mappedRefreshed.length === 0 && currentPage > 1) {
-            setCurrentPage(currentPage - 1);
-          }
-        }
-
+        await contactDbHelper.clearContacts();
+        setContacts([]);
+        setTotalPages(1);
+        setTotalRecords(0);
+        setCurrentPage(1);
+        setFavoriteContacts(new Set());
         setSelectedContacts([]);
         setIsAllSelected(false);
 
         setShowBulkDeleteModal(false);
-        setBulkDeleteMode(null);
         setBulkDeletePhrase('');
         setBulkDeleteError('');
 
-        const successMsg =
-          response?.data?.msg ||
-          (bulkDeleteMode === 'all'
-            ? 'All contacts deleted successfully'
-            : 'Selected contacts deleted successfully');
+        const successMsg = response?.data?.msg || 'All contacts deleted successfully';
         setSuccessMessage(successMsg);
         setShowSuccessModal(true);
       } else {
@@ -1714,25 +1640,6 @@ function Contact() {
                           : `${selectedContacts.length} contact(s) selected on this page.`}
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Tooltip
-                          content="Not authorized"
-                          disabled={permissions && permissions.delete_contact === false}
-                          position="top"
-                        >
-                          <button
-                            onClick={() => { if (!permissions || permissions.delete_contact) handleOpenBulkDeleteSelectedPage(); }}
-                            disabled={permissions && permissions.delete_contact === false}
-                            className={`inline-flex items-center px-3 py-2 rounded-md text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                              permissions && permissions.delete_contact === false
-                                ? 'bg-orange-300 cursor-not-allowed opacity-60'
-                                : 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500'
-                            }`}
-                          >
-                            <FiTrash2 className="mr-2 h-4 w-4" />
-                            Delete selected (this page)
-                          </button>
-                        </Tooltip>
-
                         {isAllSelected && (
                           <Tooltip
                             content="Not authorized"
@@ -2550,53 +2457,41 @@ function Contact() {
           <div className="relative mx-auto p-6 border w-5/6 sm:w-3/6 md:w-2/6 lg:w-2/6 xl:w-1/4 shadow-xl rounded-lg bg-white transform transition-all">
             <div className="mt-2">
               <div className="flex items-center justify-center mb-4">
-                <div
-                  className={`mx-auto flex items-center justify-center h-14 w-14 rounded-full ${
-                    bulkDeleteMode === 'all' ? 'bg-red-100' : 'bg-orange-100'
-                  }`}
-                >
-                  <FiTrash2
-                    className={`h-7 w-7 ${
-                      bulkDeleteMode === 'all' ? 'text-red-600' : 'text-orange-600'
-                    }`}
-                  />
+                <div className="mx-auto flex items-center justify-center h-14 w-14 rounded-full bg-red-100">
+                  <FiTrash2 className="h-7 w-7 text-red-600" />
                 </div>
               </div>
 
               <div className="text-center">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {bulkDeleteMode === 'all' ? 'Delete All Contacts' : 'Delete Selected Contacts'}
+                  Delete All Contacts
                 </h3>
                 <p className="text-sm text-gray-500 mb-2">
-                  {bulkDeleteMode === 'all'
-                    ? 'This will delete ALL contacts from this project.'
-                    : 'This will delete all selected contacts from this page.'}
+                  This will delete ALL contacts from this project.
                 </p>
                 <p className="text-xs text-gray-400 mb-4">This action cannot be undone.</p>
 
-                {bulkDeleteMode === 'all' && (
-                  <div className="text-left">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Type <span className="font-semibold">all-delete</span> to confirm
-                    </label>
-                    <input
-                      type="text"
-                      value={bulkDeletePhrase}
-                      onChange={(e) => {
-                        setBulkDeletePhrase(e.target.value);
-                        if (bulkDeleteError) setBulkDeleteError('');
-                      }}
-                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                        bulkDeleteError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500'
-                      }`}
-                      placeholder="all-delete"
-                      autoFocus
-                    />
-                    {bulkDeleteError && (
-                      <p className="mt-1 text-sm text-red-600">{bulkDeleteError}</p>
-                    )}
-                  </div>
-                )}
+                <div className="text-left">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Type <span className="font-semibold">all-delete</span> to confirm
+                  </label>
+                  <input
+                    type="text"
+                    value={bulkDeletePhrase}
+                    onChange={(e) => {
+                      setBulkDeletePhrase(e.target.value);
+                      if (bulkDeleteError) setBulkDeleteError('');
+                    }}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      bulkDeleteError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500'
+                    }`}
+                    placeholder="all-delete"
+                    autoFocus
+                  />
+                  {bulkDeleteError && (
+                    <p className="mt-1 text-sm text-red-600">{bulkDeleteError}</p>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-3 mt-6">
@@ -2609,12 +2504,8 @@ function Contact() {
                 </button>
                 <button
                   onClick={confirmBulkDelete}
-                  disabled={isBulkDeleting || (bulkDeleteMode === 'all' && bulkDeletePhrase.trim() !== 'all-delete')}
-                  className={`flex-1 px-4 py-2.5 text-sm font-medium text-white border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
-                    bulkDeleteMode === 'all'
-                      ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
-                      : 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500'
-                  }`}
+                  disabled={isBulkDeleting || bulkDeletePhrase.trim() !== 'all-delete'}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isBulkDeleting ? (
                     <>

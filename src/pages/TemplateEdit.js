@@ -161,7 +161,7 @@ function TemplateEdit() {
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-              'https://api.w1chat.com/template/template-details', // Assuming this endpoint exists
+              'https://api.w1chat.com/template/template-details',
               data_pass,
               {
                 headers: {
@@ -172,15 +172,18 @@ function TemplateEdit() {
               }
             );
 
-            if (!response?.data?.error && response?.data?.data) {
-              const templateData = response.data.data;
+            // Handle API response - check both response.data.data and response.data.template
+            if (!response?.data?.error) {
+              const templateData = response.data.data || {};
+              const templateObj = response.data.template || templateData.template || {};
+              
               const template = {
                 id: templateData.template_id,
-                name: templateData.template_name,
-                language: templateData.template?.language || 'en',
-                category: templateData.category,
+                name: templateData.template_name || templateObj.name || '',
+                language: templateObj.language || templateData.template?.language || 'en',
+                category: templateData.category || templateObj.category || '',
                 status: templateData.status,
-                template_data: templateData.template
+                template_data: templateObj
               };
 
               console.log('Fetched template from API:', template);
@@ -307,13 +310,39 @@ function TemplateEdit() {
           newFormData.components.buttons = {
             type: 'BUTTONS',
             buttons: component.buttons?.map(btn => {
+              // Handle OTP copy code button
               if (btn.type === 'otp' && btn.otp_type === 'copy_code') {
                 return {
                   type: 'COPY_CODE',
-                  text: btn.text,
-                  copy_code: ''
+                  text: btn.text || '',
+                  copy_code: btn.copy_code || ''
                 };
               }
+              // Handle URL button - map to internal format
+              if (btn.type === 'URL') {
+                return {
+                  type: 'URL',
+                  text: btn.text || '',
+                  url: btn.url || '',
+                  example: btn.example || []
+                };
+              }
+              // Handle PHONE_NUMBER button
+              if (btn.type === 'PHONE_NUMBER') {
+                return {
+                  type: 'PHONE_NUMBER',
+                  text: btn.text || '',
+                  phone_number: btn.phone_number || ''
+                };
+              }
+              // Handle QUICK_REPLY button
+              if (btn.type === 'QUICK_REPLY') {
+                return {
+                  type: 'QUICK_REPLY',
+                  text: btn.text || ''
+                };
+              }
+              // Default: return as is
               return btn;
             }) || []
           };

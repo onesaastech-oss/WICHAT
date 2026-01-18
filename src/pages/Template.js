@@ -4,6 +4,7 @@ import Tooltip from '../component/Tooltip';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
+import toast from 'react-hot-toast';
 import { FiPlus, FiEdit, FiTrash2, FiRefreshCw, FiAlertCircle, FiMoreVertical, FiChevronDown, FiCheck } from 'react-icons/fi';
 
 function Template() {
@@ -165,10 +166,51 @@ function Template() {
     }
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this template?')) {
-      // Add delete logic here
-      console.log('Delete template:', id);
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this template?')) {
+      return;
+    }
+
+    if (!tokens?.token || !tokens?.username) {
+      toast.error('Session expired. Please login again.');
+      return;
+    }
+
+    try {
+      const selectedProjectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id;
+      if (!selectedProjectId) {
+        toast.error('No project selected.');
+        return;
+      }
+
+      const payload = {
+        project_id: selectedProjectId,
+        template_id: id
+      };
+
+      const { data, key } = Encrypt(payload);
+      const response = await axios.post(
+        'https://api.w1chat.com/template/template-delete',
+        JSON.stringify({ data, key }),
+        {
+          headers: {
+            'token': tokens.token,
+            'username': tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response?.data?.error === false) {
+        // Remove the deleted template from the list
+        setTemplates(prev => prev.filter(template => template.id !== id));
+        toast.success(response.data.msg || 'Template deleted successfully');
+      } else {
+        toast.error(response?.data?.msg || 'Failed to delete template');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error(error?.response?.data?.msg || 'An error occurred while deleting the template');
     }
   };
 
