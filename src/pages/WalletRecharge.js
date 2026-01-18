@@ -29,7 +29,6 @@ const WalletRecharge = () => {
   const [customAmount, setCustomAmount] = useState('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
   const [processing, setProcessing] = useState(false);
-  const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(false);
   const [discount, setDiscount] = useState(0);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
