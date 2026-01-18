@@ -36,7 +36,8 @@ import {
     FiGlobe,
     FiFileText,
     FiUserPlus,
-    FiUserCheck
+    FiUserCheck,
+    FiCornerUpLeft
 } from 'react-icons/fi';
 import { FaRegEye } from "react-icons/fa6";
 import { MdOutlineCancel } from "react-icons/md";
@@ -408,9 +409,30 @@ const DateSeparator = ({ displayDate, dateId }) => {
 
 
 // Message Item Component with Info Button
-const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview, formatTime, messageKey, highlightedMessageId }) => {
+const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview, formatTime, messageKey, highlightedMessageId, onReply, allMessages, onScrollToMessage }) => {
     const [showInfoModal, setShowInfoModal] = useState(false);
     const [audioTime, setAudioTime] = useState({ currentTime: 0, duration: 0 });
+    
+    // Find the original message if reply_to_message is not provided but reply_wamid exists
+    const getReplyToMessage = () => {
+        if (msg.reply_to_message) {
+            return msg.reply_to_message;
+        }
+        if (msg.is_reply && msg.reply_wamid && allMessages) {
+            return allMessages.find(m => m.wamid === msg.reply_wamid);
+        }
+        return null;
+    };
+    
+    const replyToMessage = getReplyToMessage();
+    
+    // Handle click on reply preview to scroll to original message
+    const handleReplyClick = () => {
+        if (replyToMessage && onScrollToMessage) {
+            const originalMessageKey = getMessageKey(replyToMessage);
+            onScrollToMessage(originalMessageKey);
+        }
+    };
 
     const formatAudioDuration = (seconds) => {
         if (!seconds || isNaN(seconds)) return '';
@@ -426,8 +448,8 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
     const isHighlighted = highlightedMessageId === messageKey;
     const bubbleHighlightClass = isHighlighted
         ? (msg.type === 'out'
-            ? 'ring-2 ring-offset-2 ring-offset-blue-100 ring-white dark:ring-offset-blue-900/40'
-            : 'ring-2 ring-offset-2 ring-offset-gray-100 ring-blue-300 dark:ring-offset-gray-800 dark:ring-blue-500')
+            ? 'ring-2 ring-offset-2 ring-blue-500 ring-offset-blue-100 dark:ring-offset-blue-900/40 animate-pulse bg-[#c8f7c5]'
+            : 'ring-2 ring-offset-2 ring-blue-500 ring-offset-gray-100 dark:ring-offset-gray-800 animate-pulse !bg-blue-50 dark:!bg-blue-900/30')
         : '';
 
     return (
@@ -447,6 +469,218 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                 : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-md border border-gray-200 dark:border-gray-700'
                                 } max-w-full relative ${bubbleHighlightClass}`}
                         >
+                            {/* Reply to message preview */}
+                            {msg.is_reply && (
+                                <div 
+                                    onClick={replyToMessage ? handleReplyClick : undefined}
+                                    className={`mb-2 p-2 rounded-lg border-l-4 ${msg.type === 'out' 
+                                        ? 'border-green-600 bg-green-50 hover:bg-green-100' 
+                                        : 'border-blue-500 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'} ${replyToMessage ? 'cursor-pointer transition-colors' : ''}`}
+                                >
+                                    {replyToMessage ? (
+                                        <div className="flex items-start gap-2">
+                                            {/* Media Thumbnail for image/video/document */}
+                                            {(() => {
+                                                const replyMsg = replyToMessage;
+                                                const msgType = (replyMsg.message_type || '').toLowerCase();
+                                                const mediaUrl = replyMsg.media_url;
+                                                
+                                                // Image thumbnail
+                                                if ((msgType === 'image' || msgType === 'photo') && mediaUrl) {
+                                                    return (
+                                                        <div className="flex-shrink-0 w-10 h-10 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
+                                                            <img 
+                                                                src={mediaUrl} 
+                                                                alt="Reply" 
+                                                                className="w-full h-full object-cover"
+                                                                onError={(e) => {
+                                                                    e.target.style.display = 'none';
+                                                                    e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center"><svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>';
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    );
+                                                }
+                                                
+                                                // Video thumbnail
+                                                if (msgType === 'video' && mediaUrl) {
+                                                    return (
+                                                        <div className="flex-shrink-0 w-10 h-10 rounded overflow-hidden bg-gray-800 flex items-center justify-center relative">
+                                                            <FiVideo className="w-5 h-5 text-white" />
+                                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                                <div className="w-4 h-4 bg-white/80 rounded-full flex items-center justify-center">
+                                                                    <FiPlay className="w-2.5 h-2.5 text-gray-800 ml-0.5" />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                
+                                                // Audio icon
+                                                if (msgType === 'audio') {
+                                                    return (
+                                                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
+                                                            <FiMic className="w-5 h-5 text-white" />
+                                                        </div>
+                                                    );
+                                                }
+                                                
+                                                // Document icon
+                                                if (msgType === 'document') {
+                                                    return (
+                                                        <div className="flex-shrink-0 w-10 h-10 rounded bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                                                            <FiFile className="w-5 h-5 text-red-500" />
+                                                        </div>
+                                                    );
+                                                }
+                                                
+                                                // Location icon
+                                                if (msgType === 'location') {
+                                                    return (
+                                                        <div className="flex-shrink-0 w-10 h-10 rounded bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                                                            <FiMapPin className="w-5 h-5 text-blue-500" />
+                                                        </div>
+                                                    );
+                                                }
+                                                
+                                                // Contact icon
+                                                if (msgType === 'contact' || msgType === 'contacts') {
+                                                    return (
+                                                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                                                            <FiUser className="w-5 h-5 text-purple-500" />
+                                                        </div>
+                                                    );
+                                                }
+                                                
+                                                // Sticker
+                                                if (msgType === 'sticker') {
+                                                    return (
+                                                        <div className="flex-shrink-0 w-10 h-10 rounded bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
+                                                            <span className="text-lg">🎭</span>
+                                                        </div>
+                                                    );
+                                                }
+                                                
+                                                return null;
+                                            })()}
+                                            
+                                            {/* Text content */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-xs font-semibold mb-0.5 text-gray-700 dark:text-gray-200">
+                                                    {replyToMessage.type === 'out' ? 'You' : (displayName || activeChat?.name || 'Contact')}
+                                                </div>
+                                                <div className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 flex items-center gap-1">
+                                                    {(() => {
+                                                        const replyMsg = replyToMessage;
+                                                        const msgType = (replyMsg.message_type || '').toLowerCase();
+                                                        
+                                                        // Show icon + label for media types
+                                                        if (msgType === 'image' || msgType === 'photo') {
+                                                            return (
+                                                                <>
+                                                                    <FiImage className="w-3 h-3 flex-shrink-0" />
+                                                                    <span>{replyMsg.message || 'Photo'}</span>
+                                                                </>
+                                                            );
+                                                        }
+                                                        if (msgType === 'video') {
+                                                            return (
+                                                                <>
+                                                                    <FiVideo className="w-3 h-3 flex-shrink-0" />
+                                                                    <span>{replyMsg.message || 'Video'}</span>
+                                                                </>
+                                                            );
+                                                        }
+                                                        if (msgType === 'audio') {
+                                                            return (
+                                                                <>
+                                                                    <FiMic className="w-3 h-3 flex-shrink-0" />
+                                                                    <span>{replyMsg.is_voice ? 'Voice message' : 'Audio'}</span>
+                                                                </>
+                                                            );
+                                                        }
+                                                        if (msgType === 'document') {
+                                                            return (
+                                                                <>
+                                                                    <FiFile className="w-3 h-3 flex-shrink-0" />
+                                                                    <span>{replyMsg.media_name || replyMsg.message || 'Document'}</span>
+                                                                </>
+                                                            );
+                                                        }
+                                                        if (msgType === 'location') {
+                                                            return (
+                                                                <>
+                                                                    <FiMapPin className="w-3 h-3 flex-shrink-0" />
+                                                                    <span>Location</span>
+                                                                </>
+                                                            );
+                                                        }
+                                                        if (msgType === 'contact' || msgType === 'contacts') {
+                                                            return (
+                                                                <>
+                                                                    <FiUser className="w-3 h-3 flex-shrink-0" />
+                                                                    <span>Contact</span>
+                                                                </>
+                                                            );
+                                                        }
+                                                        if (msgType === 'sticker') {
+                                                            return <span>Sticker</span>;
+                                                        }
+                                                        
+                                                        // Template message
+                                                        if (replyMsg.is_template && replyMsg.template) {
+                                                            const bodyComponent = replyMsg.template.components?.find(c => c.type === 'BODY');
+                                                            if (bodyComponent?.text) {
+                                                                let text = bodyComponent.text;
+                                                                if (replyMsg.component) {
+                                                                    let componentData = replyMsg.component;
+                                                                    if (typeof componentData === 'string') {
+                                                                        try {
+                                                                            componentData = JSON.parse(componentData);
+                                                                        } catch (e) {
+                                                                            console.error('Failed to parse component:', e);
+                                                                        }
+                                                                    }
+                                                                    const bodyParam = componentData?.find?.(c => c.type === 'body');
+                                                                    if (bodyParam?.parameters) {
+                                                                        bodyParam.parameters.forEach((param, idx) => {
+                                                                            text = text.replace(`{{${idx + 1}}}`, param.text || '');
+                                                                        });
+                                                                    }
+                                                                }
+                                                                return <span>{text}</span>;
+                                                            }
+                                                            return <span>Template message</span>;
+                                                        }
+                                                        
+                                                        // Text message
+                                                        if (replyMsg.message) {
+                                                            return <span>{replyMsg.message}</span>;
+                                                        }
+                                                        
+                                                        return <span>Message</span>;
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex-shrink-0 w-8 h-8 rounded bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                                                <FiMessageSquare className="w-4 h-4 text-gray-400" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                                    Replied to a message
+                                                </div>
+                                                <div className="text-xs text-gray-400 dark:text-gray-500 italic">
+                                                    Message not available
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            
                             {msg.is_template ? (
                                 <TemplateMessageRenderer
                                     msg={msg}
@@ -497,6 +731,21 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                         darkMode={darkMode}
                                         failedReason={msg.failed_reason}
                                     />
+                                    {onReply && msg.wamid && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onReply(msg);
+                                            }}
+                                            className={`top-2 bg-gray-200 ${msg.type === 'out' ? 'left-2' : 'right-2'} 
+                                         group-hover:opacity-100 transition-opacity duration-200
+                                        p-1 rounded-full hover:bg-black hover:bg-opacity-10 dark:hover:bg-white dark:hover:bg-opacity-10
+                                        focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1`}
+                                            title="Reply to message"
+                                        >
+                                            <FiCornerUpLeft className="w-2.5 h-2.5 text-gray-700 dark:text-gray-400" />
+                                        </button>
+                                    )}
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -564,6 +813,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const [searchModalOpen, setSearchModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+    const [replyingToMessage, setReplyingToMessage] = useState(null);
     const projectInfo = useSelector((state) => state.project.info);
 
     const [contactForm, setContactForm] = useState({
@@ -942,6 +1192,23 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }, 80);
     }, []);
 
+    // Scroll to a message and highlight it (used for reply click)
+    const handleScrollToMessage = useCallback((messageKey) => {
+        if (!messageKey) return;
+        
+        const node = document.getElementById(`message-${messageKey}`);
+        if (node?.scrollIntoView) {
+            setHighlightedMessageId(messageKey);
+            node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+            // Message not found in current view - show toast
+            toast.error('Message not found. It may have been deleted or not loaded yet.', {
+                duration: 2500,
+                icon: '💬'
+            });
+        }
+    }, []);
+
     const handleDateClick = useCallback((selectedDate) => {
         setSearchModalOpen(false);
         if (!selectedDate) return;
@@ -1067,7 +1334,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
     useEffect(() => {
         if (!highlightedMessageId) return;
-        const timer = setTimeout(() => setHighlightedMessageId(null), 3500);
+        const timer = setTimeout(() => setHighlightedMessageId(null), 1100);
         return () => clearTimeout(timer);
     }, [highlightedMessageId]);
 
@@ -1894,6 +2161,18 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
     const sendTextMessage = async (text) => {
         const tempMessageId = `temp_${Date.now()}`;
+        
+        // Capture reply info before clearing
+        const replyInfo = replyingToMessage ? {
+            is_reply: true,
+            reply_wamid: replyingToMessage.wamid,
+            reply_to_message: replyingToMessage
+        } : {
+            is_reply: false,
+            reply_wamid: '',
+            reply_to_message: null
+        };
+        
         const newMessage = {
             id: Date.now().toString(),
             message_id: tempMessageId,
@@ -1903,11 +2182,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             status: 'pending',
             timestamp: Date.now(),
             send_by: 'You',
-            chat_number: activeChat.number
+            chat_number: activeChat.number,
+            ...replyInfo
         };
 
         setMessages(prev => [...prev, newMessage]);
         setMessageInput('');
+        setReplyingToMessage(null);
         // Reset textarea height after sending
         if (messageInputRef.current) {
             messageInputRef.current.style.height = 'auto';
@@ -1949,7 +2230,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const messagePayload = {
                 project_id: tokens.selected_project_id || '',
                 message: text,
-                number: activeChat.number
+                number: activeChat.number,
+                ...(replyInfo.is_reply && {
+                    is_reply: true,
+                    reply_wamid: replyInfo.reply_wamid
+                })
             };
 
             const { data, key } = Encrypt(messagePayload);
@@ -2976,6 +3261,15 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                                     darkMode={darkMode}
                                                     renderFilePreview={renderFilePreview}
                                                     formatTime={formatTime}
+                                                    onReply={(message) => {
+                                                        setReplyingToMessage(message);
+                                                        // Focus the input field after a short delay to ensure UI is ready
+                                                        setTimeout(() => {
+                                                            messageInputRef.current?.focus();
+                                                        }, 50);
+                                                    }}
+                                                    allMessages={messages}
+                                                    onScrollToMessage={handleScrollToMessage}
                                                 />
                                             );
                                         })}
@@ -3071,6 +3365,192 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                             <button
                                 onClick={cancelRecording}
                                 className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                            >
+                                <FiX className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Reply Preview */}
+                {replyingToMessage && (
+                    <div className="px-3 sm:px-4 py-2 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 w-full">
+                        <div className="flex items-center p-3 bg-white dark:bg-gray-800 rounded-xl border-l-4 border-blue-500 gap-3">
+                            {/* Media Thumbnail */}
+                            {(() => {
+                                const replyMsg = replyingToMessage;
+                                const msgType = (replyMsg.message_type || '').toLowerCase();
+                                const mediaUrl = replyMsg.media_url;
+                                
+                                if ((msgType === 'image' || msgType === 'photo') && mediaUrl) {
+                                    return (
+                                        <div className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-600">
+                                            <img 
+                                                src={mediaUrl} 
+                                                alt="Reply" 
+                                                className="w-full h-full object-cover"
+                                                onError={(e) => {
+                                                    e.target.style.display = 'none';
+                                                }}
+                                            />
+                                        </div>
+                                    );
+                                }
+                                if (msgType === 'video') {
+                                    return (
+                                        <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-gray-800 flex items-center justify-center relative">
+                                            <FiVideo className="w-6 h-6 text-white" />
+                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                <div className="w-5 h-5 bg-white/80 rounded-full flex items-center justify-center">
+                                                    <FiPlay className="w-3 h-3 text-gray-800 ml-0.5" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                if (msgType === 'audio') {
+                                    return (
+                                        <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
+                                            <FiMic className="w-6 h-6 text-white" />
+                                        </div>
+                                    );
+                                }
+                                if (msgType === 'document') {
+                                    return (
+                                        <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                                            <FiFile className="w-6 h-6 text-red-500" />
+                                        </div>
+                                    );
+                                }
+                                if (msgType === 'location') {
+                                    return (
+                                        <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                                            <FiMapPin className="w-6 h-6 text-blue-500" />
+                                        </div>
+                                    );
+                                }
+                                if (msgType === 'contact' || msgType === 'contacts') {
+                                    return (
+                                        <div className="flex-shrink-0 w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                                            <FiUser className="w-6 h-6 text-purple-500" />
+                                        </div>
+                                    );
+                                }
+                                if (msgType === 'sticker') {
+                                    return (
+                                        <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
+                                            <span className="text-2xl">🎭</span>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
+                            
+                            {/* Text content */}
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center space-x-2 mb-0.5">
+                                    <FiCornerUpLeft className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                                    <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                                        Replying to {replyingToMessage.type === 'out' ? 'yourself' : (displayName || activeChat?.name || 'Contact')}
+                                    </p>
+                                </div>
+                                <div className="text-sm text-gray-600 dark:text-gray-300 line-clamp-1 flex items-center gap-1">
+                                    {(() => {
+                                        const replyMsg = replyingToMessage;
+                                        const msgType = (replyMsg.message_type || '').toLowerCase();
+                                        
+                                        if (msgType === 'image' || msgType === 'photo') {
+                                            return (
+                                                <>
+                                                    <FiImage className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+                                                    <span>{replyMsg.message || 'Photo'}</span>
+                                                </>
+                                            );
+                                        }
+                                        if (msgType === 'video') {
+                                            return (
+                                                <>
+                                                    <FiVideo className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+                                                    <span>{replyMsg.message || 'Video'}</span>
+                                                </>
+                                            );
+                                        }
+                                        if (msgType === 'audio') {
+                                            return (
+                                                <>
+                                                    <FiMic className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+                                                    <span>{replyMsg.is_voice ? 'Voice message' : 'Audio'}</span>
+                                                </>
+                                            );
+                                        }
+                                        if (msgType === 'document') {
+                                            return (
+                                                <>
+                                                    <FiFile className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+                                                    <span>{replyMsg.media_name || replyMsg.message || 'Document'}</span>
+                                                </>
+                                            );
+                                        }
+                                        if (msgType === 'location') {
+                                            return (
+                                                <>
+                                                    <FiMapPin className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+                                                    <span>Location</span>
+                                                </>
+                                            );
+                                        }
+                                        if (msgType === 'contact' || msgType === 'contacts') {
+                                            return (
+                                                <>
+                                                    <FiUser className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+                                                    <span>Contact</span>
+                                                </>
+                                            );
+                                        }
+                                        if (msgType === 'sticker') {
+                                            return <span>Sticker</span>;
+                                        }
+                                        
+                                        // Template message
+                                        if (replyMsg.is_template && replyMsg.template) {
+                                            const bodyComponent = replyMsg.template.components?.find(c => c.type === 'BODY');
+                                            if (bodyComponent?.text) {
+                                                let text = bodyComponent.text;
+                                                if (replyMsg.component) {
+                                                    let componentData = replyMsg.component;
+                                                    if (typeof componentData === 'string') {
+                                                        try {
+                                                            componentData = JSON.parse(componentData);
+                                                        } catch (e) {
+                                                            console.error('Failed to parse component:', e);
+                                                        }
+                                                    }
+                                                    const bodyParam = componentData?.find?.(c => c.type === 'body');
+                                                    if (bodyParam?.parameters) {
+                                                        bodyParam.parameters.forEach((param, idx) => {
+                                                            text = text.replace(`{{${idx + 1}}}`, param.text || '');
+                                                        });
+                                                    }
+                                                }
+                                                return <span>{text}</span>;
+                                            }
+                                            return <span>Template message</span>;
+                                        }
+                                        
+                                        // Text message
+                                        if (replyMsg.message) {
+                                            return <span>{replyMsg.message}</span>;
+                                        }
+                                        
+                                        return <span>Message</span>;
+                                    })()}
+                                </div>
+                            </div>
+                            
+                            {/* Close button */}
+                            <button
+                                onClick={() => setReplyingToMessage(null)}
+                                className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0"
                             >
                                 <FiX className="w-4 h-4" />
                             </button>

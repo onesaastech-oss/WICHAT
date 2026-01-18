@@ -621,11 +621,11 @@ export default function CampaignSummary({
 
         // TEMPORARY: Send unencrypted data for testing (backend has Decrypt commented out)
         // TODO: Remove this and uncomment the encrypted version once backend Decrypt is fixed
-        const data_pass = JSON.stringify(payload);
+        //const data_pass = JSON.stringify(payload);
 
         // ORIGINAL ENCRYPTED VERSION (commented out temporarily):
-        // const { data, key } = Encrypt(payload);
-        // const data_pass = JSON.stringify({ data, key });
+        const { data, key } = Encrypt(payload);
+        const data_pass = JSON.stringify({ data, key });
         // console.log('Encrypted data being sent:', { data: data.substring(0, 50) + '...', key: key.substring(0, 50) + '...' });
 
         // Determine endpoint based on audience type
