@@ -87,6 +87,8 @@ function Contact() {
   const contactsLastRequestedPageRef = useRef(0);
   const contactsHasUserScrolledRef = useRef(false);
   const contactsIgnoreNextSearchEffectRef = useRef(false);
+  const scrollJumpTimeoutRef = useRef(null);
+  const lastFetchedPageRef = useRef(1);
 
   // Form state for creating new contact
   const [newContact, setNewContact] = useState({
@@ -497,6 +499,11 @@ function Contact() {
       contactsLoadingRef.current = false;
       contactsLastRequestedPageRef.current = 1;
       contactsHasUserScrolledRef.current = false;
+      lastFetchedPageRef.current = 1;
+      if (scrollJumpTimeoutRef.current) {
+        clearTimeout(scrollJumpTimeoutRef.current);
+        scrollJumpTimeoutRef.current = null;
+      }
       setContacts([]);
       setContactsMeta({
         page_no: 1,
@@ -1461,11 +1468,21 @@ function Contact() {
     });
   }, [filteredContacts, sortColumn, sortDirection]);
 
+  // Calculate spacer heights for windowed scrolling
   const totalFromApi = contactsMeta?.total_records || 0;
-  const loadedCount = sortedContacts.length;
-  const remainingCount = Math.max(0, totalFromApi - loadedCount);
-  const contactsSpacerHeight = remainingCount * CONTACT_LIST_ROW_HEIGHT;
+  const currentDisplayPage = contactsMeta?.page_no || 1;
+  const itemsPerPage = contactsMeta?.limit || pageSize;
+  
+  // Items BEFORE current page (spacer at top)
+  const itemsBeforeCurrentPage = (currentDisplayPage - 1) * itemsPerPage;
+  const topSpacerHeight = itemsBeforeCurrentPage * CONTACT_LIST_ROW_HEIGHT;
+  
+  // Items AFTER current page (spacer at bottom)
+  const itemsInCurrentPage = sortedContacts.length;
+  const itemsAfterCurrentPage = Math.max(0, totalFromApi - itemsBeforeCurrentPage - itemsInCurrentPage);
+  const bottomSpacerHeight = itemsAfterCurrentPage * CONTACT_LIST_ROW_HEIGHT;
 
+  // Scroll handler: detect which page user scrolled to and fetch it
   const handleContactsScroll = useCallback(
     (e) => {
       if (!USE_INFINITE_CONTACTS_LIST) return;
@@ -1475,40 +1492,60 @@ function Contact() {
       if (el.scrollTop > 0) contactsHasUserScrolledRef.current = true;
       if (!contactsHasUserScrolledRef.current) return;
 
-      // Avoid autoload loops when list doesn't overflow yet
+      // Avoid processing when list doesn't overflow yet
       const scrollable = el.scrollHeight > el.clientHeight + 8;
       if (!scrollable) return;
 
-      // Trigger when near bottom of LOADED content (not spacer)
-      const loadedContentHeight = loadedCount * CONTACT_LIST_ROW_HEIGHT;
-      const scrolledTo = el.scrollTop + el.clientHeight;
-      const nearBottomOfLoaded = scrolledTo >= (loadedContentHeight - 150);
+      // Calculate which page the current scroll position corresponds to
+      const scrollTop = el.scrollTop;
+      const pageHeight = itemsPerPage * CONTACT_LIST_ROW_HEIGHT;
+      
+      // Determine target page based on scroll position
+      const targetPage = Math.max(1, Math.min(
+        contactsMeta?.total_pages || 1,
+        Math.floor(scrollTop / pageHeight) + 1
+      ));
 
-      if (!nearBottomOfLoaded) return;
+      // If we're already on this page or loading, skip
+      if (targetPage === lastFetchedPageRef.current) return;
       if (contactsLoadingRef.current) return;
-      if (!contactsMeta?.has_more) return;
 
-      const nextPage = (contactsPageNo || 1) + 1;
-      if (nextPage <= contactsLastRequestedPageRef.current) return;
-      contactsLastRequestedPageRef.current = nextPage;
+      // Debounce scroll jumps to avoid excessive API calls when dragging
+      if (scrollJumpTimeoutRef.current) {
+        clearTimeout(scrollJumpTimeoutRef.current);
+      }
 
-      loadContactsPage({
-        requestedPageNo: nextPage,
-        query: searchTerm,
-        append: true,
-        isFavoriteOnly: showFavoritesOnly
-      });
+      scrollJumpTimeoutRef.current = setTimeout(() => {
+        // Double-check we still need to fetch
+        if (targetPage === lastFetchedPageRef.current) return;
+        if (contactsLoadingRef.current) return;
+
+        console.log(`📜 Scroll jump detected: fetching page ${targetPage}`);
+        lastFetchedPageRef.current = targetPage;
+        contactsLastRequestedPageRef.current = targetPage;
+
+        loadContactsPage({
+          requestedPageNo: targetPage,
+          query: searchTerm,
+          append: false, // Replace, don't append
+          isFavoriteOnly: showFavoritesOnly
+        });
+      }, 150); // 150ms debounce for smooth dragging
     },
     [
       USE_INFINITE_CONTACTS_LIST,
-      contactsMeta?.has_more,
-      contactsPageNo,
+      contactsMeta?.total_pages,
+      itemsPerPage,
       loadContactsPage,
       searchTerm,
-      showFavoritesOnly,
-      loadedCount
+      showFavoritesOnly
     ]
   );
+
+  // Sync lastFetchedPageRef when contactsMeta changes
+  useEffect(() => {
+    lastFetchedPageRef.current = contactsMeta?.page_no || 1;
+  }, [contactsMeta?.page_no]);
 
   // If user lacks permission to view contacts, show an access message
   if (permissions && permissions.view_contact === false) {
@@ -1570,7 +1607,14 @@ function Contact() {
                     </div>
                   )}
                 </div>
-                <p className="text-gray-600 text-sm">Manage your contacts and customer information</p>
+                <p className="text-gray-600 text-sm">
+                  Manage your contacts and customer information
+                  {USE_INFINITE_CONTACTS_LIST && totalFromApi > 0 && (
+                    <span className="ml-2 text-xs text-gray-500">
+                      (Page {currentDisplayPage} of {contactsMeta?.total_pages || 1} • {totalFromApi} total)
+                    </span>
+                  )}
+                </p>
               </div>
 
               <div className="flex flex-wrap gap-3 mt-4 sm:mt-0">
@@ -1802,7 +1846,18 @@ function Contact() {
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {sortedContacts.length === 0 ? (
+                          {/* Top spacer for windowed scrolling */}
+                          {(USE_INFINITE_CONTACTS_LIST && topSpacerHeight > 0) && (
+                            <tr aria-hidden="true">
+                              <td colSpan="7" className="p-0">
+                                <div
+                                  style={{ height: topSpacerHeight, minHeight: topSpacerHeight }}
+                                  className="pointer-events-none"
+                                />
+                              </td>
+                            </tr>
+                          )}
+                          {sortedContacts.length === 0 && !contactsLoading ? (
                           <tr>
                             <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
                               {showFavoritesOnly
@@ -1823,7 +1878,7 @@ function Contact() {
                                 />
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {idx + 1}
+                                {itemsBeforeCurrentPage + idx + 1}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
@@ -1911,21 +1966,22 @@ function Contact() {
                             </tr>
                           )}
 
-                          {(USE_INFINITE_CONTACTS_LIST && contactsSpacerHeight > 0) && (
+                          {/* Bottom spacer for windowed scrolling */}
+                          {(USE_INFINITE_CONTACTS_LIST && bottomSpacerHeight > 0) && (
                             <tr aria-hidden="true">
                               <td colSpan="7" className="p-0">
                                 <div
-                                  style={{ height: contactsSpacerHeight, minHeight: contactsSpacerHeight }}
+                                  style={{ height: bottomSpacerHeight, minHeight: bottomSpacerHeight }}
                                   className="pointer-events-none"
                                 />
                               </td>
                             </tr>
                           )}
 
-                          {(USE_INFINITE_CONTACTS_LIST && !contactsLoading && !contactsMeta?.has_more && contactsSpacerHeight === 0 && sortedContacts.length > 0) && (
+                          {(USE_INFINITE_CONTACTS_LIST && !contactsLoading && currentDisplayPage >= (contactsMeta?.total_pages || 1) && sortedContacts.length > 0) && (
                             <tr>
                               <td colSpan="7" className="px-6 py-3 text-center text-xs text-gray-400">
-                                End of contacts
+                                End of contacts (Page {currentDisplayPage} of {contactsMeta?.total_pages || 1})
                               </td>
                             </tr>
                           )}
