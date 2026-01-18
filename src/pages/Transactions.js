@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
-import { FiDownload, FiSearch, FiFilter, FiChevronDown, FiChevronUp, FiFileText, FiCalendar, FiDollarSign, FiRefreshCw } from 'react-icons/fi';
+import { FiDownload, FiFileText, FiCalendar, FiDollarSign, FiRefreshCw } from 'react-icons/fi';
 import moment from 'moment';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
+import Pagination from '../component/Pagination';
 
 const Transactions = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -13,19 +14,23 @@ const Transactions = () => {
     const saved = localStorage.getItem('sidebarMinimized');
     return saved ? JSON.parse(saved) : false;
   });
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterType, setFilterType] = useState('all');
-  const [showFilters, setShowFilters] = useState(false);
-  const [sortBy, setSortBy] = useState('date');
-  const [sortOrder, setSortOrder] = useState('desc');
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tokens, setTokens] = useState(null);
-  const [lastId, setLastId] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalCredit, setTotalCredit] = useState(0);
+  const [totalDebit, setTotalDebit] = useState(0);
+
+  // Server-side filters (payload options)
+  const [fromDate, setFromDate] = useState(() => moment().subtract(30, 'days').format('YYYY-MM-DD'));
+  const [toDate, setToDate] = useState(() => moment().format('YYYY-MM-DD'));
+  const [transactionType, setTransactionType] = useState('all'); // template send | wallet topup | project renewal | all
+  const [entryType, setEntryType] = useState('all'); // Credit=1, Debit=0, all
+  const [projectFilter, setProjectFilter] = useState('selected'); // selected | all
 
   useEffect(() => {
     localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -63,21 +68,40 @@ const Transactions = () => {
   }, []);
 
   // Fetch transactions from API
-  const fetchTransactions = async (resetData = false) => {
+  const fetchTransactions = async (page = currentPage, limit = pageSize, overrides = {}) => {
     if (!tokens?.token || !tokens?.username) return;
 
     try {
       setLoading(true);
       setError('');
 
-      const projectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
-      if (!projectId) {
+      const effectiveFromDate = overrides.fromDate ?? fromDate;
+      const effectiveToDate = overrides.toDate ?? toDate;
+      const effectiveTransactionType = overrides.transactionType ?? transactionType;
+      const effectiveEntryType = overrides.entryType ?? entryType;
+      const effectiveProjectFilter = overrides.projectFilter ?? projectFilter;
+
+      const selectedProjectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
+      const allProjectIds = (tokens.projects || []).map(p => p?.project_id).filter(Boolean);
+
+      const projectIds =
+        effectiveProjectFilter === 'all'
+          ? allProjectIds
+          : (selectedProjectId ? [selectedProjectId] : []);
+
+      if (!projectIds.length) {
         setError('No project selected');
         return;
       }
 
       const payload = {
-        last_id: resetData ? 0 : lastId
+        page_no: page,
+        limit: limit,
+        project_ids: projectIds,
+        ...(effectiveFromDate ? { from_date: effectiveFromDate } : {}),
+        ...(effectiveToDate ? { to_date: effectiveToDate } : {}),
+        ...(effectiveTransactionType !== 'all' ? { transaction_type: effectiveTransactionType } : {}),
+        ...(effectiveEntryType !== 'all' ? { type: effectiveEntryType } : {})
       };
 
       console.log('📤 Fetching transactions:', payload);
@@ -107,15 +131,23 @@ const Transactions = () => {
       const responseData = response.data;
       const newTransactions = responseData.data || [];
       
-      if (resetData) {
-        setTransactions(newTransactions);
-      } else {
-        setTransactions(prev => [...prev, ...newTransactions]);
-      }
+      setTransactions(newTransactions);
+
+      // Totals from API
+      setTotalCredit(parseFloat(responseData.total_credit || 0));
+      setTotalDebit(parseFloat(responseData.total_debit || 0));
       
-      setLastId(responseData.last_id || 0);
-      setTotalCount(responseData.count || 0);
-      setHasMore(newTransactions.length > 0);
+      // Extract pagination metadata
+      if (responseData.meta) {
+        setCurrentPage(responseData.meta.page_no || page);
+        setPageSize(responseData.meta.limit || limit);
+        setTotalPages(responseData.meta.total_pages || 1);
+        setTotalRecords(responseData.meta.total_records || 0);
+      } else {
+        // Fallback if meta is not available
+        setTotalRecords(newTransactions.length);
+        setTotalPages(1);
+      }
 
     } catch (error) {
       console.error('Failed to fetch transactions:', error);
@@ -128,56 +160,33 @@ const Transactions = () => {
   // Load transactions when tokens are available
   useEffect(() => {
     if (tokens?.token && tokens?.username) {
-      fetchTransactions(true);
+      fetchTransactions(1, pageSize);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokens]);
 
+  // Fetch transactions when page or page size changes
+  useEffect(() => {
+    if (tokens?.token && tokens?.username) {
+      fetchTransactions(currentPage, pageSize);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, pageSize]);
+
   // Transform API data to match component expectations
-  const transformedTransactions = transactions.map(transaction => ({
+  const transformedTransactions = transactions.map((transaction, index) => ({
     id: transaction.transaction_id,
     date: transaction.create_date,
     type: transaction.type ? 'Credit' : 'Debit',
     description: transaction.transaction_type,
     amount: parseFloat(transaction.amount),
-    status: 'Completed', // API doesn't provide status, assuming completed
-    paymentMethod: transaction.transaction_type,
     invoiceNumber: transaction.transaction_id,
     remark: transaction.remark,
-    create_by: transaction.create_by
+    create_by: transaction.create_by,
+    payment_details: transaction.payment_details,
+    message_details: transaction.message_details,
+    serialNumber: (currentPage - 1) * pageSize + index + 1
   }));
-
-  // Filter and sort transactions
-  const filteredTransactions = transformedTransactions
-    .filter(transaction => {
-      const matchesSearch = 
-        transaction.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (transaction.remark && transaction.remark.toLowerCase().includes(searchTerm.toLowerCase()));
-      
-      const matchesStatus = filterStatus === 'all' || transaction.status.toLowerCase() === filterStatus.toLowerCase();
-      const matchesType = filterType === 'all' || transaction.type.toLowerCase() === filterType.toLowerCase();
-      
-      return matchesSearch && matchesStatus && matchesType;
-    })
-    .sort((a, b) => {
-      let comparison = 0;
-      switch (sortBy) {
-        case 'date':
-          comparison = new Date(a.date) - new Date(b.date);
-          break;
-        case 'amount':
-          comparison = a.amount - b.amount;
-          break;
-        case 'id':
-          comparison = a.id.localeCompare(b.id);
-          break;
-        default:
-          comparison = 0;
-      }
-      return sortOrder === 'asc' ? comparison : -comparison;
-    });
 
   // Generate PDF Invoice
   const generatePDF = (transaction) => {
@@ -204,14 +213,14 @@ const Transactions = () => {
     doc.text('Transaction ID:', 20, 60);
     doc.text('Date:', 20, 66);
     doc.text('Type:', 20, 72);
-    doc.text('Status:', 20, 78);
+    doc.text('Transaction Type:', 20, 78);
     
     doc.setTextColor(0, 0, 0);
     doc.setFont(undefined, 'bold');
     doc.text(transaction.id, 70, 60);
     doc.text(moment(transaction.date).format('MMMM DD, YYYY HH:mm'), 70, 66);
     doc.text(transaction.type, 70, 72);
-    doc.text(transaction.status, 70, 78);
+    doc.text(transaction.description, 70, 78);
     
     // Bill To Section (if create_by exists)
     if (transaction.create_by) {
@@ -228,6 +237,100 @@ const Transactions = () => {
     // Line
     doc.setDrawColor(200, 200, 200);
     doc.line(20, 85, 190, 85);
+    
+    let currentY = 90;
+    
+    // Payment Details Section (for wallet topup)
+    if (transaction.payment_details) {
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text('Payment Details', 20, currentY);
+      currentY += 8;
+      
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text('Payment ID:', 20, currentY);
+      doc.text('Name:', 20, currentY + 6);
+      doc.text('Email:', 20, currentY + 12);
+      doc.text('Mobile:', 20, currentY + 18);
+      doc.text('UTR:', 20, currentY + 24);
+      doc.text('Payment Date:', 20, currentY + 30);
+      
+      doc.setTextColor(0, 0, 0);
+      doc.setFont(undefined, 'bold');
+      doc.text(transaction.payment_details.payment_id || 'N/A', 70, currentY);
+      doc.text(transaction.payment_details.name || 'N/A', 70, currentY + 6);
+      doc.text(transaction.payment_details.email || 'N/A', 70, currentY + 12);
+      doc.text(transaction.payment_details.mobile || 'N/A', 70, currentY + 18);
+      doc.text(transaction.payment_details.utr || 'N/A', 70, currentY + 24);
+      doc.text(
+        transaction.payment_details.create_date 
+          ? moment(transaction.payment_details.create_date).format('MMMM DD, YYYY HH:mm')
+          : 'N/A',
+        70,
+        currentY + 30
+      );
+      
+      currentY += 40;
+      doc.setDrawColor(200, 200, 200);
+      doc.line(20, currentY, 190, currentY);
+      currentY += 10;
+    }
+    
+    // Message Details Section (for template send)
+    if (transaction.message_details) {
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text('Message Details', 20, currentY);
+      currentY += 8;
+      
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text('Unique ID:', 20, currentY);
+      doc.text('WAMID:', 20, currentY + 6);
+      doc.text('Project ID:', 20, currentY + 12);
+      doc.text('Message By:', 20, currentY + 18);
+      doc.text('Number:', 20, currentY + 24);
+      doc.text('Template Name:', 20, currentY + 30);
+      doc.text('Language:', 20, currentY + 36);
+      doc.text('Category:', 20, currentY + 42);
+      doc.text('Message Date:', 20, currentY + 48);
+      
+      doc.setTextColor(0, 0, 0);
+      doc.setFont(undefined, 'bold');
+      doc.text(transaction.message_details.unique_id || 'N/A', 70, currentY);
+      doc.text(
+        transaction.message_details.wamid 
+          ? (transaction.message_details.wamid.length > 40 
+              ? transaction.message_details.wamid.substring(0, 40) + '...' 
+              : transaction.message_details.wamid)
+          : 'N/A',
+        70,
+        currentY + 6
+      );
+      doc.text(transaction.message_details.project_id || 'N/A', 70, currentY + 12);
+      doc.text(transaction.message_details.message_by || 'N/A', 70, currentY + 18);
+      doc.text(transaction.message_details.number || 'N/A', 70, currentY + 24);
+      doc.text(transaction.message_details.template_name || 'N/A', 70, currentY + 30);
+      doc.text(transaction.message_details.language_code || 'N/A', 70, currentY + 36);
+      doc.text(transaction.message_details.category || 'N/A', 70, currentY + 42);
+      doc.text(
+        transaction.message_details.create_date 
+          ? moment(transaction.message_details.create_date).format('MMMM DD, YYYY HH:mm')
+          : 'N/A',
+        70,
+        currentY + 48
+      );
+      
+      currentY += 58;
+      doc.setDrawColor(200, 200, 200);
+      doc.line(20, currentY, 190, currentY);
+      currentY += 10;
+    }
     
     // Transaction Details Table
     const tableData = [
@@ -246,7 +349,7 @@ const Transactions = () => {
     ];
     
     autoTable(doc, {
-      startY: 90,
+      startY: currentY,
       head: [tableData[0]],
       body: [tableData[1]],
       theme: 'striped',
@@ -278,37 +381,16 @@ const Transactions = () => {
     doc.setFontSize(8);
     doc.setFont(undefined, 'normal');
     doc.setTextColor(150, 150, 150);
-    doc.text('Thank you for your business!', 20, 280);
-    doc.text('This is a computer-generated receipt.', 20, 285);
+    const pageHeight = doc.internal.pageSize.height;
+    doc.text('Thank you for your business!', 20, pageHeight - 20);
+    doc.text('This is a computer-generated receipt.', 20, pageHeight - 15);
     
     // Save the PDF
     doc.save(`Transaction-${transaction.id}.pdf`);
   };
 
-  const handleSort = (field) => {
-    if (sortBy === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortBy(field);
-      setSortOrder('asc');
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status.toLowerCase()) {
-      case 'completed':
-        return 'bg-green-100 text-green-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'failed':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   const getTransactionTypeDisplay = (transactionType) => {
-    return transactionType.split(' ').map(word => 
+    return (transactionType || '').split(' ').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
   };
@@ -319,23 +401,54 @@ const Transactions = () => {
       : 'text-red-600 font-semibold';
   };
 
-  const totalAmount = filteredTransactions.reduce((sum, t) => {
-    return sum + (t.type === 'Credit' ? t.amount : -t.amount);
-  }, 0);
-
   // Refresh transactions
   const handleRefresh = () => {
     if (tokens?.token && tokens?.username) {
-      setLastId(0);
-      fetchTransactions(true);
+      setCurrentPage(1);
+      fetchTransactions(1, pageSize);
     }
   };
 
-  // Load more transactions
-  const loadMoreTransactions = () => {
-    if (hasMore && !loading && tokens?.token && tokens?.username) {
-      fetchTransactions(false);
+  const handleApplyFilters = () => {
+    if (tokens?.token && tokens?.username) {
+      setCurrentPage(1);
+      fetchTransactions(1, pageSize);
     }
+  };
+
+  const handleResetFilters = () => {
+    const newFromDate = moment().subtract(30, 'days').format('YYYY-MM-DD');
+    const newToDate = moment().format('YYYY-MM-DD');
+    const newTransactionType = 'all';
+    const newEntryType = 'all';
+    const newProjectFilter = 'selected';
+
+    setFromDate(newFromDate);
+    setToDate(newToDate);
+    setTransactionType(newTransactionType);
+    setEntryType(newEntryType);
+    setProjectFilter(newProjectFilter);
+    if (tokens?.token && tokens?.username) {
+      setCurrentPage(1);
+      fetchTransactions(1, pageSize, {
+        fromDate: newFromDate,
+        toDate: newToDate,
+        transactionType: newTransactionType,
+        entryType: newEntryType,
+        projectFilter: newProjectFilter
+      });
+    }
+  };
+
+  // Handle page change
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
+
+  // Handle page size change
+  const handlePageSizeChange = (newPageSize) => {
+    setPageSize(newPageSize);
+    setCurrentPage(1); // Reset to first page when changing page size
   };
 
   return (
@@ -383,8 +496,8 @@ const Transactions = () => {
             <div className="bg-white rounded-xl shadow p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Total Transactions</p>
-                  <p className="text-2xl font-bold text-gray-900">{totalCount || filteredTransactions.length}</p>
+                  <p className="text-sm text-gray-600 mb-1">Total Records</p>
+                  <p className="text-2xl font-bold text-gray-900">{totalRecords || transformedTransactions.length}</p>
                 </div>
                 <div className="bg-indigo-100 rounded-lg p-3">
                   <FiFileText className="text-indigo-600" size={24} />
@@ -394,10 +507,8 @@ const Transactions = () => {
             <div className="bg-white rounded-xl shadow p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Net Balance</p>
-                  <p className={`text-2xl font-bold ${totalAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ₹{Math.abs(totalAmount).toFixed(2)}
-                  </p>
+                  <p className="text-sm text-gray-600 mb-1">Total Credit</p>
+                  <p className="text-2xl font-bold text-green-600">₹{Number(totalCredit || 0).toFixed(2)}</p>
                 </div>
                 <div className="bg-green-100 rounded-lg p-3">
                   <FiDollarSign className="text-green-600" size={24} />
@@ -407,12 +518,8 @@ const Transactions = () => {
             <div className="bg-white rounded-xl shadow p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">This Month</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {filteredTransactions.filter(t => 
-                      moment(t.date).isSame(moment(), 'month')
-                    ).length}
-                  </p>
+                  <p className="text-sm text-gray-600 mb-1">Total Debit</p>
+                  <p className="text-2xl font-bold text-red-600">₹{Number(totalDebit || 0).toFixed(2)}</p>
                 </div>
                 <div className="bg-blue-100 rounded-lg p-3">
                   <FiCalendar className="text-blue-600" size={24} />
@@ -422,86 +529,81 @@ const Transactions = () => {
           </div>
           )}
 
-          {/* Search and Filter Section */}
+          {/* Filters (server-side; maps to API payload) */}
           {!loading && !error && (
             <div className="bg-white rounded-xl shadow p-4 md:p-6 mb-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              {/* Search */}
-              <div className="flex-1 relative">
-                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-                <input
-                  type="text"
-                  placeholder="Search by ID, description, or invoice number..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-              </div>
-
-              {/* Filter Toggle */}
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <FiFilter size={20} />
-                <span className="hidden sm:inline">Filters</span>
-                {showFilters ? <FiChevronUp /> : <FiChevronDown />}
-              </button>
-            </div>
-
-            {/* Filter Options */}
-            {showFilters && (
-              <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">From Date</label>
+                  <input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">To Date</label>
+                  <input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Transaction Type</label>
                   <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
+                    value={transactionType}
+                    onChange={(e) => setTransactionType(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   >
-                    <option value="all">All Status</option>
-                    <option value="completed">Completed</option>
-                    <option value="pending">Pending</option>
-                    <option value="failed">Failed</option>
+                    <option value="all">All</option>
+                    <option value="template send">Template Send</option>
+                    <option value="wallet topup">Wallet Topup</option>
+                    <option value="project renewal">Project Renewal</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Entry Type</label>
                   <select
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value)}
+                    value={entryType}
+                    onChange={(e) => setEntryType(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   >
-                    <option value="all">All Types</option>
-                    <option value="credit">Credit</option>
-                    <option value="debit">Debit</option>
+                    <option value="all">All</option>
+                    <option value="1">Credit</option>
+                    <option value="0">Debit</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Projects</label>
                   <select
-                    value={sortBy}
-                    onChange={(e) => handleSort(e.target.value)}
+                    value={projectFilter}
+                    onChange={(e) => setProjectFilter(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   >
-                    <option value="date">Date</option>
-                    <option value="amount">Amount</option>
-                    <option value="id">Transaction ID</option>
+                    <option value="selected">Selected Project</option>
+                    <option value="all">All Projects</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Order</label>
-                  <select
-                    value={sortOrder}
-                    onChange={(e) => setSortOrder(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                <div className="flex items-end gap-2">
+                  <button
+                    onClick={handleApplyFilters}
+                    disabled={loading}
+                    className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    <option value="desc">Descending</option>
-                    <option value="asc">Ascending</option>
-                  </select>
+                    Apply
+                  </button>
+                  <button
+                    onClick={handleResetFilters}
+                    disabled={loading}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Reset
+                  </button>
                 </div>
               </div>
-            )}
             </div>
           )}
 
@@ -542,35 +644,26 @@ const Transactions = () => {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th 
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                      onClick={() => handleSort('id')}
-                    >
-                      Transaction ID
-                      {sortBy === 'id' && (sortOrder === 'asc' ? ' ↑' : ' ↓')}
-                    </th>
-                    <th 
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                      onClick={() => handleSort('date')}
-                    >
-                      Date
-                      {sortBy === 'date' && (sortOrder === 'asc' ? ' ↑' : ' ↓')}
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      S.No
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Description
+                      Transaction ID
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Transaction Type
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Type
                     </th>
-                    <th 
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                      onClick={() => handleSort('amount')}
-                    >
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Amount
-                      {sortBy === 'amount' && (sortOrder === 'asc' ? ' ↑' : ' ↓')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Details
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Receipt
@@ -578,15 +671,18 @@ const Transactions = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredTransactions.length === 0 ? (
+                  {transformedTransactions.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
+                      <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
                         No transactions found
                       </td>
                     </tr>
                   ) : (
-                    filteredTransactions.map((transaction) => (
+                    transformedTransactions.map((transaction) => (
                       <tr key={transaction.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{transaction.serialNumber}</div>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">{transaction.id}</div>
                           <div className="text-xs text-gray-500">{transaction.invoiceNumber}</div>
@@ -601,12 +697,6 @@ const Transactions = () => {
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-sm text-gray-900">{getTransactionTypeDisplay(transaction.description)}</div>
-                          {transaction.remark && (
-                            <div className="text-xs text-gray-500">{transaction.remark}</div>
-                          )}
-                          {transaction.create_by && (
-                            <div className="text-xs text-blue-600">By: {transaction.create_by.username}</div>
-                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={getTypeColor(transaction.type)}>
@@ -618,10 +708,45 @@ const Transactions = () => {
                             {transaction.type === 'Credit' ? '+' : '-'}₹{transaction.amount.toFixed(2)}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(transaction.status)}`}>
-                            {transaction.status}
-                          </span>
+                        <td className="px-6 py-4">
+                          {/* Payment Details for wallet topup */}
+                          {transaction.payment_details && (
+                            <div className="space-y-1">
+                              <div className="text-xs font-semibold text-indigo-600">Payment Details:</div>
+                              <div className="text-xs text-gray-600">ID: {transaction.payment_details.payment_id || 'N/A'}</div>
+                              <div className="text-xs text-gray-600">UTR: {transaction.payment_details.utr || 'N/A'}</div>
+                              <div className="text-xs text-gray-600">Name: {transaction.payment_details.name || 'N/A'}</div>
+                              {transaction.payment_details.create_date && (
+                                <div className="text-xs text-gray-500">
+                                  {moment(transaction.payment_details.create_date).format('MMM DD, YYYY')}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {/* Message Details for template send */}
+                          {transaction.message_details && (
+                            <div className="space-y-1">
+                              <div className="text-xs font-semibold text-indigo-600">Message Details:</div>
+                              <div className="text-xs text-gray-600">Template: {transaction.message_details.template_name || 'N/A'}</div>
+                              <div className="text-xs text-gray-600">Number: {transaction.message_details.number || 'N/A'}</div>
+                              <div className="text-xs text-gray-600">Category: {transaction.message_details.category || 'N/A'}</div>
+                              <div className="text-xs text-gray-600">Language: {transaction.message_details.language_code || 'N/A'}</div>
+                              {transaction.message_details.create_date && (
+                                <div className="text-xs text-gray-500">
+                                  {moment(transaction.message_details.create_date).format('MMM DD, YYYY')}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {/* Remark and Created By */}
+                          {transaction.remark && (
+                            <div className="text-xs text-gray-600 mt-1">Remark: {transaction.remark}</div>
+                          )}
+                          {transaction.create_by && (
+                            <div className="text-xs text-blue-600 mt-1">
+                              By: {transaction.create_by.username || 'N/A'}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <button
@@ -641,30 +766,70 @@ const Transactions = () => {
 
             {/* Mobile Cards */}
             <div className="md:hidden divide-y divide-gray-200">
-              {filteredTransactions.length === 0 ? (
+              {transformedTransactions.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
                   No transactions found
                 </div>
               ) : (
-                filteredTransactions.map((transaction) => (
+                transformedTransactions.map((transaction) => (
                   <div key={transaction.id} className="p-4 hover:bg-gray-50 transition-colors">
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-semibold text-gray-900">{(transaction.id).slice(6)}</span>
-                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(transaction.status)}`}>
-                            {transaction.status}
-                          </span>
+                          <span className="text-xs font-semibold text-gray-500">#{transaction.serialNumber}</span>
+                          <span className="text-sm font-semibold text-gray-900">{transaction.id}</span>
                         </div>
                         <p className="text-xs text-gray-500">{transaction.invoiceNumber}</p>
                       </div>
                       <span className={getTypeColor(transaction.type)}>
-                        {transaction.type === 'Credit' ? '' : ''}₹{transaction.amount.toFixed(2)}
+                        {transaction.type === 'Credit' ? '+' : '-'}₹{transaction.amount.toFixed(2)}
                       </span>
                     </div>
                     <p className="text-sm text-gray-700 mb-2">{getTransactionTypeDisplay(transaction.description)}</p>
+                    
+                    {/* Payment Details for wallet topup */}
+                    {transaction.payment_details && (
+                      <div className="bg-indigo-50 rounded-lg p-3 mb-2">
+                        <div className="text-xs font-semibold text-indigo-600 mb-1">Payment Details:</div>
+                        <div className="text-xs text-gray-700">Payment ID: {transaction.payment_details.payment_id || 'N/A'}</div>
+                        <div className="text-xs text-gray-700">UTR: {transaction.payment_details.utr || 'N/A'}</div>
+                        <div className="text-xs text-gray-700">Name: {transaction.payment_details.name || 'N/A'}</div>
+                        <div className="text-xs text-gray-700">Email: {transaction.payment_details.email || 'N/A'}</div>
+                        <div className="text-xs text-gray-700">Mobile: {transaction.payment_details.mobile || 'N/A'}</div>
+                        {transaction.payment_details.create_date && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Payment Date: {moment(transaction.payment_details.create_date).format('MMM DD, YYYY hh:mm A')}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Message Details for template send */}
+                    {transaction.message_details && (
+                      <div className="bg-indigo-50 rounded-lg p-3 mb-2">
+                        <div className="text-xs font-semibold text-indigo-600 mb-1">Message Details:</div>
+                        <div className="text-xs text-gray-700">Template: {transaction.message_details.template_name || 'N/A'}</div>
+                        <div className="text-xs text-gray-700">Number: {transaction.message_details.number || 'N/A'}</div>
+                        <div className="text-xs text-gray-700">Category: {transaction.message_details.category || 'N/A'}</div>
+                        <div className="text-xs text-gray-700">Language: {transaction.message_details.language_code || 'N/A'}</div>
+                        <div className="text-xs text-gray-700">Message By: {transaction.message_details.message_by || 'N/A'}</div>
+                        {transaction.message_details.wamid && (
+                          <div className="text-xs text-gray-600 break-all mt-1">
+                            WAMID: {transaction.message_details.wamid.length > 30 
+                              ? transaction.message_details.wamid.substring(0, 30) + '...' 
+                              : transaction.message_details.wamid}
+                          </div>
+                        )}
+                        {transaction.message_details.create_date && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Message Date: {moment(transaction.message_details.create_date).format('MMM DD, YYYY hh:mm A')}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
                     {transaction.remark && (
-                      <p className="text-xs text-gray-500 mb-2">{transaction.remark}</p>
+                      <p className="text-xs text-gray-500 mb-2">Remark: {transaction.remark}</p>
                     )}
                     <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-3">
                       <span>{moment(transaction.date).format('MMM DD, YYYY hh:mm A')}</span>
@@ -691,22 +856,19 @@ const Transactions = () => {
             </div>
           )}
 
-          {/* Pagination Info and Load More */}
-          {!loading && !error && filteredTransactions.length > 0 && (
-            <div className="mt-4 text-center">
-              <div className="text-sm text-gray-600 mb-4">
-                Showing {filteredTransactions.length} of {totalCount || transactions.length} transactions
-              </div>
-              {hasMore && (
-                <button
-                  onClick={loadMoreTransactions}
-                  disabled={loading}
-                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loading ? 'Loading...' : 'Load More'}
-                </button>
-              )}
-            </div>
+          {/* Pagination */}
+          {!loading && !error && transactions.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalRecords={totalRecords}
+              pageSize={pageSize}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+              pageSizeOptions={[10, 20, 50, 100]}
+              showPageSizeSelector={true}
+              showGoToPage={true}
+            />
           )}
         </div>
       </div>

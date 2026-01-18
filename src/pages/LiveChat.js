@@ -5,7 +5,8 @@ import ChatList from './ChatList';
 import Conversation from './Conversation';
 import { dbHelper } from './db';
 import { socketManager } from './socket';
-import { FiArrowLeft, FiSun, FiMoon } from 'react-icons/fi';
+import { FiArrowLeft, FiSun, FiMoon, FiLock } from 'react-icons/fi';
+import logo from '../logo.svg';
 import { Header, Sidebar } from '../component/Menu';
 function LiveChat() {
     const navigate = useNavigate();
@@ -455,9 +456,45 @@ function LiveChat() {
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
                                 transition={{ duration: 0.3 }}
-                                className="flex-1 hidden md:flex items-center justify-center text-gray-400 dark:text-gray-500"
+                                className="flex-1 hidden md:flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 text-center p-8"
                             >
-                                Select a chat to start messaging
+                                <motion.div
+                                    initial={{ scale: 0.8, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    transition={{ delay: 0.2, duration: 0.5 }}
+                                    className="mb-8 p-6 bg-white dark:bg-gray-800 rounded-full shadow-xl relative overflow-hidden"
+                                >
+                                    <div className="absolute inset-0 bg-green-500/10 dark:bg-green-500/20 blur-xl rounded-full"></div>
+                                    <img src={logo} alt="1Chat Logo" className="w-20 h-20 object-contain relative z-10" />
+                                </motion.div>
+
+                                <motion.h2
+                                    initial={{ y: 20, opacity: 0 }}
+                                    animate={{ y: 0, opacity: 1 }}
+                                    transition={{ delay: 0.3 }}
+                                    className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-3"
+                                >
+                                    Welcome to 1Chat
+                                </motion.h2>
+
+                                <motion.p
+                                    initial={{ y: 20, opacity: 0 }}
+                                    animate={{ y: 0, opacity: 1 }}
+                                    transition={{ delay: 0.4 }}
+                                    className="text-gray-500 dark:text-gray-400 max-w-md text-lg leading-relaxed"
+                                >
+                                    Select a conversation from the sidebar to start messaging, or create a new one to connect with your contacts.
+                                </motion.p>
+
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ delay: 0.6 }}
+                                    className="mt-12 flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-full"
+                                >
+                                    <FiLock className="w-4 h-4" />
+                                    <span>End-to-end encrypted connection</span>
+                                </motion.div>
                             </motion.div>
                         )}
                     </AnimatePresence>
