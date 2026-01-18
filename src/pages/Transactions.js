@@ -189,7 +189,14 @@ const Transactions = () => {
   }));
 
   // Generate PDF Invoice
-  const generatePDF = (transaction) => {
+  const generatePDF = (transformedTransaction) => {
+    // Find the original transaction from the transactions array
+    const originalTransaction = transactions.find(t => t.transaction_id === transformedTransaction.id);
+    if (!originalTransaction) {
+      console.error('Original transaction not found');
+      return;
+    }
+
     const doc = new jsPDF();
     
     // Company/Service Info
@@ -217,21 +224,21 @@ const Transactions = () => {
     
     doc.setTextColor(0, 0, 0);
     doc.setFont(undefined, 'bold');
-    doc.text(transaction.id, 70, 60);
-    doc.text(moment(transaction.date).format('MMMM DD, YYYY HH:mm'), 70, 66);
-    doc.text(transaction.type, 70, 72);
-    doc.text(transaction.description, 70, 78);
+    doc.text(transformedTransaction.id, 70, 60);
+    doc.text(moment(transformedTransaction.date).format('MMMM DD, YYYY HH:mm'), 70, 66);
+    doc.text(transformedTransaction.type, 70, 72);
+    doc.text(transformedTransaction.description, 70, 78);
     
     // Bill To Section (if create_by exists)
-    if (transaction.create_by) {
+    if (transformedTransaction.create_by) {
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
       doc.text('Created By:', 140, 60);
       doc.setTextColor(0, 0, 0);
       doc.setFont(undefined, 'normal');
-      doc.text(transaction.create_by.username || 'N/A', 140, 66);
-      doc.text(transaction.create_by.email || 'N/A', 140, 72);
-      doc.text(transaction.create_by.mobile || 'N/A', 140, 78);
+      doc.text(transformedTransaction.create_by.username || 'N/A', 140, 66);
+      doc.text(transformedTransaction.create_by.email || 'N/A', 140, 72);
+      doc.text(transformedTransaction.create_by.mobile || 'N/A', 140, 78);
     }
     
     // Line
@@ -241,7 +248,7 @@ const Transactions = () => {
     let currentY = 90;
     
     // Payment Details Section (for wallet topup)
-    if (transaction.payment_details) {
+    if (originalTransaction.payment_details) {
       doc.setFontSize(12);
       doc.setFont(undefined, 'bold');
       doc.setTextColor(0, 0, 0);
@@ -260,14 +267,14 @@ const Transactions = () => {
       
       doc.setTextColor(0, 0, 0);
       doc.setFont(undefined, 'bold');
-      doc.text(transaction.payment_details.payment_id || 'N/A', 70, currentY);
-      doc.text(transaction.payment_details.name || 'N/A', 70, currentY + 6);
-      doc.text(transaction.payment_details.email || 'N/A', 70, currentY + 12);
-      doc.text(transaction.payment_details.mobile || 'N/A', 70, currentY + 18);
-      doc.text(transaction.payment_details.utr || 'N/A', 70, currentY + 24);
+      doc.text(originalTransaction.payment_details.payment_id || 'N/A', 70, currentY);
+      doc.text(originalTransaction.payment_details.name || 'N/A', 70, currentY + 6);
+      doc.text(originalTransaction.payment_details.email || 'N/A', 70, currentY + 12);
+      doc.text(originalTransaction.payment_details.mobile || 'N/A', 70, currentY + 18);
+      doc.text(originalTransaction.payment_details.utr || 'N/A', 70, currentY + 24);
       doc.text(
-        transaction.payment_details.create_date 
-          ? moment(transaction.payment_details.create_date).format('MMMM DD, YYYY HH:mm')
+        originalTransaction.payment_details.create_date 
+          ? moment(originalTransaction.payment_details.create_date).format('MMMM DD, YYYY HH:mm')
           : 'N/A',
         70,
         currentY + 30
@@ -280,7 +287,7 @@ const Transactions = () => {
     }
     
     // Message Details Section (for template send)
-    if (transaction.message_details) {
+    if (originalTransaction.message_details) {
       doc.setFontSize(12);
       doc.setFont(undefined, 'bold');
       doc.setTextColor(0, 0, 0);
@@ -302,25 +309,25 @@ const Transactions = () => {
       
       doc.setTextColor(0, 0, 0);
       doc.setFont(undefined, 'bold');
-      doc.text(transaction.message_details.unique_id || 'N/A', 70, currentY);
+      doc.text(originalTransaction.message_details.unique_id || 'N/A', 70, currentY);
       doc.text(
-        transaction.message_details.wamid 
-          ? (transaction.message_details.wamid.length > 40 
-              ? transaction.message_details.wamid.substring(0, 40) + '...' 
-              : transaction.message_details.wamid)
+        originalTransaction.message_details.wamid 
+          ? (originalTransaction.message_details.wamid.length > 40 
+              ? originalTransaction.message_details.wamid.substring(0, 40) + '...' 
+              : originalTransaction.message_details.wamid)
           : 'N/A',
         70,
         currentY + 6
       );
-      doc.text(transaction.message_details.project_id || 'N/A', 70, currentY + 12);
-      doc.text(transaction.message_details.message_by || 'N/A', 70, currentY + 18);
-      doc.text(transaction.message_details.number || 'N/A', 70, currentY + 24);
-      doc.text(transaction.message_details.template_name || 'N/A', 70, currentY + 30);
-      doc.text(transaction.message_details.language_code || 'N/A', 70, currentY + 36);
-      doc.text(transaction.message_details.category || 'N/A', 70, currentY + 42);
+      doc.text(originalTransaction.message_details.project_id || 'N/A', 70, currentY + 12);
+      doc.text(originalTransaction.message_details.message_by || 'N/A', 70, currentY + 18);
+      doc.text(originalTransaction.message_details.number || 'N/A', 70, currentY + 24);
+      doc.text(originalTransaction.message_details.template_name || 'N/A', 70, currentY + 30);
+      doc.text(originalTransaction.message_details.language_code || 'N/A', 70, currentY + 36);
+      doc.text(originalTransaction.message_details.category || 'N/A', 70, currentY + 42);
       doc.text(
-        transaction.message_details.create_date 
-          ? moment(transaction.message_details.create_date).format('MMMM DD, YYYY HH:mm')
+        originalTransaction.message_details.create_date 
+          ? moment(originalTransaction.message_details.create_date).format('MMMM DD, YYYY HH:mm')
           : 'N/A',
         70,
         currentY + 48
@@ -341,10 +348,10 @@ const Transactions = () => {
         'Remark'
       ],
       [
-        transaction.description,
-        transaction.type,
-        `₹${transaction.amount.toFixed(2)}`,
-        transaction.remark || 'N/A'
+        transformedTransaction.description,
+        transformedTransaction.type,
+        `₹${transformedTransaction.amount.toFixed(2)}`,
+        transformedTransaction.remark || 'N/A'
       ]
     ];
     
@@ -375,7 +382,7 @@ const Transactions = () => {
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
     doc.text('Total Amount:', 140, finalY);
-    doc.text(`₹${transaction.amount.toFixed(2)}`, 180, finalY);
+    doc.text(`₹${transformedTransaction.amount.toFixed(2)}`, 180, finalY);
     
     // Footer
     doc.setFontSize(8);
@@ -386,7 +393,7 @@ const Transactions = () => {
     doc.text('This is a computer-generated receipt.', 20, pageHeight - 15);
     
     // Save the PDF
-    doc.save(`Transaction-${transaction.id}.pdf`);
+    doc.save(`Transaction-${transformedTransaction.id}.pdf`);
   };
 
   const getTransactionTypeDisplay = (transactionType) => {
