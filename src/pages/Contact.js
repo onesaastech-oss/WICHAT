@@ -5,7 +5,6 @@ import Pagination from '../component/Pagination';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import { useNavigate } from 'react-router-dom';
-import { contactDbHelper } from './db';
 import { useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
 import ExcelUpload from './Campaign/components/AudienceType/ExcelUpload';
@@ -16,8 +15,6 @@ import {
   FiUpload,
   FiEdit,
   FiTrash2,
-  FiChevronLeft,
-  FiChevronRight,
   FiChevronUp,
   FiChevronDown,
   FiX,
@@ -48,8 +45,6 @@ function Contact() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [selectedContacts, setSelectedContacts] = useState([]);
   const [isAllSelected, setIsAllSelected] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [dbInitialized, setDbInitialized] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingContact, setEditingContact] = useState(null);
   const [favoriteContacts, setFavoriteContacts] = useState(new Set());
@@ -73,16 +68,23 @@ function Contact() {
 
   // Infinite list (modal-style) state (smooth scroll + accurate scrollbar using API meta)
   const USE_INFINITE_CONTACTS_LIST = true;
-  const CONTACT_LIST_ROW_HEIGHT = 64; // approximate row height for spacer calculation
+  const CONTACT_LIST_ROW_HEIGHT = 64; // used to estimate scrollbar position like mobile contact lists
   const [contactsMeta, setContactsMeta] = useState({
     page_no: 1,
     limit: 20,
     total_records: 0,
     total_pages: 1,
-    has_more: false
+    has_more: false,
+    has_more_previous: false,
+    has_more_next: false
   });
   const [contactsPageNo, setContactsPageNo] = useState(1);
   const [contactsLoading, setContactsLoading] = useState(false);
+  const [firstId, setFirstId] = useState(null); // cursor for scrolling UP
+  const [lastId, setLastId] = useState(null);   // cursor for scrolling DOWN
+  const [scrollbarPosition, setScrollbarPosition] = useState(0);
+  const [isDragging, setIsDragging] = useState(false); // thumb drag only (not loading)
+  const [scrollbarMetrics, setScrollbarMetrics] = useState({ trackHeight: 0, containerHeight: 0 });
   const contactsReqIdRef = useRef(0);
   const contactsLoadingRef = useRef(false);
   const contactsLastRequestedPageRef = useRef(0);
@@ -90,6 +92,49 @@ function Contact() {
   const contactsIgnoreNextSearchEffectRef = useRef(false);
   const scrollJumpTimeoutRef = useRef(null);
   const lastFetchedPageRef = useRef(1);
+  const scrollContainerRef = useRef(null);
+  const scrollbarTrackRef = useRef(null);
+  const scrollWindowStartIndexRef = useRef(0); // global index offset for current loaded window (jump sets this)
+  const thumbDragRef = useRef(null);
+  const isDraggingRef = useRef(false); // ref version to prevent position updates during drag
+  const dragPositionRef = useRef(0); // visual position during drag (avoids stale closures)
+
+  // Keep stable scrollbar sizing (thumb height) based on visible rows vs total records
+  useEffect(() => {
+    if (!USE_INFINITE_CONTACTS_LIST) return;
+    const trackEl = scrollbarTrackRef.current;
+    const containerEl = scrollContainerRef.current;
+    if (!trackEl || !containerEl) return;
+
+    const update = () => {
+      const track = scrollbarTrackRef.current;
+      const container = scrollContainerRef.current;
+      if (!track || !container) return;
+      setScrollbarMetrics({
+        trackHeight: track.clientHeight || 0,
+        containerHeight: container.clientHeight || 0
+      });
+    };
+
+    // Ensure we measure after layout too (first paint can report 0 height)
+    update();
+    const rafId = requestAnimationFrame(update);
+
+    let ro;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(update);
+      ro.observe(trackEl);
+      ro.observe(containerEl);
+    } else {
+      window.addEventListener('resize', update);
+    }
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (ro) ro.disconnect();
+      else window.removeEventListener('resize', update);
+    };
+  }, [USE_INFINITE_CONTACTS_LIST, contactsMeta?.total_records]);
 
   // Form state for creating new contact
   const [newContact, setNewContact] = useState({
@@ -100,6 +145,23 @@ function Contact() {
     website: '',
     remark: ''
   });
+
+  // Country selection (Create Contact) - local number input (10 digits) + dial code prefix at submission
+  const DEFAULT_CREATE_COUNTRY = { iso2: 'IN', name: 'India', dialCode: '91' };
+  const CREATE_COUNTRY_OPTIONS = [
+    DEFAULT_CREATE_COUNTRY,
+    { iso2: 'US', name: 'United States', dialCode: '1' },
+    { iso2: 'CA', name: 'Canada', dialCode: '1' },
+    { iso2: 'GB', name: 'United Kingdom', dialCode: '44' },
+    { iso2: 'AE', name: 'United Arab Emirates', dialCode: '971' },
+    { iso2: 'SA', name: 'Saudi Arabia', dialCode: '966' },
+    { iso2: 'SG', name: 'Singapore', dialCode: '65' },
+    { iso2: 'AU', name: 'Australia', dialCode: '61' },
+    { iso2: 'BD', name: 'Bangladesh', dialCode: '880' },
+    { iso2: 'NP', name: 'Nepal', dialCode: '977' },
+    { iso2: 'PK', name: 'Pakistan', dialCode: '92' }
+  ];
+  const [createCountry, setCreateCountry] = useState(DEFAULT_CREATE_COUNTRY);
 
   // Form state for editing contact
   const [editContact, setEditContact] = useState({
@@ -148,82 +210,36 @@ function Contact() {
     localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
   }, [isMinimized]);
 
-  // Initialize database and load auth tokens
+  // Load auth tokens from session
   useEffect(() => {
-    const initializeApp = async () => {
       try {
-        // Load auth tokens from session
         const sessionData = localStorage.getItem('userData');
         if (sessionData) {
           const parsed = JSON.parse(sessionData);
           if (parsed && typeof parsed === 'object') {
             setTokens(parsed);
-            console.log(parsed.selected_project_id);
-            
-
-            // Initialize contact database with project ID
-            const projectId = parsed.selected_project_id || '';
-            const dbInitSuccess = await contactDbHelper.init(projectId);
-            setDbInitialized(dbInitSuccess);
           }
         }
       } catch (e) {
-        console.error('Failed to initialize app:', e);
+      console.error('Failed to load session data:', e);
       }
-    };
-
-    initializeApp();
   }, []);
 
-  // 3-Step Process: Load local DB → Sync with API → Refresh local DB
+  // Legacy paginated mode - fetch from API directly
   useEffect(() => {
     if (USE_INFINITE_CONTACTS_LIST) return;
-    if (!tokens?.token || !tokens?.username || !dbInitialized) return;
+    if (!tokens?.token || !tokens?.username) return;
     if (permissions && permissions.view_contact === false) return;
 
-    const loadAndSyncContacts = async () => {
+    const loadContacts = async () => {
       try {
-        // 1️⃣ Load local database immediately
-        console.log('📱 Step 1: Loading contacts from local database...');
         setLoading(true);
-
-        const localResult = await contactDbHelper.getContacts(currentPage, pageSize);
-        if (localResult.contacts.length > 0) {
-          const mappedLocal = localResult.contacts.map(c => ({
-            id: c.contact_id, // Use contact_id as the main ID
-            name: c.name,
-            mobile: c.number,
-            email: c.email,
-            firm_name: c.firm_name,
-            website: c.website,
-            remark: c.remark,
-            languageCode: c.language_code,
-            country: c.country,
-            createdOn: c.create_date,
-            is_favorite: c.is_favorite || false
-          }));
-
-          // Load favorites from database
-          const favorites = new Set(mappedLocal.filter(c => c.is_favorite).map(c => c.id));
-          setFavoriteContacts(favorites);
-          setContacts(mappedLocal);
-          setTotalPages(localResult.totalPages);
-          setTotalRecords(localResult.totalCount || 0);
-          setLoading(false);
-          console.log(`✅ Loaded ${mappedLocal.length} contacts from local DB`);
-        } else {
-          console.log('📭 No local contacts found, will wait for API sync');
-        }
-
-        // 2️⃣ Sync with API - make request and wait for response
-        console.log('🌐 Step 2: Syncing with API...');
-        setSyncing(true);
 
         const payload = {
           project_id: tokens.selected_project_id || '',
           page_no: currentPage,
           limit: pageSize,
-          query: ''
+          query: searchTerm || ''
         };
 
         const { data, key } = Encrypt(payload);
@@ -244,17 +260,9 @@ function Contact() {
         if (!response?.data?.error) {
           const apiList = response?.data?.data || [];
           const apiMeta = response?.data?.meta || null;
-          console.log(`📥 Received ${apiList.length} contacts from API`, apiMeta);
 
-          // Save to local database
-          await contactDbHelper.saveContacts(apiList);
-
-          // 3️⃣ After API updates DB, re-fetch from local DB again
-          console.log('🔄 Step 3: Refreshing from updated local database...');
-          const refreshedResult = await contactDbHelper.getContacts(currentPage, pageSize);
-
-          const mappedRefreshed = refreshedResult.contacts.map(c => ({
-            id: c.contact_id, // Use contact_id as the main ID
+          const mapped = apiList.map(c => ({
+            id: c.contact_id,
             name: c.name,
             mobile: c.number,
             email: c.email,
@@ -267,80 +275,36 @@ function Contact() {
             is_favorite: c.is_favorite || false
           }));
 
-          // Update favorites from refreshed data
-          const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
-          setFavoriteContacts(refreshedFavorites);
+          const favorites = new Set(mapped.filter(c => c.is_favorite).map(c => c.id));
+          setFavoriteContacts(favorites);
+          setContacts(mapped);
 
-          setContacts(mappedRefreshed);
-          
-          // Use API meta if available, otherwise fall back to local DB count
           if (apiMeta) {
-            const metaTotalPages = apiMeta.total_pages > 0 ? apiMeta.total_pages : (apiMeta.total_records > 0 ? 1 : 0);
-            setTotalPages(metaTotalPages);
+            setTotalPages(apiMeta.total_pages > 0 ? apiMeta.total_pages : 1);
             setTotalRecords(apiMeta.total_records || 0);
-          } else {
-            setTotalPages(refreshedResult.totalPages || 0);
-            setTotalRecords(refreshedResult.totalCount || 0);
           }
-          
-          console.log(`✅ Final result: ${mappedRefreshed.length} contacts displayed, Total: ${apiMeta?.total_records || refreshedResult.totalCount}`);
         } else {
           console.warn('⚠️ API returned error:', response?.data?.message);
-          // If API fails but we have local data, keep showing local data
-          if (localResult.contacts.length === 0) {
             setContacts([]);
             setTotalPages(1);
             setTotalRecords(0);
-          }
         }
       } catch (error) {
-        console.error('❌ Error in loadAndSyncContacts:', error);
-        // If everything fails, try to show local data or empty state
-        try {
-          const fallbackResult = await contactDbHelper.getContacts(currentPage, pageSize);
-          if (fallbackResult.contacts.length > 0) {
-            const mappedFallback = fallbackResult.contacts.map(c => ({
-              id: c.contact_id, // Use contact_id as the main ID
-              name: c.name,
-              mobile: c.number,
-              email: c.email,
-              firm_name: c.firm_name,
-              website: c.website,
-              remark: c.remark,
-              languageCode: c.language_code,
-              country: c.country,
-              createdOn: c.create_date,
-              is_favorite: c.is_favorite || false
-            }));
-
-            // Update favorites from fallback data
-            const fallbackFavorites = new Set(mappedFallback.filter(c => c.is_favorite).map(c => c.id));
-            setFavoriteContacts(fallbackFavorites);
-            setContacts(mappedFallback);
-            setTotalPages(fallbackResult.totalPages);
-            setTotalRecords(fallbackResult.totalCount || 0);
-          } else {
+        console.error('❌ Error loading contacts:', error);
             setContacts([]);
             setTotalPages(1);
             setTotalRecords(0);
-          }
-        } catch (fallbackError) {
-          console.error('❌ Fallback also failed:', fallbackError);
-          setContacts([]);
-          setTotalPages(1);
-          setTotalRecords(0);
-        }
       } finally {
         setLoading(false);
-        setSyncing(false);
         setSelectedContacts([]);
         setIsAllSelected(false);
       }
     };
 
-    loadAndSyncContacts();
-  }, [USE_INFINITE_CONTACTS_LIST, tokens?.token, tokens?.username, tokens?.projects, currentPage, pageSize, dbInitialized, permissions]);
+    loadContacts();
+  }, [USE_INFINITE_CONTACTS_LIST, tokens?.token, tokens?.username, tokens?.selected_project_id, currentPage, pageSize, searchTerm, permissions]);
 
+  // Load contacts with page-based pagination (for scrollbar jumps)
   const loadContactsPage = useCallback(
     async ({ requestedPageNo, query, append, isFavoriteOnly }) => {
       if (!tokens?.token || !tokens?.username) return;
@@ -383,13 +347,8 @@ function Contact() {
         if (!response?.data?.error) {
           const apiList = response?.data?.data || [];
           const meta = response?.data?.meta || null;
-
-          // best-effort local DB warm-up (non-blocking for UI)
-          try {
-            if (dbInitialized) await contactDbHelper.saveContacts(apiList);
-          } catch (e) {
-            console.warn('Contact DB save failed (non-blocking):', e);
-          }
+          const responseFirstId = response?.data?.first_id || null;
+          const responseLastId = response?.data?.last_id || null;
 
           const mapped = apiList.map((c) => ({
             id: c.contact_id,
@@ -405,6 +364,7 @@ function Contact() {
             is_favorite: c.is_favorite || false
           }));
 
+          // Replace contacts entirely for page jump, append for infinite scroll
           setContacts((prev) => {
             const next = append ? [...prev, ...mapped] : mapped;
             const seen = new Set();
@@ -416,6 +376,8 @@ function Contact() {
             });
           });
 
+          // Update favorites
+          if (append) {
           setFavoriteContacts((prev) => {
             const next = new Set(prev);
             for (const row of mapped) {
@@ -423,35 +385,67 @@ function Contact() {
             }
             return next;
           });
+          } else {
+            setFavoriteContacts(new Set(mapped.filter(c => c.is_favorite).map(c => c.id)));
+          }
 
           const fallbackTotalRecords =
             meta?.total_records ??
+            response?.data?.total_records ??
             response?.data?.count ??
             (append ? undefined : mapped.length);
 
           const totalPagesFallback =
             meta?.total_pages ??
+            response?.data?.total_pages ??
             (typeof fallbackTotalRecords === 'number'
               ? Math.max(1, Math.ceil(fallbackTotalRecords / pageSize))
               : 1);
 
           const hasMoreFallback =
             meta?.has_more ??
+            response?.data?.has_more ??
             (meta?.page_no
               ? meta.page_no < (meta.total_pages || totalPagesFallback)
               : requestedPageNo < totalPagesFallback);
 
+          // Extract bidirectional flags
+          const hasMorePrevious = response?.data?.has_more_previous ?? false;
+          const hasMoreNext = response?.data?.has_more_next ?? hasMoreFallback;
+
           setContactsMeta({
             page_no: meta?.page_no ?? requestedPageNo,
             limit: meta?.limit ?? pageSize,
-            total_records: meta?.total_records ?? (fallbackTotalRecords || 0),
+            total_records: meta?.total_records ?? response?.data?.total_records ?? (fallbackTotalRecords || 0),
             total_pages: totalPagesFallback,
-            has_more: hasMoreFallback
+            has_more: hasMoreFallback,
+            has_more_previous: hasMorePrevious,
+            has_more_next: hasMoreNext
           });
           setContactsPageNo(meta?.page_no ?? requestedPageNo);
-          setCurrentPage(meta?.page_no ?? requestedPageNo); // keep legacy state aligned
-          setTotalRecords(meta?.total_records ?? (fallbackTotalRecords || 0));
+          setCurrentPage(meta?.page_no ?? requestedPageNo);
+          setTotalRecords(meta?.total_records ?? response?.data?.total_records ?? (fallbackTotalRecords || 0));
           setTotalPages(totalPagesFallback);
+          
+          // Update cursor IDs for bidirectional pagination
+          if (responseFirstId) {
+            setFirstId(responseFirstId);
+          }
+          if (responseLastId) {
+            setLastId(responseLastId);
+          }
+          
+          // Update scrollbar position for page-based loads - skip if user is dragging
+          scrollWindowStartIndexRef.current = Math.max(0, (requestedPageNo - 1) * pageSize);
+          if (!isDraggingRef.current && !append) {
+            if (requestedPageNo === 1) {
+              setScrollbarPosition(0);
+            } else {
+              const totalPages = meta?.total_pages ?? totalPagesFallback;
+              const position = totalPages > 0 ? (((requestedPageNo - 1) / (totalPages - 1)) * 100) : 0;
+              setScrollbarPosition(Math.min(position, 100));
+            }
+          }
         } else {
           console.warn('⚠️ contact-list API returned error:', response?.data?.message);
           if (!append) {
@@ -461,12 +455,17 @@ function Contact() {
               limit: pageSize,
               total_records: 0,
               total_pages: 1,
-              has_more: false
+              has_more: false,
+              has_more_previous: false,
+              has_more_next: false
             });
             setContactsPageNo(1);
             setCurrentPage(1);
             setTotalRecords(0);
             setTotalPages(1);
+            setFirstId(null);
+            setLastId(null);
+            scrollWindowStartIndexRef.current = 0;
           }
         }
       } catch (error) {
@@ -478,12 +477,17 @@ function Contact() {
             limit: pageSize,
             total_records: 0,
             total_pages: 1,
-            has_more: false
+            has_more: false,
+            has_more_previous: false,
+            has_more_next: false
           });
           setContactsPageNo(1);
           setCurrentPage(1);
           setTotalRecords(0);
           setTotalPages(1);
+          setFirstId(null);
+          setLastId(null);
+          scrollWindowStartIndexRef.current = 0;
         }
       } finally {
         if (reqId === contactsReqIdRef.current) {
@@ -498,8 +502,279 @@ function Contact() {
       tokens?.username,
       tokens?.selected_project_id,
       permissions,
+      pageSize
+    ]
+  );
+
+  // Load more contacts with cursor-based pagination (for infinite scroll via mouse wheel)
+  const loadMoreContacts = useCallback(
+    async (query, isFavoriteOnly) => {
+      if (!tokens?.token || !tokens?.username) return;
+      if (permissions && permissions.view_contact === false) return;
+      if (contactsLoadingRef.current || !lastId || !contactsMeta.has_more) return;
+
+      const projectId = tokens.selected_project_id || '';
+      const reqId = ++contactsReqIdRef.current;
+
+      try {
+        contactsLoadingRef.current = true;
+        setContactsLoading(true);
+
+        const payload = {
+          project_id: projectId,
+          last_id: lastId,
+          limit: pageSize,
+          query: query || '',
+          ...(isFavoriteOnly ? { is_favorite_only: true } : {})
+        };
+
+        const { data, key } = Encrypt(payload);
+        const data_pass = JSON.stringify({ data, key });
+
+        const response = await axios.post(
+          'https://api.w1chat.com/contact/contact-list',
+          data_pass,
+          {
+            headers: {
+              token: tokens.token,
+              username: tokens.username,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        // ignore stale results
+        if (reqId !== contactsReqIdRef.current) return;
+
+        if (!response?.data?.error) {
+          const apiList = response?.data?.data || [];
+          const meta = response?.data?.meta || null;
+          const responseFirstId = response?.data?.first_id || null;
+          const responseLastId = response?.data?.last_id || null;
+
+          const mapped = apiList.map((c) => ({
+            id: c.contact_id,
+            name: c.name,
+            mobile: c.number,
+            email: c.email,
+            firm_name: c.firm_name,
+            website: c.website,
+            remark: c.remark,
+            languageCode: c.language_code,
+            country: c.country,
+            createdOn: c.create_date,
+            is_favorite: c.is_favorite || false
+          }));
+
+          // Append new contacts at the END (dedupe)
+          setContacts((prev) => {
+            const next = [...prev, ...mapped];
+            const seen = new Set();
+            return next.filter((row) => {
+              if (!row?.id) return false;
+              if (seen.has(row.id)) return false;
+              seen.add(row.id);
+              return true;
+            });
+          });
+
+          // Update favorites
+          setFavoriteContacts((prev) => {
+            const next = new Set(prev);
+            for (const row of mapped) {
+              if (row?.id && row.is_favorite) next.add(row.id);
+            }
+            return next;
+          });
+
+          // Update cursor IDs
+          if (responseFirstId && !firstId) {
+            // Only set firstId if we don't have one yet
+            setFirstId(responseFirstId);
+          }
+          if (responseLastId) {
+            setLastId(responseLastId);
+          }
+
+          // Update meta with bidirectional flags
+          const hasMore = meta?.has_more ?? response?.data?.has_more ?? (apiList.length === pageSize);
+          const hasMoreNext = response?.data?.has_more_next ?? hasMore;
+          const hasMorePrevious = response?.data?.has_more_previous ?? contactsMeta.has_more_previous;
+
+          setContactsMeta((prev) => ({
+            ...prev,
+            has_more: hasMore,
+            has_more_next: hasMoreNext,
+            has_more_previous: hasMorePrevious,
+            page_no: meta?.page_no ?? prev.page_no + 1,
+            total_records: meta?.total_records ?? response?.data?.total_records ?? prev.total_records,
+            total_pages: meta?.total_pages ?? response?.data?.total_pages ?? prev.total_pages
+          }));
+        } else {
+          console.warn('⚠️ contact-list API returned error:', response?.data?.message);
+        }
+      } catch (error) {
+        console.error('❌ Error loading more contacts:', error);
+      } finally {
+        if (reqId === contactsReqIdRef.current) {
+          setContactsLoading(false);
+          contactsLoadingRef.current = false;
+        }
+      }
+    },
+    [
+      tokens?.token,
+      tokens?.username,
+      tokens?.selected_project_id,
+      permissions,
       pageSize,
-      dbInitialized
+      lastId,
+      contactsMeta.has_more,
+      contactsMeta.has_more_previous,
+      firstId
+    ]
+  );
+
+  // Load previous contacts (scroll UP) with cursor-based pagination
+  const loadPreviousContacts = useCallback(
+    async (query, isFavoriteOnly) => {
+      if (!tokens?.token || !tokens?.username) return;
+      if (permissions && permissions.view_contact === false) return;
+      if (contactsLoadingRef.current || !firstId || !contactsMeta.has_more_previous) return;
+
+      const projectId = tokens.selected_project_id || '';
+      const reqId = ++contactsReqIdRef.current;
+
+      try {
+        contactsLoadingRef.current = true;
+        setContactsLoading(true);
+
+        const payload = {
+          project_id: projectId,
+          first_id: firstId,
+          limit: pageSize,
+          query: query || '',
+          ...(isFavoriteOnly ? { is_favorite_only: true } : {})
+        };
+
+        const { data, key } = Encrypt(payload);
+        const data_pass = JSON.stringify({ data, key });
+
+        const response = await axios.post(
+          'https://api.w1chat.com/contact/contact-list',
+          data_pass,
+          {
+            headers: {
+              token: tokens.token,
+              username: tokens.username,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        // ignore stale results
+        if (reqId !== contactsReqIdRef.current) return;
+
+        if (!response?.data?.error) {
+          const apiList = response?.data?.data || [];
+          const meta = response?.data?.meta || null;
+          const responseFirstId = response?.data?.first_id || null;
+          const responseLastId = response?.data?.last_id || null;
+
+          const mapped = apiList.map((c) => ({
+            id: c.contact_id,
+            name: c.name,
+            mobile: c.number,
+            email: c.email,
+            firm_name: c.firm_name,
+            website: c.website,
+            remark: c.remark,
+            languageCode: c.language_code,
+            country: c.country,
+            createdOn: c.create_date,
+            is_favorite: c.is_favorite || false
+          }));
+
+          // Get current scroll position before prepending
+          const scrollContainer = scrollContainerRef.current;
+          const previousScrollHeight = scrollContainer?.scrollHeight || 0;
+
+          // Prepend new contacts at the BEGINNING (dedupe)
+          setContacts((prev) => {
+            const next = [...mapped, ...prev];
+            const seen = new Set();
+            return next.filter((row) => {
+              if (!row?.id) return false;
+              if (seen.has(row.id)) return false;
+              seen.add(row.id);
+              return true;
+            });
+          });
+
+          // Update favorites
+          setFavoriteContacts((prev) => {
+            const next = new Set(prev);
+            for (const row of mapped) {
+              if (row?.id && row.is_favorite) next.add(row.id);
+            }
+            return next;
+          });
+
+          // Update cursor IDs
+          if (responseFirstId) {
+            setFirstId(responseFirstId);
+          }
+          if (responseLastId && !lastId) {
+            // Only set lastId if we don't have one yet
+            setLastId(responseLastId);
+          }
+
+          // Update scrollWindowStartIndexRef to reflect new starting position
+          scrollWindowStartIndexRef.current = Math.max(0, scrollWindowStartIndexRef.current - mapped.length);
+
+          // Update meta with bidirectional flags
+          const hasMorePrevious = response?.data?.has_more_previous ?? false;
+          const hasMoreNext = response?.data?.has_more_next ?? contactsMeta.has_more_next;
+
+          setContactsMeta((prev) => ({
+            ...prev,
+            has_more_previous: hasMorePrevious,
+            has_more_next: hasMoreNext,
+            page_no: Math.max(1, (meta?.page_no ?? prev.page_no) - 1),
+            total_records: meta?.total_records ?? response?.data?.total_records ?? prev.total_records,
+            total_pages: meta?.total_pages ?? response?.data?.total_pages ?? prev.total_pages
+          }));
+
+          // Maintain scroll position after prepending content
+          requestAnimationFrame(() => {
+            if (scrollContainer) {
+              const newScrollHeight = scrollContainer.scrollHeight;
+              const addedHeight = newScrollHeight - previousScrollHeight;
+              scrollContainer.scrollTop = scrollContainer.scrollTop + addedHeight;
+            }
+          });
+        } else {
+          console.warn('⚠️ contact-list API returned error:', response?.data?.message);
+        }
+      } catch (error) {
+        console.error('❌ Error loading previous contacts:', error);
+      } finally {
+        if (reqId === contactsReqIdRef.current) {
+          setContactsLoading(false);
+          contactsLoadingRef.current = false;
+        }
+      }
+    },
+    [
+      tokens?.token,
+      tokens?.username,
+      tokens?.selected_project_id,
+      permissions,
+      pageSize,
+      firstId,
+      contactsMeta.has_more_previous,
+      contactsMeta.has_more_next,
+      lastId
     ]
   );
 
@@ -520,10 +795,17 @@ function Contact() {
         limit: pageSize,
         total_records: 0,
         total_pages: 1,
-        has_more: false
+        has_more: false,
+        has_more_previous: false,
+        has_more_next: false
       });
       setContactsPageNo(1);
       setCurrentPage(1);
+      setFirstId(null);
+      setLastId(null);
+      setScrollbarPosition(0);
+      dragPositionRef.current = 0;
+      scrollWindowStartIndexRef.current = 0;
       setSelectedContacts([]);
       setIsAllSelected(false);
       setLoading(true);
@@ -533,6 +815,10 @@ function Contact() {
         append: false,
         isFavoriteOnly
       });
+      // Reset scroll position
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = 0;
+      }
     },
     [loadContactsPage, pageSize]
   );
@@ -541,7 +827,6 @@ function Contact() {
   useEffect(() => {
     if (!USE_INFINITE_CONTACTS_LIST) return;
     if (!tokens?.token || !tokens?.username) return;
-    if (!dbInitialized) return;
     if (permissions && permissions.view_contact === false) return;
     contactsIgnoreNextSearchEffectRef.current = true;
     resetAndLoadContacts('', showFavoritesOnly);
@@ -549,7 +834,6 @@ function Contact() {
     USE_INFINITE_CONTACTS_LIST,
     tokens?.token,
     tokens?.username,
-    dbInitialized,
     permissions,
     pageSize,
     reloadTick
@@ -580,6 +864,14 @@ function Contact() {
     if (!phoneRegex.test(cleaned)) {
       return 'Please enter a valid mobile number (10-15 digits)';
     }
+    return '';
+  };
+
+  // Create form expects local 10-digit number; dial code is selected separately.
+  const validateLocalPhoneNumber10 = (phone) => {
+    const cleaned = String(phone || '').replace(/\D/g, '');
+    if (!cleaned) return 'Mobile number is required';
+    if (!/^\d{10}$/.test(cleaned)) return 'Please enter a valid 10-digit mobile number';
     return '';
   };
 
@@ -649,7 +941,7 @@ function Contact() {
   // Validate create contact form
   const validateCreateForm = () => {
     const errors = {
-      number: validatePhoneNumber(newContact.number),
+      number: validateLocalPhoneNumber10(newContact.number),
       name: validateName(newContact.name),
       email: validateEmail(newContact.email),
       website: validateWebsite(newContact.website),
@@ -686,9 +978,12 @@ function Contact() {
     }
 
     try {
+      const localNumber10 = String(newContact.number || '').replace(/\D/g, '').slice(0, 10);
+      const fullNumber = `${String(createCountry?.dialCode || '91').replace(/\D/g, '')}${localNumber10}`;
       const payload = {
         project_id: tokens.selected_project_id || '',
-        ...newContact
+        ...newContact,
+        number: fullNumber
       };
 
       const { data, key } = Encrypt(payload);
@@ -707,20 +1002,6 @@ function Contact() {
       );
 
       if (!response?.data?.error) {
-        // Save to local database immediately
-        const newContactData = {
-          contact_id: response?.data?.data?.contact_id || response?.data?.data?.id || Date.now().toString(),
-          number: newContact.number,
-          name: newContact.name,
-          email: newContact.email,
-          firm_name: newContact.firm_name,
-          website: newContact.website,
-          remark: newContact.remark,
-          create_date: new Date().toISOString()
-        };
-
-        await contactDbHelper.saveContacts([newContactData]);
-
         // Close modal and reset form
         setShowCreateModal(false);
         setNewContact({
@@ -731,6 +1012,7 @@ function Contact() {
           website: '',
           remark: ''
         });
+        setCreateCountry(DEFAULT_CREATE_COUNTRY);
         setCreateErrors({
           number: '',
           name: '',
@@ -741,33 +1023,7 @@ function Contact() {
 
         // Refresh contacts list immediately - go to page 1 to show new contact
         setCurrentPage(1);
-        if (USE_INFINITE_CONTACTS_LIST) {
           setReloadTick((t) => t + 1);
-        } else {
-          // Directly refresh the contacts list from local database
-          const refreshedResult = await contactDbHelper.getContacts(1, pageSize);
-          const mappedRefreshed = refreshedResult.contacts.map(c => ({
-            id: c.contact_id,
-            name: c.name,
-            mobile: c.number,
-            email: c.email,
-            firm_name: c.firm_name,
-            website: c.website,
-            remark: c.remark,
-            languageCode: c.language_code,
-            country: c.country,
-            createdOn: c.create_date,
-            is_favorite: c.is_favorite || false
-          }));
-
-          // Update favorites from refreshed data
-          const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
-          setFavoriteContacts(refreshedFavorites);
-
-          setContacts(mappedRefreshed);
-          setTotalPages(refreshedResult.totalPages);
-          setTotalRecords(refreshedResult.totalCount || 0);
-        }
 
         // Show success message
         const successMsg = response?.data?.msg || 'Contact created successfully';
@@ -852,20 +1108,6 @@ function Contact() {
       );
 
       if (!response?.data?.error) {
-        // Update local database immediately
-        const updatedContactData = {
-          contact_id: editContact.contact_id,
-          number: editContact.number,
-          name: editContact.name,
-          email: editContact.email,
-          firm_name: editContact.firm_name,
-          website: editContact.website,
-          remark: editContact.remark,
-          create_date: editingContact.createdOn || new Date().toISOString()
-        };
-
-        await contactDbHelper.saveContacts([updatedContactData]);
-
         // Close modal and reset form
         setShowEditModal(false);
         setEditingContact(null);
@@ -886,33 +1128,8 @@ function Contact() {
           remark: ''
         });
 
-        if (USE_INFINITE_CONTACTS_LIST) {
+        // Refresh contacts list
           setReloadTick((t) => t + 1);
-        } else {
-          // Refresh the contacts list to show updated data
-          const refreshedResult = await contactDbHelper.getContacts(currentPage, pageSize);
-          const mappedRefreshed = refreshedResult.contacts.map(c => ({
-            id: c.contact_id,
-            name: c.name,
-            mobile: c.number,
-            email: c.email,
-            firm_name: c.firm_name,
-            website: c.website,
-            remark: c.remark,
-            languageCode: c.language_code,
-            country: c.country,
-            createdOn: c.create_date,
-            is_favorite: c.is_favorite || false
-          }));
-
-          // Update favorites from refreshed data
-          const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
-          setFavoriteContacts(refreshedFavorites);
-
-          setContacts(mappedRefreshed);
-          setTotalPages(refreshedResult.totalPages);
-          setTotalRecords(refreshedResult.totalCount || 0);
-        }
 
         // Show success message
         const successMsg = response?.data?.msg || 'Contact updated successfully';
@@ -1034,31 +1251,7 @@ function Contact() {
 
         // Refresh contacts list
         setCurrentPage(1);
-        if (USE_INFINITE_CONTACTS_LIST) {
           setReloadTick((t) => t + 1);
-        } else {
-          const refreshedResult = await contactDbHelper.getContacts(1, pageSize);
-          const mappedRefreshed = refreshedResult.contacts.map(c => ({
-            id: c.contact_id,
-            name: c.name,
-            mobile: c.number,
-            email: c.email,
-            firm_name: c.firm_name,
-            website: c.website,
-            remark: c.remark,
-            languageCode: c.language_code,
-            country: c.country,
-            createdOn: c.create_date,
-            is_favorite: c.is_favorite || false
-          }));
-
-          const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
-          setFavoriteContacts(refreshedFavorites);
-
-          setContacts(mappedRefreshed);
-          setTotalPages(refreshedResult.totalPages);
-          setTotalRecords(refreshedResult.totalCount || 0);
-        }
 
         // Show success message with import statistics
         const importData = response?.data?.data || {};
@@ -1126,13 +1319,6 @@ function Contact() {
           toast.success(`${contact.name} removed from favorites`);
         }
         setFavoriteContacts(newFavorites);
-
-        // Update local database
-        await contactDbHelper.updateContact(contact.id, {
-          is_favorite: isFavorite
-        });
-
-        console.log(`✅ Contact ${isFavorite ? 'added to' : 'removed from'} favorites`);
       } else {
         toast.error('Failed to update favorite status: ' + (response?.data?.message || 'Unknown error'));
       }
@@ -1184,41 +1370,8 @@ function Contact() {
       );
 
       if (!response?.data?.error) {
-        // Delete from local database using both id and number for reliability
-        await contactDbHelper.deleteContact(contactToDelete.id, contactToDelete.mobile);
-
-        if (USE_INFINITE_CONTACTS_LIST) {
+        // Refresh contacts list
           setReloadTick((t) => t + 1);
-        } else {
-          // Refresh the contacts list
-          const refreshedResult = await contactDbHelper.getContacts(currentPage, pageSize);
-          const mappedRefreshed = refreshedResult.contacts.map(c => ({
-            id: c.contact_id,
-            name: c.name,
-            mobile: c.number,
-            email: c.email,
-            firm_name: c.firm_name,
-            website: c.website,
-            remark: c.remark,
-            languageCode: c.language_code,
-            country: c.country,
-            createdOn: c.create_date,
-            is_favorite: c.is_favorite || false
-          }));
-
-          // Update favorites from refreshed data
-          const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
-          setFavoriteContacts(refreshedFavorites);
-
-          setContacts(mappedRefreshed);
-          setTotalPages(refreshedResult.totalPages);
-          setTotalRecords(refreshedResult.totalCount || 0);
-
-          // If current page is empty and not the first page, go to previous page
-          if (mappedRefreshed.length === 0 && currentPage > 1) {
-            setCurrentPage(currentPage - 1);
-          }
-        }
 
         // Update selected contacts
         setSelectedContacts(prev => prev.filter(id => id !== contactToDelete.id));
@@ -1297,7 +1450,6 @@ function Contact() {
       );
 
       if (!response?.data?.error) {
-        await contactDbHelper.clearContacts();
         setContacts([]);
         setTotalPages(1);
         setTotalRecords(0);
@@ -1305,6 +1457,18 @@ function Contact() {
         setFavoriteContacts(new Set());
         setSelectedContacts([]);
         setIsAllSelected(false);
+        setContactsMeta({
+          page_no: 1,
+          limit: pageSize,
+          total_records: 0,
+          total_pages: 1,
+          has_more: false,
+          has_more_previous: false,
+          has_more_next: false
+        });
+        setFirstId(null);
+        setLastId(null);
+        setScrollbarPosition(0);
 
         setShowBulkDeleteModal(false);
         setBulkDeletePhrase('');
@@ -1451,9 +1615,6 @@ function Contact() {
           const apiFavoriteIds = new Set(apiList.map(c => c.contact_id));
           setFavoriteContacts(apiFavoriteIds);
 
-          // Save to local database to keep it in sync
-          await contactDbHelper.saveContacts(apiList);
-
           console.log('✅ Favorites synced from API');
         } else {
           console.warn('⚠️ API returned error:', response?.data?.message);
@@ -1561,84 +1722,313 @@ function Contact() {
     });
   }, [filteredContacts, sortColumn, sortDirection]);
 
-  // Calculate spacer heights for windowed scrolling
+  // Calculate display info for infinite scroll
   const totalFromApi = contactsMeta?.total_records || 0;
   const currentDisplayPage = contactsMeta?.page_no || 1;
-  const itemsPerPage = contactsMeta?.limit || pageSize;
-  
-  // Items BEFORE current page (spacer at top)
-  const itemsBeforeCurrentPage = (currentDisplayPage - 1) * itemsPerPage;
-  const topSpacerHeight = itemsBeforeCurrentPage * CONTACT_LIST_ROW_HEIGHT;
-  
-  // Items AFTER current page (spacer at bottom)
-  const itemsInCurrentPage = sortedContacts.length;
-  const itemsAfterCurrentPage = Math.max(0, totalFromApi - itemsBeforeCurrentPage - itemsInCurrentPage);
-  const bottomSpacerHeight = itemsAfterCurrentPage * CONTACT_LIST_ROW_HEIGHT;
 
-  // Scroll handler: detect which page user scrolled to and fetch it
+  // Scroll handler: infinite scroll + scrollbar position tracking
   const handleContactsScroll = useCallback(
     (e) => {
       if (!USE_INFINITE_CONTACTS_LIST) return;
+      if (isDragging) return; // Don't trigger infinite scroll while dragging scrollbar
+
       const el = e.currentTarget;
       if (!el) return;
 
       if (el.scrollTop > 0) contactsHasUserScrolledRef.current = true;
       if (!contactsHasUserScrolledRef.current) return;
 
-      // Avoid processing when list doesn't overflow yet
-      const scrollable = el.scrollHeight > el.clientHeight + 8;
-      if (!scrollable) return;
-
-      // Calculate which page the current scroll position corresponds to
-      const scrollTop = el.scrollTop;
-      const pageHeight = itemsPerPage * CONTACT_LIST_ROW_HEIGHT;
+      const { scrollTop, scrollHeight, clientHeight } = el;
       
-      // Determine target page based on scroll position
-      const targetPage = Math.max(1, Math.min(
-        contactsMeta?.total_pages || 1,
-        Math.floor(scrollTop / pageHeight) + 1
-      ));
-
-      // If we're already on this page or loading, skip
-      if (targetPage === lastFetchedPageRef.current) return;
-      if (contactsLoadingRef.current) return;
-
-      // Debounce scroll jumps to avoid excessive API calls when dragging
-      if (scrollJumpTimeoutRef.current) {
-        clearTimeout(scrollJumpTimeoutRef.current);
+      // Mobile-like scrollbar position (0-100%) mapped to GLOBAL list size
+      const total = contactsMeta?.total_records || 0;
+      if (total > 1) {
+        const visibleIndex = Math.max(0, Math.floor(scrollTop / CONTACT_LIST_ROW_HEIGHT));
+        const globalIndex = Math.max(0, scrollWindowStartIndexRef.current + visibleIndex);
+        const pos = (globalIndex / (total - 1)) * 100;
+        setScrollbarPosition(Math.max(0, Math.min(pos, 100)));
+      } else {
+        setScrollbarPosition(0);
       }
 
-      scrollJumpTimeoutRef.current = setTimeout(() => {
-        // Double-check we still need to fetch
-        if (targetPage === lastFetchedPageRef.current) return;
-        if (contactsLoadingRef.current) return;
+      // Load more when near bottom (scroll DOWN) - 90% threshold
+      if (scrollTop + clientHeight >= scrollHeight * 0.9 && contactsMeta.has_more_next && !contactsLoadingRef.current) {
+        loadMoreContacts(searchTerm, showFavoritesOnly);
+      }
 
-        console.log(`📜 Scroll jump detected: fetching page ${targetPage}`);
-        lastFetchedPageRef.current = targetPage;
-        contactsLastRequestedPageRef.current = targetPage;
-
-        loadContactsPage({
-          requestedPageNo: targetPage,
-          query: searchTerm,
-          append: false, // Replace, don't append
-          isFavoriteOnly: showFavoritesOnly
-        });
-      }, 150); // 150ms debounce for smooth dragging
+      // Load previous when near top (scroll UP) - 10% threshold
+      if (scrollTop <= scrollHeight * 0.1 && contactsMeta.has_more_previous && !contactsLoadingRef.current) {
+        loadPreviousContacts(searchTerm, showFavoritesOnly);
+      }
     },
     [
       USE_INFINITE_CONTACTS_LIST,
-      contactsMeta?.total_pages,
-      itemsPerPage,
-      loadContactsPage,
+      isDragging,
+      contactsMeta.has_more_next,
+      contactsMeta.has_more_previous,
+      contactsMeta?.total_records,
+      loadMoreContacts,
+      loadPreviousContacts,
+      searchTerm,
+      showFavoritesOnly,
+      CONTACT_LIST_ROW_HEIGHT
+    ]
+  );
+
+  // Scrollbar drag handler: jump to specific position
+  const handleScrollbarDrag = useCallback(
+    async (position) => {
+      // position is 0-100 (percentage)
+      if (!tokens?.token || !tokens?.username) return;
+      if (permissions && permissions.view_contact === false) return;
+      if (contactsLoadingRef.current) return;
+
+      setContactsLoading(true);
+      contactsLoadingRef.current = true;
+
+      try {
+        // Calculate which page to load based on scrollbar position
+        const totalPages = contactsMeta.total_pages || 1;
+        const targetPage = Math.ceil((position / 100) * totalPages);
+        const clampedPage = Math.max(1, Math.min(targetPage, totalPages));
+
+        const projectId = tokens.selected_project_id || '';
+        const reqId = ++contactsReqIdRef.current;
+
+        const payload = {
+          project_id: projectId,
+          page_no: clampedPage,
+          limit: pageSize,
+          query: searchTerm || '',
+          ...(showFavoritesOnly ? { is_favorite_only: true } : {})
+        };
+
+        const { data, key } = Encrypt(payload);
+        const data_pass = JSON.stringify({ data, key });
+
+        const response = await axios.post(
+          'https://api.w1chat.com/contact/contact-list',
+          data_pass,
+          {
+            headers: {
+              token: tokens.token,
+              username: tokens.username,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        // ignore stale results
+        if (reqId !== contactsReqIdRef.current) return;
+
+        if (!response?.data?.error) {
+          const apiList = response?.data?.data || [];
+          const meta = response?.data?.meta || null;
+          const responseFirstId = response?.data?.first_id || null;
+          const responseLastId = response?.data?.last_id || null;
+
+          const mapped = apiList.map((c) => ({
+            id: c.contact_id,
+            name: c.name,
+            mobile: c.number,
+            email: c.email,
+            firm_name: c.firm_name,
+            website: c.website,
+            remark: c.remark,
+            languageCode: c.language_code,
+            country: c.country,
+            createdOn: c.create_date,
+            is_favorite: c.is_favorite || false
+          }));
+
+          // Replace contacts with new page data
+          setContacts(mapped);
+
+          setFavoriteContacts((prev) => {
+            const next = new Set();
+            for (const row of mapped) {
+              if (row?.id && row.is_favorite) next.add(row.id);
+            }
+            return next;
+          });
+
+          const totalRecords = meta?.total_records ?? response?.data?.total_records ?? contactsMeta.total_records;
+          const totalPages = meta?.total_pages ?? response?.data?.total_pages ?? contactsMeta.total_pages;
+          const hasMore = meta?.has_more ?? response?.data?.has_more ?? false;
+          const hasMorePrevious = response?.data?.has_more_previous ?? (clampedPage > 1);
+          const hasMoreNext = response?.data?.has_more_next ?? (clampedPage < totalPages);
+
+          setContactsMeta({
+            page_no: meta?.page_no ?? clampedPage,
+            limit: meta?.limit ?? pageSize,
+            total_records: totalRecords,
+            total_pages: totalPages,
+            has_more: hasMore,
+            has_more_previous: hasMorePrevious,
+            has_more_next: hasMoreNext
+          });
+          setContactsPageNo(meta?.page_no ?? clampedPage);
+          setCurrentPage(meta?.page_no ?? clampedPage);
+          setTotalRecords(totalRecords);
+          setTotalPages(totalPages);
+          // Only update scrollbar position if not currently dragging
+          if (!isDraggingRef.current) {
+            setScrollbarPosition(position);
+          }
+          
+          // Update cursor IDs for bidirectional pagination
+          if (responseFirstId) {
+            setFirstId(responseFirstId);
+          }
+          if (responseLastId) {
+            setLastId(responseLastId);
+          }
+
+          // Scroll container to top
+          if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = 0;
+          }
+
+          scrollWindowStartIndexRef.current = Math.max(0, (clampedPage - 1) * pageSize);
+          lastFetchedPageRef.current = clampedPage;
+        } else {
+          console.warn('⚠️ contact-list API returned error:', response?.data?.message);
+        }
+      } catch (error) {
+        console.error('❌ Error jumping to position:', error);
+      } finally {
+        setContactsLoading(false);
+        contactsLoadingRef.current = false;
+      }
+    },
+    [
+      tokens?.token,
+      tokens?.username,
+      tokens?.selected_project_id,
+      permissions,
+      pageSize,
+      contactsMeta.total_pages,
+      contactsMeta.total_records,
       searchTerm,
       showFavoritesOnly
     ]
   );
 
+  // Custom scrollbar (stable thumb size + smooth drag). Drag updates ref live, state on release.
+  const totalForThumb = contactsMeta?.total_records || 0;
+  const visibleRows = scrollbarMetrics.containerHeight
+    ? Math.max(1, Math.floor(scrollbarMetrics.containerHeight / CONTACT_LIST_ROW_HEIGHT))
+    : pageSize;
+  const thumbFraction = totalForThumb > 0 ? Math.min(1, visibleRows / totalForThumb) : 1;
+  const thumbHeight = scrollbarMetrics.trackHeight
+    ? Math.max(28, Math.round(scrollbarMetrics.trackHeight * thumbFraction))
+    : 28;
+  const maxThumbTop = Math.max(0, (scrollbarMetrics.trackHeight || 0) - thumbHeight);
+  
+  // Use ref position during drag to avoid stale closure issues
+  const currentPosition = isDragging ? dragPositionRef.current : scrollbarPosition;
+  const thumbTop = maxThumbTop > 0 ? (maxThumbTop * (currentPosition / 100)) : 0;
+
+  // Convert clientY to percentage position (0-100)
+  const positionFromClientY = useCallback((clientY) => {
+    const trackEl = scrollbarTrackRef.current;
+    if (!trackEl) return 0;
+    const rect = trackEl.getBoundingClientRect();
+    const trackH = rect.height;
+    if (trackH <= 0) return 0;
+    // Calculate where the click/drag is relative to track
+    const y = clientY - rect.top;
+    // Clamp to valid range
+    const clampedY = Math.max(0, Math.min(y, trackH));
+    return (clampedY / trackH) * 100;
+  }, []);
+
+  const handleTrackPointerDown = (e) => {
+    // Click on track jumps immediately
+    if (!USE_INFINITE_CONTACTS_LIST) return;
+    if (contactsLoadingRef.current) return;
+    const pos = positionFromClientY(e.clientY);
+    setScrollbarPosition(pos);
+    dragPositionRef.current = pos;
+    handleScrollbarDrag(pos);
+  };
+
+  const handleThumbPointerDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (contactsLoadingRef.current) return;
+    
+    // Set dragging state
+    setIsDragging(true);
+    isDraggingRef.current = true;
+    dragPositionRef.current = scrollbarPosition;
+    
+    // Store initial Y for delta calculation
+    thumbDragRef.current = {
+      pointerId: e.pointerId,
+      startY: e.clientY,
+      startPosition: scrollbarPosition
+    };
+    
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (_) {
+      // ignore
+    }
+  };
+
+  const handleThumbPointerMove = (e) => {
+    if (!isDraggingRef.current || !thumbDragRef.current) return;
+    
+    const trackEl = scrollbarTrackRef.current;
+    if (!trackEl) return;
+    
+    const { startY, startPosition } = thumbDragRef.current;
+    const trackHeight = trackEl.getBoundingClientRect().height;
+    if (trackHeight <= 0) return;
+    
+    // Calculate delta as percentage of track height
+    const dy = e.clientY - startY;
+    const deltaPercent = (dy / trackHeight) * 100;
+    
+    // Calculate new position
+    const newPos = Math.max(0, Math.min(100, startPosition + deltaPercent));
+    
+    // Update ref for immediate visual feedback (no re-render delay)
+    dragPositionRef.current = newPos;
+    
+    // Also update state to trigger re-render for visual update
+    setScrollbarPosition(newPos);
+  };
+
+  const handleThumbPointerUp = async (e) => {
+    if (!isDraggingRef.current) return;
+    
+    const finalPosition = dragPositionRef.current;
+    
+    // Clear drag state
+    setIsDragging(false);
+    isDraggingRef.current = false;
+    thumbDragRef.current = null;
+    
+    // Sync final position to state
+    setScrollbarPosition(finalPosition);
+    
+    // Fetch data for the final position
+    await handleScrollbarDrag(finalPosition);
+  };
+
   // Sync lastFetchedPageRef when contactsMeta changes
   useEffect(() => {
     lastFetchedPageRef.current = contactsMeta?.page_no || 1;
   }, [contactsMeta?.page_no]);
+
+  // Sync dragPositionRef when scrollbarPosition changes (from non-drag sources)
+  useEffect(() => {
+    if (!isDraggingRef.current) {
+      dragPositionRef.current = scrollbarPosition;
+    }
+  }, [scrollbarPosition]);
 
   // If user lacks permission to view contacts, show an access message
   if (permissions && permissions.view_contact === false) {
@@ -1671,6 +2061,11 @@ function Contact() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <style>{`
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
       <Header
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
@@ -1693,12 +2088,6 @@ function Contact() {
               <div>
                 <div className="flex items-center gap-3 mb-2">
                   <h1 className="text-base font-bold text-gray-900">Contact Management</h1>
-                  {syncing && (
-                    <div className="flex items-center text-sm text-blue-600">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                      Syncing...
-                    </div>
-                  )}
                 </div>
                 <p className="text-gray-600 text-sm">
                   Manage your contacts and customer information
@@ -1749,7 +2138,27 @@ function Contact() {
                   position="top"
                 >
                   <button
-                    onClick={() => { if (!permissions || permissions.create_contact) setShowCreateModal(true); }}
+                    onClick={() => {
+                      if (!permissions || permissions.create_contact) {
+                        setCreateCountry({ iso2: 'IN', name: 'India', dialCode: '91' });
+                        setNewContact({
+                          number: '',
+                          name: '',
+                          email: '',
+                          firm_name: '',
+                          website: '',
+                          remark: ''
+                        });
+                        setCreateErrors({
+                          number: '',
+                          name: '',
+                          email: '',
+                          website: '',
+                          remark: ''
+                        });
+                        setShowCreateModal(true);
+                      }
+                    }}
                     disabled={permissions && permissions.create_contact === false}
                     className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${permissions && permissions.create_contact === false ? 'bg-indigo-400 cursor-not-allowed opacity-60' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                   >
@@ -1833,10 +2242,16 @@ function Contact() {
 
                   {/* Table Header */}
                   <div className="overflow-x-auto">
-                    <div
-                      className="relative max-h-[65vh] overflow-y-auto overscroll-contain"
-                      onScroll={handleContactsScroll}
-                    >
+                    <div className="flex" style={{ height: '65vh' }}>
+                      <div
+                        ref={scrollContainerRef}
+                        className="relative flex-1 overflow-y-auto overscroll-contain scrollbar-hide"
+                        style={{
+                          scrollbarWidth: 'none', /* Firefox */
+                          msOverflowStyle: 'none', /* IE and Edge */
+                        }}
+                        onScroll={handleContactsScroll}
+                      >
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50 sticky top-0 z-10">
                           <tr>
@@ -1920,17 +2335,6 @@ function Contact() {
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {/* Top spacer for windowed scrolling */}
-                          {(USE_INFINITE_CONTACTS_LIST && topSpacerHeight > 0) && (
-                            <tr aria-hidden="true">
-                              <td colSpan="7" className="p-0">
-                                <div
-                                  style={{ height: topSpacerHeight, minHeight: topSpacerHeight }}
-                                  className="pointer-events-none"
-                                />
-                              </td>
-                            </tr>
-                          )}
                           {sortedContacts.length === 0 && !contactsLoading ? (
                           <tr>
                             <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
@@ -1952,7 +2356,7 @@ function Contact() {
                                 />
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {itemsBeforeCurrentPage + idx + 1}
+                                {scrollWindowStartIndexRef.current + idx + 1}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
@@ -2040,19 +2444,7 @@ function Contact() {
                             </tr>
                           )}
 
-                          {/* Bottom spacer for windowed scrolling */}
-                          {(USE_INFINITE_CONTACTS_LIST && bottomSpacerHeight > 0) && (
-                            <tr aria-hidden="true">
-                              <td colSpan="7" className="p-0">
-                                <div
-                                  style={{ height: bottomSpacerHeight, minHeight: bottomSpacerHeight }}
-                                  className="pointer-events-none"
-                                />
-                              </td>
-                            </tr>
-                          )}
-
-                          {(USE_INFINITE_CONTACTS_LIST && !contactsLoading && currentDisplayPage >= (contactsMeta?.total_pages || 1) && sortedContacts.length > 0) && (
+                          {(USE_INFINITE_CONTACTS_LIST && !contactsLoading && !contactsMeta.has_more && sortedContacts.length > 0) && (
                             <tr>
                               <td colSpan="7" className="px-6 py-3 text-center text-xs text-gray-400">
                                 End of contacts (Page {currentDisplayPage} of {contactsMeta?.total_pages || 1})
@@ -2061,6 +2453,43 @@ function Contact() {
                           )}
                         </tbody>
                       </table>
+                      </div>
+                      
+                      {/* Scrollbar */}
+                      {USE_INFINITE_CONTACTS_LIST && contactsMeta.total_records > 0 && (
+                        <div className="w-10 flex flex-col items-center bg-gray-50 border-l border-gray-200 py-2">
+                          <div
+                            ref={scrollbarTrackRef}
+                            className="relative flex-1 w-5 rounded-full bg-gray-200/70 mx-auto"
+                            onPointerDown={handleTrackPointerDown}
+                            style={{ touchAction: 'none' }}
+                            aria-label="Contacts scrollbar"
+                            role="scrollbar"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={Math.round(scrollbarPosition)}
+                          >
+                            <div
+                              className="absolute left-1/2 -translate-x-1/2 w-4 rounded-full bg-indigo-600 shadow-sm"
+                              style={{
+                                height: `${thumbHeight}px`,
+                                top: `${thumbTop}px`,
+                                transition: isDragging ? 'none' : 'top 60ms linear',
+                                touchAction: 'none',
+                                cursor: isDragging ? 'grabbing' : 'grab'
+                              }}
+                              onPointerDown={handleThumbPointerDown}
+                              onPointerMove={handleThumbPointerMove}
+                              onPointerUp={handleThumbPointerUp}
+                              onPointerCancel={handleThumbPointerUp}
+                              title={`${Math.round(scrollbarPosition)}%`}
+                            />
+                          </div>
+                          <div className="text-[10px] text-gray-500 mt-2 text-center font-medium tabular-nums">
+                            {Math.round(scrollbarPosition)}%
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -2095,6 +2524,7 @@ function Contact() {
                 <button
                   onClick={() => {
                     setShowCreateModal(false);
+                    setCreateCountry(DEFAULT_CREATE_COUNTRY);
                     setCreateErrors({
                       number: '',
                       name: '',
@@ -2115,24 +2545,57 @@ function Contact() {
                     <FiPhone className="inline h-4 w-4 mr-1" />
                     Mobile Number *
                   </label>
-                  <input
-                    type="tel"
-                    value={newContact.number}
-                    onChange={(e) => {
-                      setNewContact({ ...newContact, number: e.target.value });
-                      if (createErrors.number) {
-                        setCreateErrors({ ...createErrors, number: validatePhoneNumber(e.target.value) });
-                      }
-                    }}
-                    onBlur={() => setCreateErrors({ ...createErrors, number: validatePhoneNumber(newContact.number) })}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      createErrors.number 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
-                    placeholder="Enter mobile number"
-                    required
-                  />
+                  <div className="flex gap-2">
+                    <select
+                      value={createCountry.iso2}
+                      onChange={(e) => {
+                        const next = CREATE_COUNTRY_OPTIONS.find((c) => c.iso2 === e.target.value) || DEFAULT_CREATE_COUNTRY;
+                        setCreateCountry(next);
+                        if (newContact.number) {
+                          setCreateErrors({ ...createErrors, number: validateLocalPhoneNumber10(newContact.number) });
+                        }
+                      }}
+                      className="w-4/12 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                      aria-label="Country code"
+                    >
+                      {CREATE_COUNTRY_OPTIONS.map((c) => (
+                        <option key={c.iso2} value={c.iso2}>
+                          {c.name} ({c.dialCode})
+                        </option>
+                      ))}
+                    </select>
+
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={10}
+                      value={newContact.number}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setNewContact({ ...newContact, number: digits });
+                        if (createErrors.number) {
+                          setCreateErrors({ ...createErrors, number: validateLocalPhoneNumber10(digits) });
+                        }
+                      }}
+                      onBlur={() => setCreateErrors({ ...createErrors, number: validateLocalPhoneNumber10(newContact.number) })}
+                      className={`w-8/12 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                        createErrors.number
+                          ? 'border-red-500 focus:ring-red-500'
+                          : 'border-gray-300 focus:ring-indigo-500'
+                      }`}
+                      placeholder="Enter 10-digit number"
+                      required
+                    />
+                  </div>
+
+                  {!createErrors.number && /^\d{10}$/.test(newContact.number) && (
+                    <p className="mt-1 text-sm text-green-600 inline-flex items-center">
+                      <FiCheckCircle className="h-4 w-4 mr-1" />
+                      Valid number (will be saved as {String(createCountry?.dialCode || '91').replace(/\D/g, '')}
+                      {newContact.number})
+                    </p>
+                  )}
                   {createErrors.number && (
                     <p className="mt-1 text-sm text-red-600">{createErrors.number}</p>
                   )}
@@ -2269,6 +2732,7 @@ function Contact() {
                 <button
                   onClick={() => {
                     setShowCreateModal(false);
+                    setCreateCountry(DEFAULT_CREATE_COUNTRY);
                     setCreateErrors({
                       number: '',
                       name: '',
@@ -2283,7 +2747,7 @@ function Contact() {
                 </button>
                 <button
                   onClick={handleCreateContact}
-                  disabled={!newContact.number || !newContact.name}
+                  disabled={!newContact.name || !newContact.number || newContact.number.length !== 10}
                   className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Create Contact

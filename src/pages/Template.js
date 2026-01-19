@@ -6,6 +6,7 @@ import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import toast from 'react-hot-toast';
 import { FiPlus, FiEdit, FiTrash2, FiRefreshCw, FiAlertCircle, FiMoreVertical, FiChevronDown, FiCheck } from 'react-icons/fi';
+import DeleteConfirmationModal from '../component/Modals/DeleteConfirmationModal';
 
 function Template() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -18,6 +19,9 @@ function Template() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const observerTarget = useRef(null);
   const abortControllerRef = useRef(null);
   const filterRef = useRef(null);
@@ -166,26 +170,36 @@ function Template() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this template?')) {
-      return;
-    }
+  const handleDeleteClick = (template) => {
+    setTemplateToDelete(template);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!templateToDelete) return;
 
     if (!tokens?.token || !tokens?.username) {
       toast.error('Session expired. Please login again.');
+      setDeleteModalOpen(false);
+      setTemplateToDelete(null);
       return;
     }
+
+    setIsDeleting(true);
 
     try {
       const selectedProjectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id;
       if (!selectedProjectId) {
         toast.error('No project selected.');
+        setIsDeleting(false);
+        setDeleteModalOpen(false);
+        setTemplateToDelete(null);
         return;
       }
 
       const payload = {
         project_id: selectedProjectId,
-        template_id: id
+        template_id: templateToDelete.id
       };
 
       const { data, key } = Encrypt(payload);
@@ -203,15 +217,24 @@ function Template() {
 
       if (response?.data?.error === false) {
         // Remove the deleted template from the list
-        setTemplates(prev => prev.filter(template => template.id !== id));
+        setTemplates(prev => prev.filter(template => template.id !== templateToDelete.id));
         toast.success(response.data.msg || 'Template deleted successfully');
+        setDeleteModalOpen(false);
+        setTemplateToDelete(null);
       } else {
         toast.error(response?.data?.msg || 'Failed to delete template');
       }
     } catch (error) {
       console.error('Delete error:', error);
       toast.error(error?.response?.data?.msg || 'An error occurred while deleting the template');
+    } finally {
+      setIsDeleting(false);
     }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteModalOpen(false);
+    setTemplateToDelete(null);
   };
 
   const filterOptions = [
@@ -445,7 +468,7 @@ function Template() {
                                 </Link>
                               )}
                               <button 
-                                onClick={() => handleDelete(template.id)}
+                                onClick={() => handleDeleteClick(template)}
                                 className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                 title="Delete"
                               >
@@ -520,7 +543,7 @@ function Template() {
                               )}
                               <button
                                 onClick={() => {
-                                  handleDelete(template.id);
+                                  handleDeleteClick(template);
                                   setActiveDropdown(null);
                                 }}
                                 className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
@@ -583,6 +606,17 @@ function Template() {
           </div>
         </main>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={deleteModalOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Template"
+        message="Are you sure you want to delete"
+        itemName={templateToDelete?.name}
+        loading={isDeleting}
+      />
     </div>
   );
 }

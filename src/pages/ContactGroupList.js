@@ -658,8 +658,8 @@ function ContactGroupList() {
 
   // Filter group contacts based on search
   const filteredGroupContacts = groupContacts.filter(contact =>
-    contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contact.mobile.includes(searchTerm) ||
+    (contact.name && contact.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (contact.mobile && contact.mobile.includes(searchTerm)) ||
     (contact.firm_name && contact.firm_name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
