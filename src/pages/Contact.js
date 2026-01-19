@@ -8,6 +8,8 @@ import { useNavigate } from 'react-router-dom';
 import { contactDbHelper } from './db';
 import { useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
+import ExcelUpload from './Campaign/components/AudienceType/ExcelUpload';
+import GoogleSheet from './Campaign/components/AudienceType/GoogleSheet';
 import {
   FiPlus,
   FiDownload,
@@ -127,6 +129,15 @@ function Contact() {
     website: '',
     remark: ''
   });
+
+  // Import state for Excel/Google Sheets
+  const [importAudienceType, setImportAudienceType] = useState('excel'); // 'excel' or 'sheet'
+  const [importExcelMapping, setImportExcelMapping] = useState({ name: '', phone: '' });
+  const [importSheetLink, setImportSheetLink] = useState('');
+  const [importExcelHeaders, setImportExcelHeaders] = useState([]);
+  const [importExcelData, setImportExcelData] = useState([]);
+  const [importExcelFileUrl, setImportExcelFileUrl] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
 
   const [isMinimized, setIsMinimized] = useState(() => {
     const saved = localStorage.getItem('sidebarMinimized');
@@ -913,6 +924,161 @@ function Contact() {
     } catch (error) {
       console.error('Failed to update contact:', error);
       alert('Failed to update contact. Please try again.');
+    }
+  };
+
+  // Handle import contacts
+  const handleImportContacts = async () => {
+    if (permissions && permissions.create_contact === false) {
+      alert('You do not have permission to import contacts.');
+      return;
+    }
+    if (!tokens?.token || !tokens?.username) return;
+
+    // Validate that we have the required data
+    if (!importExcelMapping.phone || !importExcelMapping.name) {
+      alert('Please map the phone number and name columns before importing.');
+      return;
+    }
+
+    let fileUrl;
+    if (importAudienceType === 'excel') {
+      fileUrl = importExcelFileUrl;
+      if (!fileUrl || !fileUrl.startsWith('http')) {
+        alert('Please upload an Excel file first.');
+        return;
+      }
+    } else {
+      // Google Sheet
+      fileUrl = importSheetLink;
+      if (!fileUrl || !fileUrl.trim()) {
+        alert('Please provide a Google Sheet link.');
+        return;
+      }
+    }
+
+    // Get column indices from headers (0-based)
+    const phoneIndex = importExcelHeaders.indexOf(importExcelMapping.phone);
+    const nameIndex = importExcelHeaders.indexOf(importExcelMapping.name);
+
+    if (phoneIndex < 0) {
+      alert('Phone number column not found in headers.');
+      return;
+    }
+
+    // Find optional column indices
+    const emailIndex = importExcelHeaders.findIndex(h => 
+      h.toLowerCase().includes('email') || h.toLowerCase().includes('e-mail')
+    );
+    const firmNameIndex = importExcelHeaders.findIndex(h => 
+      h.toLowerCase().includes('firm') || h.toLowerCase().includes('company') || h.toLowerCase().includes('organization')
+    );
+    const websiteIndex = importExcelHeaders.findIndex(h => 
+      h.toLowerCase().includes('website') || h.toLowerCase().includes('url') || h.toLowerCase().includes('web')
+    );
+    const remarkIndex = importExcelHeaders.findIndex(h => 
+      h.toLowerCase().includes('remark') || h.toLowerCase().includes('note') || h.toLowerCase().includes('comment')
+    );
+
+    setIsImporting(true);
+
+    try {
+      // Build payload
+      const payload = {
+        project_id: tokens.selected_project_id || '',
+        url: fileUrl.trim(),
+        number_index: phoneIndex,
+        name_index: nameIndex >= 0 ? nameIndex : 0,
+        start_row: 1, // Skip header row
+        end_row: importExcelData.length > 0 ? importExcelData.length : null
+      };
+
+      // Add optional fields only if found
+      if (emailIndex >= 0) {
+        payload.email_index = emailIndex;
+      }
+      if (firmNameIndex >= 0) {
+        payload.firm_name_index = firmNameIndex;
+      }
+      if (websiteIndex >= 0) {
+        payload.website_index = websiteIndex;
+      }
+      if (remarkIndex >= 0) {
+        payload.remark_index = remarkIndex;
+      }
+
+      const { data, key } = Encrypt(payload);
+      const data_pass = JSON.stringify({ data, key });
+
+      const response = await axios.post(
+        'https://api.w1chat.com/contact/import-contacts',
+        data_pass,
+        {
+          headers: {
+            'token': tokens.token,
+            'username': tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response?.data?.error) {
+        // Close modal and reset state
+        setShowImportModal(false);
+        setImportAudienceType('excel');
+        setImportExcelMapping({ name: '', phone: '' });
+        setImportSheetLink('');
+        setImportExcelHeaders([]);
+        setImportExcelData([]);
+        setImportExcelFileUrl('');
+
+        // Refresh contacts list
+        setCurrentPage(1);
+        if (USE_INFINITE_CONTACTS_LIST) {
+          setReloadTick((t) => t + 1);
+        } else {
+          const refreshedResult = await contactDbHelper.getContacts(1, pageSize);
+          const mappedRefreshed = refreshedResult.contacts.map(c => ({
+            id: c.contact_id,
+            name: c.name,
+            mobile: c.number,
+            email: c.email,
+            firm_name: c.firm_name,
+            website: c.website,
+            remark: c.remark,
+            languageCode: c.language_code,
+            country: c.country,
+            createdOn: c.create_date,
+            is_favorite: c.is_favorite || false
+          }));
+
+          const refreshedFavorites = new Set(mappedRefreshed.filter(c => c.is_favorite).map(c => c.id));
+          setFavoriteContacts(refreshedFavorites);
+
+          setContacts(mappedRefreshed);
+          setTotalPages(refreshedResult.totalPages);
+          setTotalRecords(refreshedResult.totalCount || 0);
+        }
+
+        // Show success message with import statistics
+        const importData = response?.data?.data || {};
+        const successMsg = response?.data?.msg || 'Contacts imported successfully';
+        const statsMsg = importData.total 
+          ? `${successMsg}\n\nTotal: ${importData.total}\nSuccess: ${importData.success}\nFailed: ${importData.failed}\nDuplicates: ${importData.duplicates}${importData.error_file ? `\n\nError file: ${importData.error_file}` : ''}`
+          : successMsg;
+        
+        setSuccessMessage(statsMsg);
+        setShowSuccessModal(true);
+      } else {
+        const errorMsg = response?.data?.error || response?.data?.message || 'Unknown error';
+        alert('Failed to import contacts: ' + errorMsg);
+      }
+    } catch (error) {
+      console.error('Failed to import contacts:', error);
+      const errorMsg = error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Please try again.';
+      alert('Failed to import contacts: ' + errorMsg);
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -2342,55 +2508,128 @@ function Contact() {
       {/* Import Modal */}
       {showImportModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+          <div className="relative top-10 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white my-10">
             <div className="mt-3">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Import from Excel</h3>
+                <h3 className="text-lg font-medium text-gray-900">Import Contacts</h3>
                 <button
-                  onClick={() => setShowImportModal(false)}
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportAudienceType('excel');
+                    setImportExcelMapping({ name: '', phone: '' });
+                    setImportSheetLink('');
+                    setImportExcelHeaders([]);
+                    setImportExcelData([]);
+                    setImportExcelFileUrl('');
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <FiX className="h-6 w-6" />
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Excel File
-                  </label>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
+              {/* Tab Selection */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <button
+                  onClick={() => setImportAudienceType('excel')}
+                  className={`p-4 rounded-xl border-2 transition-all ${
+                    importAudienceType === 'excel'
+                      ? 'border-indigo-500 bg-indigo-50 shadow-md'
+                      : 'border-gray-200 hover:border-indigo-300'
+                  }`}
+                >
+                  <FiFileText className={`w-6 h-6 mb-2 mx-auto ${importAudienceType === 'excel' ? 'text-indigo-600' : 'text-gray-400'}`} />
+                  <div className="font-semibold text-gray-800">Upload Excel</div>
+                  <div className="text-sm text-gray-500 mt-1">Import from Excel file</div>
+                </button>
 
-                <div className="text-sm text-gray-600">
-                  <p className="mb-2">File format requirements:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Columns: Name, Mobile, Email, Company, Website, Remark</li>
-                    <li>Supported formats: .xlsx, .xls, .csv</li>
-                    <li>Maximum 1000 contacts per import</li>
-                  </ul>
-                </div>
+                <button
+                  onClick={() => setImportAudienceType('sheet')}
+                  className={`p-4 rounded-xl border-2 transition-all ${
+                    importAudienceType === 'sheet'
+                      ? 'border-indigo-500 bg-indigo-50 shadow-md'
+                      : 'border-gray-200 hover:border-indigo-300'
+                  }`}
+                >
+                  <FiGlobe className={`w-6 h-6 mb-2 mx-auto ${importAudienceType === 'sheet' ? 'text-indigo-600' : 'text-gray-400'}`} />
+                  <div className="font-semibold text-gray-800">Google Sheet</div>
+                  <div className="text-sm text-gray-500 mt-1">Connect via link</div>
+                </button>
               </div>
 
-              <div className="flex justify-end space-x-3 mt-6">
+              {/* Component Content */}
+              <div className="max-h-[calc(100vh-350px)] overflow-y-auto">
+                {importAudienceType === 'excel' && (
+                  <ExcelUpload
+                    excelMapping={importExcelMapping}
+                    setExcelMapping={setImportExcelMapping}
+                    onContactsExtracted={() => {}}
+                    onHeadersExtracted={(headers) => {
+                      setImportExcelHeaders(headers);
+                    }}
+                    onDataExtracted={(data) => {
+                      setImportExcelData(data);
+                    }}
+                    onFileUploaded={(url) => {
+                      setImportExcelFileUrl(url);
+                    }}
+                    tokens={tokens}
+                  />
+                )}
+
+                {importAudienceType === 'sheet' && (
+                  <GoogleSheet
+                    sheetLink={importSheetLink}
+                    setSheetLink={setImportSheetLink}
+                    excelMapping={importExcelMapping}
+                    setExcelMapping={setImportExcelMapping}
+                    onContactsExtracted={() => {}}
+                    onHeadersExtracted={(headers) => {
+                      setImportExcelHeaders(headers);
+                    }}
+                    onDataExtracted={(data) => {
+                      setImportExcelData(data);
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-3 mt-6 border-t pt-4">
                 <button
-                  onClick={() => setShowImportModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportAudienceType('excel');
+                    setImportExcelMapping({ name: '', phone: '' });
+                    setImportSheetLink('');
+                    setImportExcelHeaders([]);
+                    setImportExcelData([]);
+                    setImportExcelFileUrl('');
+                  }}
+                  disabled={isImporting}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    alert('Import functionality will be implemented');
-                    setShowImportModal(false);
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  onClick={handleImportContacts}
+                  disabled={isImporting || !importExcelMapping.phone || !importExcelMapping.name}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Import Contacts
+                  {isImporting ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <FiUpload className="h-4 w-4" />
+                      Import Contacts
+                    </>
+                  )}
                 </button>
               </div>
             </div>
