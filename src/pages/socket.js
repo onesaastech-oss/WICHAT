@@ -180,9 +180,9 @@ class SocketManager {
             } = normalizeSocketMessagePayload(messageData.message || {});
 
             // Check if this is a message sent by the current user (outgoing message)
-            const isOutgoingMessage = messageData.message.type === 'out' || 
-                                    messageData.message.send_by?.username || 
-                                    messageData.message.send_by?.mobile;
+            const isOutgoingMessage = messageData.message.type === 'out' ||
+                messageData.message.send_by?.username ||
+                messageData.message.send_by?.mobile;
 
             // For outgoing messages, try to merge with existing temp message to avoid duplicates
             if (isOutgoingMessage) {
@@ -247,7 +247,7 @@ class SocketManager {
                 is_reply: messageData.message.is_reply || false,
                 status: messageData.message.status || '',
                 id: messageData.message.id || '',
-                
+
                 // ✅ Nested send_by fields with safe checks
                 send_by_username: messageData.message.send_by?.username || '',
                 send_by_name: messageData.message.send_by?.name || '',
@@ -311,9 +311,9 @@ class SocketManager {
     async handleMessageStatusUpdate(statusData) {
         try {
             console.log('📊 Message status update received:', statusData);
-            
+
             const { message_id, changes, failed_reason, last_id } = statusData;
-            
+
             if (!message_id && !last_id) {
                 console.warn('No message_id or last_id in status update:', statusData);
                 return;
@@ -333,9 +333,9 @@ class SocketManager {
 
             // Update message status in database (try message_id, wamid, or last_id)
             await dbHelper.updateMessageStatus(message_id || '', newStatus, failed_reason, last_id);
-            
+
             console.log(`✅ Message ${message_id || last_id} status updated to: ${newStatus}`);
-            
+
         } catch (error) {
             console.error('Error handling message status update:', error);
         }

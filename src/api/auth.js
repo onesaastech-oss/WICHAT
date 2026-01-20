@@ -38,7 +38,7 @@ export const fetchUserProfile = async () => {
       return null;
     }
   };
-  
+
   const userData = getUserData();
   const token = userData?.token;
   const username = userData?.username;
@@ -54,7 +54,25 @@ export const fetchUserProfile = async () => {
   };
 
   const response = await axios.request(config);
-  return response.data;
+  const apiData = response.data;
+
+  // Transform API response to localStorage format and update localStorage
+  if (!apiData.error) {
+    const updatedUserData = {
+      error: apiData.error,
+      username: apiData.username,
+      token: token, // Keep existing token
+      profile: apiData.profile,
+      project_count: apiData.projects?.project_count || 0,
+      projects: apiData.projects?.list || [],
+      selected_project_id: userData?.selected_project_id || apiData.projects?.list?.[0]?.project_id || ''
+    };
+
+    // Update localStorage with transformed data
+    localStorage.setItem('userData', JSON.stringify(updatedUserData));
+  }
+
+  return apiData;
 };
 
 // Update user profile
@@ -68,7 +86,7 @@ export const updateUserProfile = async ({ name, email, country_code, mobile, gen
       return null;
     }
   };
-  
+
   const userData = getUserData();
   const token = userData?.token;
   const username = userData?.username;
@@ -121,13 +139,13 @@ export const createPaymentOrder = async ({ project_id, amount, redirect_url }) =
   if (!token || !username) {
     throw new Error('Session expired');
   }
-  
+
   const payload = {
     project_id,
     amount,
     redirect_url
   };
-  
+
 
   // Encrypt the payload
   const { data, key } = Encrypt(payload);
@@ -154,16 +172,16 @@ export const createPaymentOrder = async ({ project_id, amount, redirect_url }) =
 };
 
 // Verify payment
-export const verifyPayment = async ({ 
-  razorpay_payment_id, 
-  razorpay_order_id, 
+export const verifyPayment = async ({
+  razorpay_payment_id,
+  razorpay_order_id,
   razorpay_signature,
   amount,
   bonus,
   discount
 }) => {
   const token = localStorage.getItem('token');
-  
+
   const payload = {
     razorpay_payment_id,
     razorpay_order_id,
@@ -199,7 +217,7 @@ export const verifyPayment = async ({
 // Validate promo code
 export const validatePromoCode = async (code) => {
   const token = localStorage.getItem('token');
-  
+
   const config = {
     method: 'get',
     maxBodyLength: Infinity,
@@ -216,7 +234,7 @@ export const validatePromoCode = async (code) => {
 // Get payment transactions
 export const getPaymentTransactions = async () => {
   const token = localStorage.getItem('token');
-  
+
   const config = {
     method: 'get',
     maxBodyLength: Infinity,
@@ -241,17 +259,17 @@ export const checkPaymentStatus = async ({ project_id, order_id }) => {
       return null;
     }
   };
-  
+
   const userData = getUserData();
   const token = userData?.token;
   const username = userData?.username;
   console.log(token, username);
-  
+
 
   if (!token || !username) {
     throw new Error('Session expired');
   }
-  
+
   const payload = {
     project_id,
     order_id
@@ -293,7 +311,7 @@ export const getProjectMetaDetails = async ({ project_id }) => {
       return null;
     }
   };
-  
+
   const userData = getUserData();
   const token = userData?.token;
   const username = userData?.username;
@@ -301,7 +319,7 @@ export const getProjectMetaDetails = async ({ project_id }) => {
   if (!token || !username) {
     throw new Error('Session expired 2');
   }
-  
+
   const payload = {
     project_id
   };
@@ -342,7 +360,7 @@ export const updateWabaProfilePicture = async ({ project_id, profile_picture }) 
   if (!token || !username) {
     throw new Error('Session expired');
   }
-  
+
   const payload = {
     project_id,
     profile_picture
@@ -373,14 +391,14 @@ export const updateWabaProfilePicture = async ({ project_id, profile_picture }) 
 };
 
 // Update WABA profile details
-export const updateWabaProfileDetails = async ({ 
-  project_id, 
-  about, 
-  address, 
-  vertical, 
-  email, 
-  websites, 
-  description 
+export const updateWabaProfileDetails = async ({
+  project_id,
+  about,
+  address,
+  vertical,
+  email,
+  websites,
+  description
 }) => {
   // Load auth tokens from localStorage to match existing API requirements
   const stored =
@@ -392,7 +410,7 @@ export const updateWabaProfileDetails = async ({
   if (!token || !username) {
     throw new Error('Session expired');
   }
-  
+
   const payload = {
     project_id,
     about,
@@ -439,7 +457,7 @@ export const getEmbedSignupLink = async ({ project_id }) => {
   if (!token || !username) {
     throw new Error('Session expired');
   }
-  
+
   const payload = {
     project_id
   };
@@ -480,7 +498,7 @@ export const createProject = async ({ company_name, project_name }) => {
       return null;
     }
   };
-  
+
   const userData = getUserData();
   const token = userData?.token;
   const username = userData?.username;
@@ -488,7 +506,7 @@ export const createProject = async ({ company_name, project_name }) => {
   if (!token || !username) {
     throw new Error('Session expired');
   }
-  
+
   const payload = {
     company_name,
     project_name

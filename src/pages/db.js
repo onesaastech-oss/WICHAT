@@ -145,7 +145,7 @@ export const dbHelper = {
             dbInstance = new ChatDatabase(dbName);
             await dbInstance.open();
 
-           // console.log('✅ Database opened successfully:', dbName);
+            // console.log('✅ Database opened successfully:', dbName);
             return true;
         } catch (error) {
             console.error('❌ Failed to open database:', error);
@@ -350,20 +350,20 @@ export const dbHelper = {
     async updateMessageStatus(messageId, status, failedReason = '', lastId = null) {
         try {
             const db = this.db;
-            
+
             // Try to find message by message_id first, then wamid, then id (last_id)
             let message = await db.messages.where('message_id').equals(messageId).first();
-            
+
             if (!message && messageId) {
                 // Try matching by wamid as fallback
                 message = await db.messages.where('wamid').equals(messageId).first();
             }
-            
+
             if (!message && lastId) {
                 // Try matching by id (last_id) as final fallback
                 message = await db.messages.where('id').equals(String(lastId)).first();
             }
-            
+
             if (!message) {
                 console.warn(`Message with ID ${messageId} (or last_id: ${lastId}) not found`);
                 return;
@@ -387,7 +387,7 @@ export const dbHelper = {
                 if (failedReason && status === 'failed') {
                     updateData.failed_reason = failedReason;
                 }
-                
+
                 // Update using the found message's primary key
                 await db.messages.update(message.id, updateData);
                 console.log(`✅ Message ${message.message_id || message.wamid || message.id} status updated from ${message.status} to ${status}`);
@@ -405,7 +405,7 @@ export const dbHelper = {
     async updateChatLastMessageStatus(chatNumber, messageId, status) {
         try {
             const db = this.db;
-            
+
             // Try to update by matching the chat's last message identifiers first
             const chatRow = await db.chats.where('number').equals(chatNumber).first();
 
@@ -682,17 +682,17 @@ export const contactDbHelper = {
         try {
             const db = this.db;
             const offset = (page - 1) * limit;
-            
+
             const contacts = await db.contacts
                 .orderBy("lastUpdated")
                 .reverse()
                 .offset(offset)
                 .limit(limit)
                 .toArray();
-                
+
             const totalCount = await db.contacts.count();
             const totalPages = Math.ceil(totalCount / limit);
-            
+
             return {
                 contacts,
                 totalCount,
@@ -761,33 +761,33 @@ export const contactDbHelper = {
         try {
             const db = this.db;
             let deleted = 0;
-            
+
             // Try to delete by number first (more reliable)
             if (number) {
                 deleted = await db.contacts
                     .where('number')
                     .equals(String(number))
                     .delete();
-                
+
                 if (deleted > 0) {
                     console.log(`✅ Contact deleted by number: ${number} (${deleted} record(s))`);
                     return deleted;
                 }
             }
-            
+
             // Fallback: try to delete by contact_id
             if (contactId) {
                 const contactIdStr = String(contactId);
                 deleted = await db.contacts
                     .filter(contact => String(contact.contact_id) === contactIdStr)
                     .delete();
-                
+
                 if (deleted > 0) {
                     console.log(`✅ Contact deleted by contact_id: ${contactId} (${deleted} record(s))`);
                     return deleted;
                 }
             }
-            
+
             console.warn(`⚠️ No contact found with id: ${contactId} or number: ${number}`);
             return 0;
         } catch (error) {
@@ -800,9 +800,9 @@ export const contactDbHelper = {
         try {
             const db = this.db;
             const searchTerm = query.toLowerCase();
-            
+
             return await db.contacts
-                .filter(contact => 
+                .filter(contact =>
                     contact.name.toLowerCase().includes(searchTerm) ||
                     contact.number.includes(searchTerm) ||
                     (contact.email && contact.email.toLowerCase().includes(searchTerm)) ||

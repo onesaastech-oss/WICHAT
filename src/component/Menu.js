@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { 
-  FiMenu, FiBriefcase, FiChevronDown, FiCreditCard, 
-  FiPlus, FiBell, FiUser, FiSettings, FiHelpCircle, 
-  FiLogOut, FiPieChart, FiMessageSquare, FiUsers, 
-  FiMail, FiZap, FiCpu, FiLock, FiChevronRight, FiX 
+import {
+  FiMenu, FiBriefcase, FiChevronDown, FiCreditCard,
+  FiPlus, FiBell, FiUser, FiSettings, FiHelpCircle,
+  FiLogOut, FiPieChart, FiMessageSquare, FiUsers,
+  FiMail, FiZap, FiCpu, FiLock, FiChevronRight, FiX
 } from 'react-icons/fi';
 
 // Adjust these import paths if necessary
@@ -39,8 +39,8 @@ const getUserData = () => {
 
 const requiresProject = (item) => {
   const protectedPaths = ['/live-chat', '/template', '/campaigns'];
-  return protectedPaths.includes(item.path) || 
-         (item.submenus && item.submenus.some(submenu => protectedPaths.includes(submenu.path)));
+  return protectedPaths.includes(item.path) ||
+    (item.submenus && item.submenus.some(submenu => protectedPaths.includes(submenu.path)));
 };
 
 const isItemActive = (item, currentPath) => {
@@ -96,7 +96,7 @@ const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubm
               <FiChevronRight size={16} className={isActive ? "text-indigo-400" : "text-slate-400"} />
             </motion.span>
           )}
-          
+
           {/* Tooltip for Mini Mode */}
           {isMini && hoveredMenu === item.key && (
             <div className="absolute left-16 ml-3 px-3 py-1.5 bg-slate-800 text-white text-xs rounded-md shadow-lg z-50 whitespace-nowrap animate-in fade-in zoom-in-95 duration-200">
@@ -107,21 +107,21 @@ const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubm
 
         <AnimatePresence>
           {(!isMini && isOpen) && (
-            <motion.div 
-              initial={{ height: 0, opacity: 0 }} 
-              animate={{ height: "auto", opacity: 1 }} 
-              exit={{ height: 0, opacity: 0 }} 
-              transition={{ duration: 0.2, ease: "easeInOut" }} 
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
               className="overflow-hidden"
             >
               <div className="ml-5 pl-4 border-l-2 border-indigo-100 my-1 space-y-0.5">
                 {item.submenus.map((sub, idx) => {
-                    const isSubActive = isSubmenuItemActive(sub.path, currentPath);
-                    return (
+                  const isSubActive = isSubmenuItemActive(sub.path, currentPath);
+                  return (
                     <a key={idx} href={sub.path} className={`block px-3 py-2 rounded-md text-sm transition-all duration-200 ${isSubActive ? 'text-indigo-700 font-semibold bg-indigo-50' : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'}`}>
                       {sub.title}
                     </a>
-                    )
+                  )
                 })}
               </div>
             </motion.div>
@@ -134,7 +134,7 @@ const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubm
   // Render Single Link Item
   return (
     <div className="mb-1 relative">
-      <a href={isDisabled ? '#' : item.path} onClick={(e) => { if(isDisabled) e.preventDefault(); else if(isMobile) setMobileMenuOpen(false); }}
+      <a href={isDisabled ? '#' : item.path} onClick={(e) => { if (isDisabled) e.preventDefault(); else if (isMobile) setMobileMenuOpen(false); }}
         className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group border
           ${isDisabled ? THEME.locked : isActive ? THEME.active : THEME.inactive}
           ${isMini ? 'justify-center px-2' : ''}`}
@@ -163,9 +163,9 @@ const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubm
           </div>
         )}
         {isMini && hoveredMenu === item.key && (
-            <div className="absolute left-16 ml-3 px-3 py-1.5 bg-slate-800 text-white text-xs rounded-md shadow-lg z-50 whitespace-nowrap animate-in fade-in zoom-in-95 duration-200">
-              {item.title} {isDisabled && '(Locked)'}
-            </div>
+          <div className="absolute left-16 ml-3 px-3 py-1.5 bg-slate-800 text-white text-xs rounded-md shadow-lg z-50 whitespace-nowrap animate-in fade-in zoom-in-95 duration-200">
+            {item.title} {isDisabled && '(Locked)'}
+          </div>
         )}
       </a>
     </div>
@@ -181,7 +181,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [selectedProjectName, setSelectedProjectName] = useState(null);
   const [userProfile, setUserProfile] = useState({ name: '', email: '' });
-  
+
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const walletBalance = useSelector((state) => state.project?.walletBalance || 0);
@@ -195,7 +195,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
         const parsed = JSON.parse(userData);
         const selectedProjectId = parsed.selected_project_id;
         const projects = parsed.projects?.list || (Array.isArray(parsed.projects) ? parsed.projects : []);
-        
+
         if (selectedProjectId && projects.length > 0) {
           const selectedProject = projects.find(p => p.project_id === selectedProjectId);
           return selectedProject ? selectedProject.name : null;
@@ -209,7 +209,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
   const toggleSidebar = () => {
     if (setIsMinimized) setIsMinimized(!isMinimized);
   };
-  
+
   const handleLogout = () => {
     localStorage.removeItem("userData");
     navigate('/login');
@@ -389,7 +389,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
           </div>
         </div>
       </header>
-      
+
       <SwitchProjectModal
         isOpen={switchProjectModalOpen}
         onClose={() => setSwitchProjectModalOpen(false)}
@@ -409,6 +409,9 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
   const [currentPath, setCurrentPath] = useState('');
   const [totalUnreadCount, setTotalUnreadCount] = useState(0);
 
+  // Check if user is the owner of the project
+  const isOwner = useSelector((state) => state.project?.owned ?? true);
+
   const userData = getUserData();
   const projectList = userData?.projects?.list || (Array.isArray(userData?.projects) ? userData.projects : []);
   const hasProjects = projectList.length > 0 || (userData?.projects?.project_count > 0);
@@ -426,7 +429,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
       try {
         const userData = getUserData();
         const selectedProjectId = userData?.selected_project_id;
-        
+
         if (!selectedProjectId) {
           setTotalUnreadCount(0);
           return;
@@ -443,7 +446,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
 
         // Get chats from database
         const chats = await dbHelper.getChats();
-        
+
         // Calculate total unread count
         const totalUnread = chats.reduce((total, chat) => {
           const unreadValueRaw = Number(chat.unread_count ?? 0);
@@ -491,11 +494,11 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
     if (isMinimized) setIsHovered(hoverState);
   };
 
-  const menuItems = [
+  const allMenuItems = [
     { key: 'dashboard', title: 'Dashboard', icon: <FiPieChart size={18} />, path: '/' },
     { key: 'live-chat', title: 'Live Chat', icon: <FiMessageSquare size={18} />, path: '/live-chat' },
-    { 
-      key: 'contact', title: 'Audience', icon: <FiUsers size={18} />, 
+    {
+      key: 'contact', title: 'Audience', icon: <FiUsers size={18} />,
       submenus: [
         { title: 'All Contacts', path: '/contact' },
         { title: 'Groups', path: '/contact-group' },
@@ -503,29 +506,38 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
     },
     { key: 'templates', title: 'Templates', icon: <FiMail size={18} />, path: '/template' },
     { key: 'campaigns', title: 'Campaigns', icon: <FiZap size={18} />, path: '/campaigns' },
-    { 
-      key: 'automation', title: 'Automation', icon: <FiCpu size={18} />, 
+    {
+      key: 'automation', title: 'Automation', icon: <FiCpu size={18} />,
       submenus: [
         { title: 'Auto Reply', path: '/auto-reply' },
         { title: 'Flow Builder', path: '/flow' }
       ]
     },
     { key: 'projects', title: 'Projects', icon: <FiBriefcase size={18} />, path: '/projects' },
-    { 
-      key: 'management', title: 'Management', icon: <FiSettings size={18} />, 
+    {
+      key: 'management', title: 'Management', icon: <FiSettings size={18} />,
       submenus: [
         { title: 'Agents', path: '/agent-management' },
         { title: 'Permissions', path: '/permission-list' }
       ]
     },
-    { 
-      key: 'billing', title: 'Billing', icon: <FiCreditCard size={18} />, 
+    {
+      key: 'billing', title: 'Billing', icon: <FiCreditCard size={18} />,
       submenus: [
         { title: 'My Plan', path: '/my-plan' },
         { title: 'Transactions', path: '/transactions' }
       ]
     }
   ];
+
+  // Filter menu items based on user role (hide Management and Billing for agents)
+  const menuItems = allMenuItems.filter(item => {
+    // If user is not the owner (i.e., is an agent), hide Management and Billing
+    if (!isOwner && (item.key === 'management' || item.key === 'billing')) {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <>
@@ -542,9 +554,9 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
               </div>
               <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
                 {menuItems.map(item => (
-                  <NavItem 
-                    key={item.key} 
-                    item={item} 
+                  <NavItem
+                    key={item.key}
+                    item={item}
                     isMobile={true}
                     currentPath={currentPath}
                     openSubmenus={openSubmenus}
@@ -571,9 +583,9 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
         <div className="flex-1 flex flex-col overflow-y-auto py-6 px-3 scrollbar-hide">
           <nav className="space-y-1">
             {menuItems.map(item => (
-              <NavItem 
-                key={item.key} 
-                item={item} 
+              <NavItem
+                key={item.key}
+                item={item}
                 isMobile={false}
                 isMinimized={isMinimized}
                 isHovered={isHovered}
@@ -588,15 +600,19 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
             ))}
           </nav>
         </div>
-        
+
         <AnimatePresence>
           {(!isMinimized || isHovered) && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ delay: 0.1 }} className="p-4 border-t border-indigo-100">
-              <div className="bg-gradient-to-br from-indigo-50 to-white rounded-xl p-4 text-xs border border-indigo-100 shadow-sm">
-                <p className="font-semibold text-indigo-900 mb-1">Need help?</p>
-                <p className="text-slate-600 mb-3 leading-relaxed">Check our docs or contact support for assistance.</p>
-                <a href="/support" className="block w-full py-1.5 bg-white border border-indigo-200 text-indigo-600 font-medium rounded-md shadow-sm hover:bg-indigo-50 transition-colors text-center">Contact Support</a>
-              </div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ delay: 0.1 }} className="p-3 border-t border-indigo-100">
+              <a href="/support" className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gradient-to-r from-indigo-50 to-white border border-indigo-100 hover:border-indigo-200 hover:shadow-sm transition-all group">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-indigo-600 shadow-sm border border-indigo-50 group-hover:scale-105 transition-transform">
+                  <FiHelpCircle size={16} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-slate-700 leading-none mb-0.5">Need Help?</span>
+                  <span className="text-[10px] text-slate-500 font-medium">Contact Support</span>
+                </div>
+              </a>
             </motion.div>
           )}
         </AnimatePresence>
@@ -614,24 +630,23 @@ const Layout = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      <Header 
-        mobileMenuOpen={mobileMenuOpen} 
+      <Header
+        mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
         isMinimized={isMinimized}
         setIsMinimized={setIsMinimized}
       />
 
-      <Sidebar 
-        mobileMenuOpen={mobileMenuOpen} 
+      <Sidebar
+        mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
         isMinimized={isMinimized}
         setIsMinimized={setIsMinimized}
       />
 
-      <main 
-        className={`pt-16 transition-all duration-300 ease-in-out ${
-          isMinimized ? 'md:pl-20' : 'md:pl-[260px]'
-        }`}
+      <main
+        className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-[260px]'
+          }`}
       >
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto animate-in fade-in duration-500">
           <Outlet />

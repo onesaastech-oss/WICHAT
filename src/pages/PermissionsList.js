@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Header, Sidebar } from '../component/Menu';
 import { Encrypt } from './encryption/payload-encryption';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 import moment from 'moment/moment';
 import {
     FiEdit,
@@ -92,7 +93,7 @@ function PermissionsList() {
         setLoading(true);
         try {
             const payload = {
-                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
+                project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
             };
 
             const { data, key } = Encrypt(payload);
@@ -113,7 +114,7 @@ function PermissionsList() {
             const res_data = response.data;
 
             if (res_data.error) {
-                alert(res_data.error);
+                toast.error(res_data.error);
             }
 
             if (res_data.msg) {
@@ -125,7 +126,7 @@ function PermissionsList() {
             }
 
         } catch (error) {
-            alert('Failed to load permission list');
+            toast.error('Failed to load permission list');
         } finally {
             setLoading(false);
         }
@@ -158,7 +159,7 @@ function PermissionsList() {
 
         try {
             const payload = {
-                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
+                project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
                 name: createFormData.name,
                 remark: createFormData.remark
             };
@@ -181,7 +182,7 @@ function PermissionsList() {
             const res_data = response.data;
 
             if (res_data.error) {
-                alert(res_data.error);
+                toast.error(res_data.error);
                 return;
             }
 
@@ -189,12 +190,12 @@ function PermissionsList() {
                 await fetchPermissions();
                 setIsCreateModalOpen(false);
                 setCreateFormData({ name: '', remark: '' });
-                alert('Permission created successfully!');
+                toast.success('Permission created successfully!');
             }
 
         } catch (error) {
             console.error('Error creating permission:', error);
-            alert('Error creating permission. Please try again.');
+            toast.error('Error creating permission. Please try again.');
         } finally {
             setFormLoading(false);
         }
@@ -224,7 +225,7 @@ function PermissionsList() {
 
         try {
             const payload = {
-                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
+                project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
                 permission_id: editingPermission.permission_id,
                 name: editFormData.name,
                 remark: editFormData.remark
@@ -249,7 +250,7 @@ function PermissionsList() {
             console.log(res_data);
 
             if (res_data.error) {
-                alert(res_data.error);
+                toast.error(res_data.error);
                 return;
             }
 
@@ -258,12 +259,12 @@ function PermissionsList() {
                 setIsEditModalOpen(false);
                 setEditFormData({ name: '', remark: '' });
                 setEditingPermission(null);
-                alert('Permission updated successfully!');
+                toast.success('Permission updated successfully!');
             }
 
         } catch (error) {
             console.error('Error updating permission:', error);
-            alert('Error updating permission. Please try again.');
+            toast.error('Error updating permission. Please try again.');
         } finally {
             setFormLoading(false);
         }
@@ -341,7 +342,7 @@ function PermissionsList() {
         try {
             // Convert permissionSettings to the API format
             const payload = {
-                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
+                project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
                 permission_id: selectedPermission.permission_id,
             };
 
@@ -370,7 +371,7 @@ function PermissionsList() {
             console.log(res_data);
 
             if (res_data.error) {
-                alert(res_data.error);
+                toast.error(res_data.error);
                 return;
             }
 
@@ -378,12 +379,12 @@ function PermissionsList() {
                 await fetchPermissions();
                 setIsSettingsModalOpen(false);
                 setSelectedPermission(null);
-                alert(res_data.msg);
+                toast.success(res_data.msg);
             }
 
         } catch (error) {
             console.log('Error saving permission settings:', error);
-            alert('Error saving permission settings. Please try again.');
+            toast.error('Error saving permission settings. Please try again.');
         } finally {
             setFormLoading(false);
         }

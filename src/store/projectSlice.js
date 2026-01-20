@@ -63,11 +63,13 @@ export const fetchProjectInfo = createAsyncThunk(
         0
       );
       const permissions = root.permissions ?? null;
+      const owned = root.project?.owned ?? true; // Default to true if not present for backward compatibility
 
       return {
         raw: response?.data,
         walletBalance,
-        permissions
+        permissions,
+        owned
       };
     } catch (err) {
       return rejectWithValue(err?.message || 'Network error');
@@ -80,7 +82,8 @@ const initialState = {
   status: 'idle',
   error: null,
   info: null,
-  permissions: null
+  permissions: null,
+  owned: true
 };
 
 const projectSlice = createSlice({
@@ -101,6 +104,7 @@ const projectSlice = createSlice({
         state.walletBalance = action.payload.walletBalance;
         state.info = action.payload.raw;
         state.permissions = action.payload.permissions;
+        state.owned = action.payload.owned;
       })
       .addCase(fetchProjectInfo.rejected, (state, action) => {
         state.status = 'failed';

@@ -55,7 +55,7 @@ function LiveChat() {
 
             // Initialize chat database for the currently selected project
             let dbInitSuccess = false;
-            const selectedProjectId = parsedData.selected_project_id ;
+            const selectedProjectId = parsedData.selected_project_id;
 
             if (selectedProjectId) {
                 dbInitSuccess = await dbHelper.init(selectedProjectId || 'default_project');
@@ -137,7 +137,7 @@ function LiveChat() {
                     send_by_username: '',
                     send_by_mobile: ''
                 };
-                
+
                 setActiveChat(prev => {
                     if (!prev || prev.number !== phone) {
                         return newChat;
@@ -246,7 +246,7 @@ function LiveChat() {
 
         // Listen to popstate events (browser back/forward)
         window.addEventListener('popstate', handlePopState);
-        
+
         return () => {
             window.removeEventListener('popstate', handlePopState);
         };
@@ -255,7 +255,7 @@ function LiveChat() {
     // Handle location changes and redirect if needed
     useEffect(() => {
         const currentPath = location.pathname;
-        
+
         // If this is a back navigation (popstate) and we're on a phone route
         if (isBackNavigationRef.current) {
             // If we're on /live-chat/:phone, redirect to /live-chat
@@ -268,7 +268,7 @@ function LiveChat() {
             }
             isBackNavigationRef.current = false;
         }
-        
+
         // Update previous location
         previousLocationRef.current = currentPath;
     }, [location.pathname, navigate]);
@@ -309,7 +309,7 @@ function LiveChat() {
                 console.log('✅ Updated chats fetched from DB after contact update:', updatedChats.length);
                 // Create a new array reference to trigger React re-render
                 setChats([...updatedChats]);
-                
+
                 // Also update activeChat if it matches the updated contact
                 if (activeChat?.number === chatNumber) {
                     const updatedActiveChat = updatedChats.find(chat => chat.number === chatNumber);
@@ -444,7 +444,7 @@ function LiveChat() {
                                     dbAvailable={dbAvailable}
                                     refresh={activeChat.refresh}
                                     socketMessage={messages}
-                                socketAssigning={assignmentUpdate}
+                                    socketAssigning={assignmentUpdate}
                                     onMessageStatusUpdate={handleMessageStatusUpdate}
                                     onContactUpdate={handleContactUpdate}
                                 />

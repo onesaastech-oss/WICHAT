@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
 import Pagination from '../component/Pagination';
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import {
@@ -18,6 +19,7 @@ import {
 
 function ContactGroup() {
   const navigate = useNavigate();
+  const permissions = useSelector((state) => state.project.permissions);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [groups, setGroups] = useState([]);
   const [totalGroupCount, setTotalGroupCount] = useState(0);
@@ -102,6 +104,7 @@ function ContactGroup() {
   // Load groups from API
   useEffect(() => {
     if (!tokens?.token || !tokens?.username) return;
+    if (permissions && permissions.view_contact === false) return;
 
     const projectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
 
@@ -132,7 +135,7 @@ function ContactGroup() {
         );
 
         console.log(response);
-        
+
 
         if (!response?.data?.error) {
           const apiList = response?.data?.data || [];
@@ -181,7 +184,7 @@ function ContactGroup() {
     };
 
     loadGroups();
-  }, [tokens?.token, tokens?.username, tokens?.selected_project_id, tokens?.projects, pageNo, pageSize, reloadTick]);
+  }, [tokens?.token, tokens?.username, tokens?.selected_project_id, tokens?.projects, pageNo, pageSize, reloadTick, permissions]);
 
   // Validation functions
   const validateGroupName = (name) => {
@@ -515,7 +518,7 @@ function ContactGroup() {
       if (sortColumn === 'contact_count') {
         aValue = Number(aValue) || 0;
         bValue = Number(bValue) || 0;
-        
+
         if (aValue < bValue) {
           return sortDirection === 'asc' ? -1 : 1;
         }
@@ -543,6 +546,34 @@ function ContactGroup() {
       }
       return 0;
     });
+  }
+
+  if (permissions && permissions.view_contact === false) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header
+          mobileMenuOpen={mobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
+          isMinimized={isMinimized}
+          setIsMinimized={setIsMinimized}
+        />
+        <Sidebar
+          mobileMenuOpen={mobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
+          isMinimized={isMinimized}
+          setIsMinimized={setIsMinimized}
+        />
+        <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
+          }`}>
+          <div className="p-4 sm:p-6 md:p-8">
+            <div className="bg-white rounded-lg shadow p-8 text-center">
+              <h2 className="text-lg font-semibold text-gray-900">Access Denied</h2>
+              <p className="mt-2 text-gray-600">You do not have permission to view contact groups.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -610,7 +641,7 @@ function ContactGroup() {
                               className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                             />
                           </th>
-                          <th 
+                          <th
                             className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                             onClick={() => handleSort('name')}
                           >
@@ -630,7 +661,7 @@ function ContactGroup() {
                               )}
                             </div>
                           </th>
-                          <th 
+                          <th
                             className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                             onClick={() => handleSort('remark')}
                           >
@@ -650,7 +681,7 @@ function ContactGroup() {
                               )}
                             </div>
                           </th>
-                          <th 
+                          <th
                             className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                             onClick={() => handleSort('contact_count')}
                           >
@@ -728,15 +759,14 @@ function ContactGroup() {
                                   >
                                     <FiEdit className="h-4 w-4" />
                                   </button>
-                                  <button 
+                                  <button
                                     onClick={() => group.contact_count === 0 && handleOpenDeleteModal(group)}
-                                    className={`${
-                                      group.contact_count > 0 
-                                        ? 'text-gray-400 cursor-not-allowed' 
-                                        : 'text-red-600 hover:text-red-900 cursor-pointer'
-                                    }`}
+                                    className={`${group.contact_count > 0
+                                      ? 'text-gray-400 cursor-not-allowed'
+                                      : 'text-red-600 hover:text-red-900 cursor-pointer'
+                                      }`}
                                     title={
-                                      group.contact_count > 0 
+                                      group.contact_count > 0
                                         ? `Cannot delete group with ${group.contact_count} contacts. Remove all contacts first.`
                                         : "Delete group"
                                     }
@@ -814,11 +844,10 @@ function ContactGroup() {
                       }
                     }}
                     onBlur={() => setCreateErrors({ ...createErrors, name: validateGroupName(newGroup.name) })}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      createErrors.name 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${createErrors.name
+                      ? 'border-red-500 focus:ring-red-500'
+                      : 'border-gray-300 focus:ring-indigo-500'
+                      }`}
                     placeholder="Enter group name"
                     required
                   />
@@ -841,11 +870,10 @@ function ContactGroup() {
                       }
                     }}
                     onBlur={() => setCreateErrors({ ...createErrors, remark: validateRemark(newGroup.remark) })}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      createErrors.remark 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${createErrors.remark
+                      ? 'border-red-500 focus:ring-red-500'
+                      : 'border-gray-300 focus:ring-indigo-500'
+                      }`}
                     placeholder="Enter group description or remark"
                     rows="3"
                   />
@@ -931,11 +959,10 @@ function ContactGroup() {
                       }
                     }}
                     onBlur={() => setEditErrors({ ...editErrors, name: validateGroupName(editGroup.name) })}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      editErrors.name 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${editErrors.name
+                      ? 'border-red-500 focus:ring-red-500'
+                      : 'border-gray-300 focus:ring-indigo-500'
+                      }`}
                     placeholder="Enter group name"
                     required
                   />
@@ -958,11 +985,10 @@ function ContactGroup() {
                       }
                     }}
                     onBlur={() => setEditErrors({ ...editErrors, remark: validateRemark(editGroup.remark) })}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      editErrors.remark 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${editErrors.remark
+                      ? 'border-red-500 focus:ring-red-500'
+                      : 'border-gray-300 focus:ring-indigo-500'
+                      }`}
                     placeholder="Enter group description or remark"
                     rows="3"
                   />

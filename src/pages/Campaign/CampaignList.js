@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header, Sidebar } from '../../component/Menu';
 import { useNavigate } from 'react-router-dom';
+import Pagination from '../../component/Pagination';
 import {
     FiPlus,
     FiSearch,
@@ -32,8 +33,10 @@ const CampaignList = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [tokens, setTokens] = useState(null);
-    const [lastId, setLastId] = useState(0);
-    const [hasMore, setHasMore] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [pageSize, setPageSize] = useState(20);
 
     useEffect(() => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -79,7 +82,7 @@ const CampaignList = () => {
     }, []);
 
     // Fetch campaigns from API
-    const fetchCampaigns = useCallback(async (reset = false, currentLastId = null) => {
+    const fetchCampaigns = useCallback(async (page = 1) => {
         if (!tokens?.token || !tokens?.username) {
             setLoading(false);
             return;
@@ -89,12 +92,10 @@ const CampaignList = () => {
             setLoading(true);
             setError(null);
 
-            // Use provided lastId, or get from state, or reset to 0
-            const lastIdToUse = reset ? 0 : (currentLastId !== null ? currentLastId : lastId);
-
             const payload = {
                 project_id: tokens.selected_project_id || '',
-                last_id: lastIdToUse,
+                page_no: page,
+                limit: pageSize,
                 status: filterStatus // filterStatus already uses API values: 'all', 'complete', 'pending', 'stopped'
             };
 
@@ -148,14 +149,14 @@ const CampaignList = () => {
                     };
                 });
 
-                if (reset) {
-                    setCampaigns(mappedCampaigns);
-                } else {
-                    setCampaigns(prev => [...prev, ...mappedCampaigns]);
-                }
+                // Replace campaigns (not append)
+                setCampaigns(mappedCampaigns);
 
-                setLastId(response?.data?.last_id || 0);
-                setHasMore(response?.data?.has_more || false);
+                // Update pagination metadata from API response
+                const meta = response?.data?.meta || {};
+                setCurrentPage(meta.page_no || page);
+                setTotalPages(meta.total_pages || 1);
+                setTotalRecords(meta.total_records || 0);
             } else {
                 setError(response?.data?.message || 'Failed to fetch campaigns');
                 setCampaigns([]);
@@ -167,15 +168,33 @@ const CampaignList = () => {
         } finally {
             setLoading(false);
         }
-    }, [tokens, filterStatus]); // Removed lastId to avoid infinite loop - we use it from state when needed
+    }, [tokens, filterStatus, pageSize]);
 
     // Fetch campaigns when tokens are loaded or filter changes
     useEffect(() => {
         if (tokens?.token && tokens?.username) {
-            setLastId(0);
-            fetchCampaigns(true);
+            setCurrentPage(1);
+            fetchCampaigns(1);
         }
     }, [tokens?.token, tokens?.username, filterStatus, fetchCampaigns]);
+
+    // Handler for page changes
+    const handlePageChange = (page) => {
+        fetchCampaigns(page);
+    };
+
+    // Handler for page size changes
+    const handlePageSizeChange = (newSize) => {
+        setPageSize(newSize);
+        setCurrentPage(1);
+    };
+
+    // Refetch when page size changes
+    useEffect(() => {
+        if (tokens?.token && tokens?.username && pageSize) {
+            fetchCampaigns(currentPage);
+        }
+    }, [pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const getStatusBadge = (status) => {
         const statusConfig = {
@@ -388,6 +407,9 @@ const CampaignList = () => {
                                 <thead className="bg-gray-50 dark:bg-gray-700">
                                     <tr>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            S.No
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                             Campaign
                                         </th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -413,7 +435,7 @@ const CampaignList = () => {
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                     {loading ? (
                                         <tr>
-                                            <td colSpan="7" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                            <td colSpan="8" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                                                 <div className="flex items-center justify-center">
                                                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
                                                     <span className="ml-2">Loading campaigns...</span>
@@ -422,13 +444,18 @@ const CampaignList = () => {
                                         </tr>
                                     ) : filteredCampaigns.length === 0 ? (
                                         <tr>
-                                            <td colSpan="7" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                            <td colSpan="8" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                                                 No campaigns found
                                             </td>
                                         </tr>
                                     ) : (
-                                        filteredCampaigns.map((campaign) => (
+                                        filteredCampaigns.map((campaign, index) => (
                                             <tr key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                                        {(currentPage - 1) * pageSize + index + 1}
+                                                    </div>
+                                                </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center">
                                                         <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300">
@@ -523,16 +550,19 @@ const CampaignList = () => {
                                 </tbody>
                             </table>
                         </div>
-                        {/* Load More Button */}
-                        {hasMore && !loading && (
-                            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 text-center">
-                                <button
-                                    onClick={() => fetchCampaigns(false, lastId)}
-                                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-200 dark:hover:bg-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                >
-                                    Load More
-                                </button>
-                            </div>
+
+                        {/* Pagination */}
+                        {!loading && filteredCampaigns.length > 0 && (
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalRecords={totalRecords}
+                                pageSize={pageSize}
+                                onPageChange={handlePageChange}
+                                onPageSizeChange={handlePageSizeChange}
+                                showPageSizeSelector={true}
+                                showGoToPage={true}
+                            />
                         )}
                     </div>
 

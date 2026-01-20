@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Header, Sidebar } from '../component/Menu';
 import Pagination from '../component/Pagination';
+import { useSelector } from 'react-redux';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import {
@@ -17,6 +18,7 @@ import {
 } from 'react-icons/fi';
 
 function ContactGroupList() {
+  const permissions = useSelector((state) => state.project.permissions);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [groupContacts, setGroupContacts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -111,6 +113,7 @@ function ContactGroupList() {
   // Load group contacts from API
   useEffect(() => {
     if (!tokens?.token || !tokens?.username) return;
+    if (permissions && permissions.view_contact === false) return;
 
     const projectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
 
@@ -175,7 +178,7 @@ function ContactGroupList() {
               total_records: totalCount
             }));
           }
-          
+
           // Set group info if available
           if (apiList.length > 0 && apiList[0].group_name) {
             setGroupInfo({
@@ -200,11 +203,12 @@ function ContactGroupList() {
     };
 
     loadGroupContacts();
-  }, [tokens?.token, tokens?.username, tokens?.selected_project_id, tokens?.projects, pageNo, pageSize, reloadTick]);
+  }, [tokens?.token, tokens?.username, tokens?.selected_project_id, tokens?.projects, pageNo, pageSize, reloadTick, permissions]);
 
   const loadAddContactsPage = useCallback(
     async ({ requestedPageNo, query, append }) => {
       if (!tokens?.token || !tokens?.username) return;
+      if (permissions && permissions.view_contact === false) return;
       // Strict guard to prevent concurrent loads (state can lag behind)
       if (addContactsLoadingRef.current) return;
 
@@ -331,7 +335,7 @@ function ContactGroupList() {
         }
       }
     },
-    [tokens?.token, tokens?.username, tokens?.selected_project_id, tokens?.projects]
+    [tokens?.token, tokens?.username, tokens?.selected_project_id, tokens?.projects, permissions]
   );
 
   const resetAndLoadAddContacts = useCallback(
@@ -375,10 +379,10 @@ function ContactGroupList() {
         loadedItemCount += 1;
       }
       const loadedContentHeight = loadedItemCount * ADD_CONTACT_ITEM_HEIGHT;
-      
+
       // How far user has scrolled
       const scrolledTo = el.scrollTop + el.clientHeight;
-      
+
       // Trigger when near bottom of LOADED content (not spacer)
       const nearBottomOfLoaded = scrolledTo >= (loadedContentHeight - 150);
 
@@ -678,6 +682,33 @@ function ContactGroupList() {
   const remainingCount = Math.max(0, totalAvailable - loadedCount);
   const addContactsSpacerHeight = remainingCount * ADD_CONTACT_ITEM_HEIGHT;
 
+  if (permissions && permissions.view_contact === false) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header
+          mobileMenuOpen={mobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
+          isMinimized={isMinimized}
+          setIsMinimized={setIsMinimized}
+        />
+        <Sidebar
+          mobileMenuOpen={mobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
+          isMinimized={isMinimized}
+          setIsMinimized={setIsMinimized}
+        />
+        <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
+          <div className="p-4 sm:p-6 md:p-8">
+            <div className="bg-white rounded-lg shadow p-8 text-center">
+              <h2 className="text-lg font-semibold text-gray-900">Access Denied</h2>
+              <p className="mt-2 text-gray-600">You do not have permission to view group contacts.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header
@@ -784,7 +815,7 @@ function ContactGroupList() {
                         {filteredGroupContacts.length === 0 ? (
                           <tr>
                             <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
-                              {searchTerm 
+                              {searchTerm
                                 ? 'No contacts found matching your search.'
                                 : 'No contacts in this group yet. Add some contacts to get started.'
                               }
@@ -900,7 +931,7 @@ function ContactGroupList() {
               </div>
 
               {/* Available contacts list - fixed height container for stable scrollbar */}
-              <div 
+              <div
                 className="relative max-h-96 min-h-96 overflow-y-auto overscroll-contain"
                 onScroll={handleAddContactsScroll}
               >
@@ -912,7 +943,7 @@ function ContactGroupList() {
                   </div>
                 ) : filteredAvailableContacts.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
-                    {addSearchTerm 
+                    {addSearchTerm
                       ? 'No contacts found matching your search.'
                       : 'No available contacts to add. All contacts are already in this group.'
                     }
@@ -959,7 +990,7 @@ function ContactGroupList() {
 
                     {/* Spacer for unloaded items - makes scrollbar accurate and stable */}
                     {addContactsSpacerHeight > 0 && (
-                      <div 
+                      <div
                         style={{ height: addContactsSpacerHeight, minHeight: addContactsSpacerHeight }}
                         className="flex-shrink-0 pointer-events-none"
                         aria-hidden="true"
@@ -1025,7 +1056,7 @@ function ContactGroupList() {
               <div className="text-center">
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Remove Contact</h3>
                 <p className="text-sm text-gray-600 mb-4">
-                  Are you sure you want to remove "{removingContact?.name}" from this group? 
+                  Are you sure you want to remove "{removingContact?.name}" from this group?
                   The contact will remain in your contact list but will be removed from this group.
                 </p>
                 <div className="flex justify-center space-x-3">
