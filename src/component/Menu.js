@@ -65,7 +65,7 @@ const isSubmenuItemActive = (submenuPath, currentPath) => {
 // ==========================================
 // 3. NavItem Component (MOVED OUTSIDE)
 // ==========================================
-const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubmenus, toggleSubmenu, setHoveredMenu, hoveredMenu, setMobileMenuOpen, hasProjects, unreadCount }) => {
+const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubmenus, toggleSubmenu, setHoveredMenu, hoveredMenu, setMobileMenuOpen, hasProjects, unreadCount, navigate }) => {
   const isActive = isItemActive(item, currentPath);
   const isDisabled = requiresProject(item) && !hasProjects;
   const hasSubmenu = item.submenus && item.submenus.length > 0;
@@ -118,9 +118,16 @@ const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubm
                 {item.submenus.map((sub, idx) => {
                   const isSubActive = isSubmenuItemActive(sub.path, currentPath);
                   return (
-                    <a key={idx} href={sub.path} className={`block px-3 py-2 rounded-md text-sm transition-all duration-200 ${isSubActive ? 'text-indigo-700 font-semibold bg-indigo-50' : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'}`}>
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        navigate(sub.path);
+                        if (isMobile) setMobileMenuOpen(false);
+                      }}
+                      className={`block px-3 py-2 rounded-md text-sm transition-all duration-200 cursor-pointer ${isSubActive ? 'text-indigo-700 font-semibold bg-indigo-50' : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'}`}
+                    >
                       {sub.title}
-                    </a>
+                    </div>
                   )
                 })}
               </div>
@@ -134,8 +141,16 @@ const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubm
   // Render Single Link Item
   return (
     <div className="mb-1 relative">
-      <a href={isDisabled ? '#' : item.path} onClick={(e) => { if (isDisabled) e.preventDefault(); else if (isMobile) setMobileMenuOpen(false); }}
-        className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group border
+      <div
+        onClick={(e) => {
+          if (isDisabled) {
+            e.preventDefault();
+          } else {
+            navigate(item.path);
+            if (isMobile) setMobileMenuOpen(false);
+          }
+        }}
+        className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group border cursor-pointer
           ${isDisabled ? THEME.locked : isActive ? THEME.active : THEME.inactive}
           ${isMini ? 'justify-center px-2' : ''}`}
         onMouseEnter={() => isMini && setHoveredMenu(item.key)}
@@ -167,7 +182,7 @@ const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubm
             {item.title} {isDisabled && '(Locked)'}
           </div>
         )}
-      </a>
+      </div>
     </div>
   );
 };
@@ -374,9 +389,16 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
                       <FiBriefcase size={16} /> Switch Project
                     </button>
                     {profileItems.map((item, index) => (
-                      <a key={index} href={item.path} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-colors" onClick={() => setProfileDropdownOpen(false)}>
+                      <div
+                        key={index}
+                        onClick={() => {
+                          if (item.path !== '#') navigate(item.path);
+                          setProfileDropdownOpen(false);
+                        }}
+                        className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-colors cursor-pointer"
+                      >
                         {item.icon} {item.title}
-                      </a>
+                      </div>
                     ))}
                     <div className="my-1 h-px bg-slate-100"></div>
                     <button onClick={handleLogout} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
@@ -408,6 +430,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
   const [isHovered, setIsHovered] = useState(false);
   const [currentPath, setCurrentPath] = useState('');
   const [totalUnreadCount, setTotalUnreadCount] = useState(0);
+  const navigate = useNavigate();
 
   // Check if user is the owner of the project
   const isOwner = useSelector((state) => state.project?.owned ?? true);
@@ -564,6 +587,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
                     hasProjects={hasProjects}
                     setMobileMenuOpen={setMobileMenuOpen}
                     unreadCount={totalUnreadCount}
+                    navigate={navigate}
                   />
                 ))}
               </div>
@@ -596,6 +620,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
                 hoveredMenu={hoveredMenu}
                 hasProjects={hasProjects}
                 unreadCount={totalUnreadCount}
+                navigate={navigate}
               />
             ))}
           </nav>
@@ -604,7 +629,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
         <AnimatePresence>
           {(!isMinimized || isHovered) && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ delay: 0.1 }} className="p-3 border-t border-indigo-100">
-              <a href="/support" className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gradient-to-r from-indigo-50 to-white border border-indigo-100 hover:border-indigo-200 hover:shadow-sm transition-all group">
+              <div onClick={() => navigate('/support')} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gradient-to-r from-indigo-50 to-white border border-indigo-100 hover:border-indigo-200 hover:shadow-sm transition-all group cursor-pointer">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-indigo-600 shadow-sm border border-indigo-50 group-hover:scale-105 transition-transform">
                   <FiHelpCircle size={16} />
                 </div>
@@ -612,7 +637,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
                   <span className="text-xs font-bold text-slate-700 leading-none mb-0.5">Need Help?</span>
                   <span className="text-[10px] text-slate-500 font-medium">Contact Support</span>
                 </div>
-              </a>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
