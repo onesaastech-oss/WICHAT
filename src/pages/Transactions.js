@@ -538,7 +538,7 @@ const Transactions = () => {
                   Reset All
                 </button>
               </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Date Range Picker */}
                 <DateRangePicker
                   startDate={fromDate}
@@ -548,28 +548,13 @@ const Transactions = () => {
                   maxDate={moment().format('YYYY-MM-DD')}
                 />
 
-                {/* Multi-Select Projects */}
-                <div className="lg:col-span-2">
-                  <MultiSelect
-                    options={(tokens?.projects || []).map(project => ({
-                      value: project.project_id,
-                      label: project.name
-                    }))}
-                    selectedValues={selectedProjects}
-                    onChange={setSelectedProjects}
-                    label="Projects"
-                    placeholder="Select projects"
-                    allOptionLabel="All Projects"
-                  />
-                </div>
-
                 {/* Transaction Type */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Transaction Type</label>
                   <select
                     value={transactionType}
                     onChange={(e) => setTransactionType(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
                   >
                     <option value="all">All</option>
                     <option value="template send">Template Send</option>
@@ -584,12 +569,27 @@ const Transactions = () => {
                   <select
                     value={entryType}
                     onChange={(e) => setEntryType(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
                   >
                     <option value="all">All</option>
                     <option value="1">Credit</option>
                     <option value="0">Debit</option>
                   </select>
+                </div>
+
+                {/* Multi-Select Projects */}
+                <div>
+                  <MultiSelect
+                    options={(tokens?.projects || []).map(project => ({
+                      value: project.project_id,
+                      label: project.name
+                    }))}
+                    selectedValues={selectedProjects}
+                    onChange={setSelectedProjects}
+                    label="Projects"
+                    placeholder="Select projects"
+                    allOptionLabel="All Projects"
+                  />
                 </div>
               </div>
             </div>
