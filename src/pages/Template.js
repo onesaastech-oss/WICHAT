@@ -1,28 +1,35 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Header, Sidebar } from '../component/Menu';
 import Tooltip from '../component/Tooltip';
+import Pagination from '../component/Pagination'; // Import Pagination component
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import toast from 'react-hot-toast';
-import { FiPlus, FiEdit, FiTrash2, FiRefreshCw, FiAlertCircle, FiMoreVertical, FiChevronDown, FiCheck } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiRefreshCw, FiAlertCircle, FiMoreVertical, FiChevronDown, FiCheck, FiEye } from 'react-icons/fi';
+import TemplatePreviewModal from '../component/Modals/TemplatePreviewModal';
 import DeleteConfirmationModal from '../component/Modals/DeleteConfirmationModal';
 
 function Template() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [lastId, setLastId] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const [statusFilter, setStatusFilter] = useState('');
   const [tokens, setTokens] = useState(null);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const observerTarget = useRef(null);
+
+  // Preview Modal State
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [templateToPreview, setTemplateToPreview] = useState(null);
+
   const abortControllerRef = useRef(null);
   const filterRef = useRef(null);
 
@@ -52,25 +59,21 @@ function Template() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchTemplates = useCallback(async (isInitial = false) => {
+  const fetchTemplates = useCallback(async () => {
     if (!tokens?.token || !tokens?.username) return;
 
     if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
 
-    if (isInitial) {
-      setLoading(true);
-      setLastId(0);
-    } else {
-      setIsLoadingMore(true);
-    }
+    setLoading(true);
 
     try {
       const selectedProjectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id;
       const payload = {
         project_id: selectedProjectId,
         status: statusFilter,
-        last_id: isInitial ? 0 : lastId
+        page: currentPage,
+        limit: pageSize
       };
 
       const { data, key } = Encrypt(payload);
@@ -99,42 +102,32 @@ function Template() {
           template_data: t.template
         }));
 
-        setTemplates(prev => isInitial ? apiTemplates : [...prev, ...apiTemplates]);
-        setLastId(response.data.last_id);
-        setHasMore(response.data.has_more);
+        setTemplates(apiTemplates);
+
+        if (response.data.meta) {
+          setTotalPages(response.data.meta.total_pages);
+          setTotalRecords(response.data.meta.total_records);
+        }
+      } else {
+        setTemplates([]);
+        setTotalPages(1);
+        setTotalRecords(0);
       }
     } catch (error) {
       if (axios.isCancel(error)) return;
       console.error('Fetch error:', error);
+      setTemplates([]);
     } finally {
       setLoading(false);
-      setIsLoadingMore(false);
     }
-  }, [tokens, statusFilter, lastId]);
+  }, [tokens, statusFilter, currentPage, pageSize]);
 
   useEffect(() => {
-    fetchTemplates(true);
+    fetchTemplates();
     return () => abortControllerRef.current?.abort();
-  }, [statusFilter, tokens?.token]);
+  }, [fetchTemplates]);
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading && !isLoadingMore) {
-          fetchTemplates(false);
-        }
-      },
-      { 
-        threshold: 0.1,
-        rootMargin: '200px'
-      }
-    );
 
-    const currentTarget = observerTarget.current;
-    if (currentTarget) observer.observe(currentTarget);
-    
-    return () => currentTarget && observer.unobserve(currentTarget);
-  }, [hasMore, loading, isLoadingMore, fetchTemplates]);
 
   const getStatusStyle = (status) => {
     const styles = {
@@ -146,7 +139,7 @@ function Template() {
   };
 
   const getStatusIcon = (status) => {
-    switch(status) {
+    switch (status) {
       case 'APPROVED':
         return (
           <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
@@ -237,11 +230,21 @@ function Template() {
     setTemplateToDelete(null);
   };
 
+  const handlePreviewClick = (template) => {
+    setTemplateToPreview(template);
+    setPreviewModalOpen(true);
+  };
+
+  const handlePreviewClose = () => {
+    setPreviewModalOpen(false);
+    setTemplateToPreview(null);
+  };
+
   const filterOptions = [
     { value: '', label: 'All Status', count: templates.length, color: 'text-gray-600' },
-    { 
-      value: 'APPROVED', 
-      label: 'Approved', 
+    {
+      value: 'APPROVED',
+      label: 'Approved',
       count: templates.filter(t => t.status === 'APPROVED').length,
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-50',
@@ -251,9 +254,9 @@ function Template() {
         </svg>
       )
     },
-    { 
-      value: 'PENDING', 
-      label: 'Pending', 
+    {
+      value: 'PENDING',
+      label: 'Pending',
       count: templates.filter(t => t.status === 'PENDING').length,
       color: 'text-amber-600',
       bgColor: 'bg-amber-50',
@@ -263,9 +266,9 @@ function Template() {
         </svg>
       )
     },
-    { 
-      value: 'REJECTED', 
-      label: 'Rejected', 
+    {
+      value: 'REJECTED',
+      label: 'Rejected',
       count: templates.filter(t => t.status === 'REJECTED').length,
       color: 'text-rose-600',
       bgColor: 'bg-rose-50',
@@ -281,28 +284,28 @@ function Template() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header 
-        mobileMenuOpen={mobileMenuOpen} 
-        setMobileMenuOpen={setMobileMenuOpen} 
-        isMinimized={isMinimized} 
-        setIsMinimized={setIsMinimized} 
+      <Header
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+        isMinimized={isMinimized}
+        setIsMinimized={setIsMinimized}
       />
-      
+
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar 
-          mobileMenuOpen={mobileMenuOpen} 
-          setMobileMenuOpen={setMobileMenuOpen} 
-          isMinimized={isMinimized} 
-          setIsMinimized={setIsMinimized} 
+        <Sidebar
+          mobileMenuOpen={mobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
+          isMinimized={isMinimized}
+          setIsMinimized={setIsMinimized}
         />
 
         <main className={`flex-1 transition-all duration-300 ease-in-out pt-16 overflow-y-auto ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-            
+
             {/* Action Bar */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Templates</h1>
-              
+
               <div className="flex items-center gap-2 flex-wrap">
                 {/* Custom Filter Dropdown */}
                 <div className="relative flex-1 sm:flex-initial" ref={filterRef}>
@@ -336,11 +339,10 @@ function Template() {
                             setStatusFilter(option.value);
                             setIsFilterOpen(false);
                           }}
-                          className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${
-                            statusFilter === option.value
-                              ? 'bg-indigo-50 text-indigo-700'
-                              : 'text-gray-700 hover:bg-gray-50'
-                          }`}
+                          className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${statusFilter === option.value
+                            ? 'bg-indigo-50 text-indigo-700'
+                            : 'text-gray-700 hover:bg-gray-50'
+                            }`}
                         >
                           <div className="flex items-center gap-3">
                             {option.icon && (
@@ -365,7 +367,7 @@ function Template() {
                 </div>
 
                 <button
-                  onClick={() => fetchTemplates(true)}
+                  onClick={fetchTemplates}
                   className="p-2.5 text-gray-600 hover:text-indigo-600 hover:bg-white rounded-lg transition-all shadow-sm border border-gray-200 hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={loading}
                   title="Refresh"
@@ -377,7 +379,7 @@ function Template() {
                   to="/template-add"
                   className="inline-flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-indigo-800 active:scale-95 transition-all shadow-md hover:shadow-lg"
                 >
-                  <FiPlus className="mr-2 w-4 h-4" /> 
+                  <FiPlus className="mr-2 w-4 h-4" />
                   <span className="hidden sm:inline">New Template</span>
                   <span className="sm:hidden">New</span>
                 </Link>
@@ -448,9 +450,16 @@ function Template() {
                           <td className="px-6 py-4 text-sm text-gray-500">{template.updatedOn}</td>
                           <td className="px-6 py-4">
                             <div className="flex justify-end gap-2">
-                              {template.status === 'APPROVED' ? (
+                              <button
+                                onClick={() => handlePreviewClick(template)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="View"
+                              >
+                                <FiEye size={18} />
+                              </button>
+                              {template.status === 'PENDING' ? (
                                 <Tooltip
-                                  content="Can not edit for approved Template"
+                                  content="Can not edit for pending Template"
                                   disabled={false}
                                   position="top"
                                 >
@@ -459,15 +468,15 @@ function Template() {
                                   </span>
                                 </Tooltip>
                               ) : (
-                                <Link 
-                                  to={`/template-edit/${template.id}`} 
+                                <Link
+                                  to={`/template-edit/${template.id}`}
                                   className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                                   title="Edit"
                                 >
                                   <FiEdit size={18} />
                                 </Link>
                               )}
-                              <button 
+                              <button
                                 onClick={() => handleDeleteClick(template)}
                                 className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                 title="Delete"
@@ -517,9 +526,19 @@ function Template() {
                           >
                             <FiMoreVertical size={18} />
                           </button>
-                          
+
                           {activeDropdown === template.id && (
                             <div className="absolute right-0 bottom-full mb-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                              <button
+                                onClick={() => {
+                                  handlePreviewClick(template);
+                                  setActiveDropdown(null);
+                                }}
+                                className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                              >
+                                <FiEye size={16} />
+                                View
+                              </button>
                               {template.status === 'APPROVED' ? (
                                 <Tooltip
                                   content="Can not edit for approved Template"
@@ -586,23 +605,16 @@ function Template() {
               )}
             </div>
 
-            {/* Infinite Scroll Sentinel */}
-            <div ref={observerTarget} className="w-full py-8 flex items-center justify-center">
-              {isLoadingMore && (
-                <div className="flex items-center gap-2 text-indigo-600 font-medium text-sm">
-                  <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                  Loading more...
-                </div>
-              )}
-              {!hasMore && templates.length > 0 && (
-                <span className="text-gray-400 text-sm italic">You've reached the end</span>
-              )}
-              {!loading && templates.length === 0 && (
-                <div className="text-center py-12">
-                  <p className="text-gray-500 text-sm">No templates found</p>
-                </div>
-              )}
-            </div>
+            {/* Pagination */}
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalRecords={totalRecords}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              pageSizeOptions={[10, 20, 50, 100]}
+            />
           </div>
         </main>
       </div>
@@ -616,6 +628,13 @@ function Template() {
         message="Are you sure you want to delete"
         itemName={templateToDelete?.name}
         loading={isDeleting}
+      />
+
+      {/* Preview Modal */}
+      <TemplatePreviewModal
+        isOpen={previewModalOpen}
+        onClose={handlePreviewClose}
+        template={templateToPreview}
       />
     </div>
   );

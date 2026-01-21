@@ -9,6 +9,7 @@ import LiveChat from './pages/LiveChat';
 import Template from './pages/Template';
 import TemplateAdd from './pages/TemplateAdd';
 import TemplateEdit from './pages/TemplateEdit';
+import TemplateView from './pages/TemplateView';
 import Contact from './pages/Contact';
 import ContactGroup from './pages/ContactGroup';
 import ContactGroupList from './pages/ContactGroupList';
@@ -93,6 +94,11 @@ root.render(
           <Route path="/template-edit/:templateId" element={
             <ProtectedRoute requiresProject={true}>
               <TemplateEdit />
+            </ProtectedRoute>
+          } />
+          <Route path="/template-view/:templateId" element={
+            <ProtectedRoute requiresProject={true}>
+              <TemplateView />
             </ProtectedRoute>
           } />
           <Route path="/campaigns" element={

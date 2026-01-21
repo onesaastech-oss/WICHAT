@@ -336,8 +336,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
               <FiMenu size={22} />
             </button>
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold text-lg shadow-md shadow-indigo-200">W</div>
-              <span className="text-xl font-bold tracking-tight text-slate-800 hidden sm:block font-sans">WICHAT</span>
+              <img src="/logo-main.png" alt="logo" className="h-8" />
             </div>
           </div>
 
