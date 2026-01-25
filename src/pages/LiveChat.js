@@ -101,12 +101,6 @@ function LiveChat() {
         if (!isInitialized) return;
 
         if (phone) {
-            // Wait for chats to load if db is available
-            if (dbAvailable && chats.length === 0) {
-                // Chats are still loading, wait for them
-                return;
-            }
-
             // Find the chat with matching phone number
             const chat = chats.find(c => c.number === phone);
             if (chat) {

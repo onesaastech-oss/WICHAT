@@ -88,7 +88,6 @@ function TemplateAdd() {
   // Categories
   const categories = [
     { code: 'MARKETING', name: 'Marketing' },
-    { code: 'TRANSACTIONAL', name: 'Transactional' },
     { code: 'UTILITY', name: 'Utility' },
   ];
 
@@ -106,7 +105,7 @@ function TemplateAdd() {
     { type: 'QUICK_REPLY', label: 'Quick Reply', icon: <FiMessageSquare /> },
     { type: 'PHONE_NUMBER', label: 'Phone Number', icon: <FiPhone /> },
     { type: 'URL', label: 'URL', icon: <FiLink /> },
-    { type: 'COPY_CODE', label: 'Copy Code', icon: <FiCopy /> }
+    // { type: 'COPY_CODE', label: 'Copy Code', icon: <FiCopy /> }
   ];
 
   // Handle form input changes
@@ -1092,7 +1091,7 @@ function TemplateAdd() {
                         )}
 
                         {/* Copy Code Button */}
-                        {btn.type === 'COPY_CODE' && (
+                        {/* {btn.type === 'COPY_CODE' && (
                           <div className="space-y-2">
                             <p className="text-xs text-gray-600 mb-1">
                               This button will be converted to OTP format with type "otp" and otp_type "copy_code"
@@ -1105,7 +1104,7 @@ function TemplateAdd() {
                               onChange={e => updateButton(index, 'copy_code', e.target.value)}
                             />
                           </div>
-                        )}
+                        )} */}
                       </div>
                     ))}
                   </div>

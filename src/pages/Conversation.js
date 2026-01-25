@@ -850,6 +850,48 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
     }, [activeChat, ensureContactDb, contactDetails, tokens]);
 
+    const fetchContactDetails = useCallback(async (number) => {
+        if (!tokens?.token || !tokens?.username) return;
+
+        setContactDetailsLoading(true);
+        setContactDetailsError('');
+
+        try {
+            const payload = {
+                project_id: tokens.selected_project_id || '',
+                number: number
+            };
+
+
+            const { data, key } = Encrypt(payload);
+            const data_pass = JSON.stringify({ data, key });
+
+            const response = await axios.post(
+                'https://api.w1chat.com/contact/contact-details',
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+
+            if (!response?.data?.error) {
+                setContactDetails(response.data);
+            } else {
+                setContactDetailsError(response?.data?.message || 'Failed to fetch contact details');
+            }
+        } catch (error) {
+            console.error('Failed to fetch contact details:', error);
+            setContactDetailsError('Failed to fetch contact details. Please try again.');
+        } finally {
+            setContactDetailsLoading(false);
+        }
+    }, [tokens?.token, tokens?.username, tokens?.selected_project_id]);
+
     const handleContactSave = useCallback(async (formData, fullNumber, country) => {
         if (contactSubmitting) return;
 
@@ -954,25 +996,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     onContactUpdate(trimmedNumber, trimmedName);
                 }
 
-                // Update local contact details state immediately to reflect changes in UI
-                setContactDetails(prev => {
-                    const updatedContact = {
-                        ...prev?.contact,
-                        ...contactData,
-                        modify_date: new Date().toISOString()
-                    };
-
-                    // Ensure create_date is preserved if it exists in previous state
-                    if (prev?.contact?.create_date && !updatedContact.create_date) {
-                        updatedContact.create_date = prev.contact.create_date;
-                    }
-
-                    return {
-                        ...prev,
-                        has_contact: true,
-                        contact: updatedContact
-                    };
-                });
+                // Refetch contact details from API to get complete updated data
+                await fetchContactDetails(trimmedNumber);
 
                 // Show success toast message
                 toast.success(isUpdate ? 'Contact updated successfully' : 'Contact created successfully', {
@@ -991,7 +1016,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         } finally {
             setContactSubmitting(false);
         }
-    }, [existingContactId, ensureContactDb, contactSubmitting, dbAvailable, tokens, onContactUpdate, setContactDetails]);
+    }, [existingContactId, ensureContactDb, contactSubmitting, dbAvailable, tokens, onContactUpdate, fetchContactDetails]);
 
     const handleSearchMenuClick = useCallback(() => {
         setShowHeaderMenu(false);
@@ -1615,49 +1640,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         if (!hasMoreMessages || loadingPrevious) return;
         await syncWithAPI(true);
     };
-
-    // Fetch contact details function
-    const fetchContactDetails = useCallback(async (number) => {
-        if (!tokens?.token || !tokens?.username) return;
-
-        setContactDetailsLoading(true);
-        setContactDetailsError('');
-
-        try {
-            const payload = {
-                project_id: tokens.selected_project_id || '',
-                number: number
-            };
-
-
-            const { data, key } = Encrypt(payload);
-            const data_pass = JSON.stringify({ data, key });
-
-            const response = await axios.post(
-                'https://api.w1chat.com/contact/contact-details',
-                data_pass,
-                {
-                    headers: {
-                        'token': tokens.token,
-                        'username': tokens.username,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-
-
-            if (!response?.data?.error) {
-                setContactDetails(response.data);
-            } else {
-                setContactDetailsError(response?.data?.message || 'Failed to fetch contact details');
-            }
-        } catch (error) {
-            console.error('Failed to fetch contact details:', error);
-            setContactDetailsError('Failed to fetch contact details. Please try again.');
-        } finally {
-            setContactDetailsLoading(false);
-        }
-    }, [tokens?.token, tokens?.username, tokens.projects]);
 
     // Auto-fetch contact details when activeChat changes
     useEffect(() => {
@@ -3601,7 +3583,9 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                     Contact Details
                                 </h3>
                                 <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center space-x-2">
-                                    <span>{activeChat?.name} • {activeChat?.number}</span>
+                                    <span>
+                                        {contactDetails?.contact?.name || activeChat?.name} • {contactDetails?.contact?.number || activeChat?.number}
+                                    </span>
                                     {contactDetailsLoading && (
                                         <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-400"></div>
                                     )}

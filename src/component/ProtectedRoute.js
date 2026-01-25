@@ -29,7 +29,7 @@ const ProtectedRoute = ({ children, requiresProject = false }) => {
 
       try {
         const response = await checkSession();
-        if (response.error === "session expired") {
+        if (response.error && response.error.toLowerCase() === "session expired") {
           localStorage.removeItem('userData');
           toast.error("Session expired. Please login again.");
           setIsSessionValid(false);
