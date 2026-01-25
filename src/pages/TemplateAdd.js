@@ -122,12 +122,18 @@ function TemplateAdd() {
 
   // Check if all mandatory fields are filled
   const isFormValid = () => {
-    return (
+    const basicFieldsValid = (
       formData.name.trim() !== '' &&
       formData.category !== '' &&
       formData.language !== '' &&
       formData.components.body.text.trim() !== ''
     );
+
+    // Check if all variables have sample values
+    const allVariablesHaveSamples = bodyVariables.length === 0 || 
+      bodyVariables.every(v => v.sample && v.sample.trim() !== '');
+
+    return basicFieldsValid && allVariablesHaveSamples;
   };
 
   // Handle header format change
@@ -482,9 +488,10 @@ function TemplateAdd() {
         };
 
         if (bodyVariables.length > 0) {
-          const bodySamples = bodyVariables.map(v => v.sample || '');
+          // Each variable sample wrapped in individual arrays: [["value1"], ["value2"]]
+          const bodySamples = bodyVariables.map(v => [v.sample || '']);
           bodyComponent.example = {
-            body_text: [bodySamples]
+            body_text: bodySamples
           };
         }
 
@@ -1128,7 +1135,9 @@ function TemplateAdd() {
                   </button>
                   {!isFormValid() && (
                     <p className="mt-2 text-sm text-red-600 text-center">
-                      Please fill in all mandatory fields: Template Name, Category, Language, and Body Content
+                      Please fill in all mandatory fields: Template Name, Category, Language, Body Content
+                      {bodyVariables.length > 0 && bodyVariables.some(v => !v.sample || v.sample.trim() === '') && 
+                        ', and all variable sample values'}
                     </p>
                   )}
                 </div>
