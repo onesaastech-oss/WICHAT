@@ -1152,6 +1152,12 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     };
                 });
 
+                // Show success toast message
+                toast.success(isUpdate ? 'Contact updated successfully' : 'Contact created successfully', {
+                    duration: 3000,
+                    icon: '✓'
+                });
+
                 setShowContactModal(false);
             } else {
                 const errorMessage = response?.data?.message || 'Unknown error';
