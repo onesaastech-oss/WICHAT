@@ -68,8 +68,16 @@ root.render(
           }}
         />
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/dasboard" element={<Dashboard />} />
+          <Route path="/" element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/dasboard" element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } />
           {/* Protected routes that require project */}
           <Route path="/live-chat" element={
             <ProtectedRoute requiresProject={true}>

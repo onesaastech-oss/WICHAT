@@ -1006,8 +1006,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
             let existing = await contactDbHelper.getContactByNumber(activeChat.number);
 
-
-            setExistingContactId(existing?.contact_id || null);
+            // Prioritize contact_id from API response (currentContactDetails) over local DB
+            setExistingContactId(currentContactDetails?.contact_id || existing?.contact_id || null);
             setContactForm({
                 name: currentContactDetails?.name || existing?.name || activeChat.name || '',
                 number: activeChat.number || '',

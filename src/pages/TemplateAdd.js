@@ -112,10 +112,22 @@ function TemplateAdd() {
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    // Force template name to lowercase
+    const processedValue = name === 'name' ? value.toLowerCase() : value;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: processedValue
     }));
+  };
+
+  // Check if all mandatory fields are filled
+  const isFormValid = () => {
+    return (
+      formData.name.trim() !== '' &&
+      formData.category !== '' &&
+      formData.language !== '' &&
+      formData.components.body.text.trim() !== ''
+    );
   };
 
   // Handle header format change
@@ -530,7 +542,7 @@ function TemplateAdd() {
 
       // Prepare payload with project_id (matching working API pattern)
       const selectedProjectId = userData.selected_project_id || userData.projects?.[0]?.project_id;
-      
+
       const payload = {
         project_id: selectedProjectId,
         template: {
@@ -688,33 +700,35 @@ function TemplateAdd() {
                 {/* Template Name */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Template Name *
+                    Template Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     name="name"
                     value={formData.name}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${formData.name.trim() ? 'border-green-400' : 'border-gray-300'
+                      }`}
                     required
                     placeholder="e.g., welcome_message"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Use lowercase with underscores (e.g., order_confirmation)
+                  <p className="mt-1 text-xs text-indigo-600 font-medium">
+                    ✓ Automatically converted to lowercase (use underscores for spaces)
                   </p>
                 </div>
 
                 {/* Category */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Category *
+                    Category <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
                       name="category"
                       value={formData.category}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none transition-colors ${formData.category ? 'border-green-400' : 'border-gray-300'
+                        }`}
                       required
                     >
                       <option value="">Select a category</option>
@@ -729,14 +743,15 @@ function TemplateAdd() {
                 {/* Language */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Language *
+                    Language <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
                       name="language"
                       value={formData.language}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none transition-colors ${formData.language ? 'border-green-400' : 'border-gray-300'
+                        }`}
                       required
                     >
                       <option value="">Select a language</option>
@@ -852,7 +867,7 @@ function TemplateAdd() {
                 <div className="mb-6">
                   <div className="flex justify-between items-center mb-1">
                     <label className="block text-sm font-medium text-gray-700">
-                      Body Content *
+                      Body Content <span className="text-red-500">*</span>
                     </label>
                     <button
                       type="button"
@@ -865,7 +880,8 @@ function TemplateAdd() {
                   <textarea
                     ref={textareaRef}
                     rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${formData.components.body.text.trim() ? 'border-green-400' : 'border-gray-300'
+                      }`}
                     placeholder="Enter your message content here. Use {{1}} for variables."
                     value={formData.components.body.text}
                     onChange={(e) => handleBodyTextChange(e.target.value)}
@@ -1092,11 +1108,29 @@ function TemplateAdd() {
                 <div className="mt-8">
                   <button
                     type="submit"
-                    disabled={isSubmitting}
-                    className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isSubmitting || !isFormValid()}
+                    className={`w-full py-3 px-4 rounded-md font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:cursor-not-allowed ${isFormValid() && !isSubmitting
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md hover:shadow-lg'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      }`}
                   >
-                    {isSubmitting ? 'Submitting...' : 'Submit Template for Approval'}
+                    {isSubmitting ? (
+                      <span className="flex items-center justify-center">
+                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Submitting...
+                      </span>
+                    ) : (
+                      'Submit Template for Approval'
+                    )}
                   </button>
+                  {!isFormValid() && (
+                    <p className="mt-2 text-sm text-red-600 text-center">
+                      Please fill in all mandatory fields: Template Name, Category, Language, and Body Content
+                    </p>
+                  )}
                 </div>
               </form>
             </div>

@@ -536,3 +536,44 @@ export const createProject = async ({ company_name, project_name }) => {
   return response.data;
 };
 
+
+// Check user session
+export const checkSession = async () => {
+  const getUserData = () => {
+    try {
+      const userData = localStorage.getItem('userData');
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      console.error('Error parsing userData from localStorage:', error);
+      return null;
+    }
+  };
+
+  const userData = getUserData();
+  const token = userData?.token;
+  const username = userData?.username;
+
+  if (!token || !username) {
+    // If no token locally, effectively logged out
+    return { error: "session expired" };
+  }
+
+  const config = {
+    method: 'post',
+    maxBodyLength: Infinity,
+    url: 'https://api.w1chat.com/account/session-check',
+    headers: {
+      'token': token,
+      'username': username,
+      'Content-Type': 'application/json'
+    }
+  };
+
+  try {
+    const response = await axios.request(config);
+    return response.data;
+  } catch (error) {
+    // If API call fails (e.g. 401), consider session expired
+    return { error: "session expired" };
+  }
+};

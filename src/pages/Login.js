@@ -122,6 +122,7 @@ const Login = () => {
           dispatch(setAuthData(userDataToStore));
           toast.success('Login successful, but no projects found.');
           setTimeout(() => {
+            toast.dismiss();
             navigate('/projects');
           }, 800);
           return;
@@ -143,6 +144,7 @@ const Login = () => {
 
           toast.loading('Redirecting...');
           setTimeout(() => {
+            toast.dismiss();
             navigate('/'); // Navigate to Home directly
           }, 1500);
           return;
@@ -192,6 +194,7 @@ const Login = () => {
     setShowProjectModal(false);
     toast.loading('Redirecting...');
     setTimeout(() => {
+      toast.dismiss();
       navigate('/');
     }, 800);
   };
@@ -240,6 +243,7 @@ const Login = () => {
         localStorage.setItem("userData", JSON.stringify(responseData));
         toast.success('Google login successful!');
         setTimeout(() => {
+          toast.dismiss();
           navigate("/");
         }, 1500);
       }
@@ -550,9 +554,8 @@ const Login = () => {
                   type="button"
                   onClick={handleProjectConfirm}
                   disabled={!selectedProjectIdLocal}
-                  className={`px-4 py-2 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    !selectedProjectIdLocal ? 'opacity-70 cursor-not-allowed' : ''
-                  }`}
+                  className={`px-4 py-2 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!selectedProjectIdLocal ? 'opacity-70 cursor-not-allowed' : ''
+                    }`}
                 >
                   Continue
                 </button>

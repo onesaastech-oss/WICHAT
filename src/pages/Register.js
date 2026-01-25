@@ -163,6 +163,7 @@ const Register = () => {
         localStorage.setItem("userData", JSON.stringify(responseData));
         toast.success('Registration successful with Google!');
         setTimeout(() => {
+          toast.dismiss();
           navigate("/");
         }, 1500);
       } else {
@@ -230,6 +231,7 @@ const Register = () => {
             localStorage.setItem("userData", JSON.stringify(data));
             toast.success('Registration successful!');
             setTimeout(() => {
+              toast.dismiss();
               navigate("/"); // Navigate to Home
             }, 1500);
           } else {
