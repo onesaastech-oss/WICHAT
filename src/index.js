@@ -29,6 +29,7 @@ import CampaignDetails from './pages/Campaign/CampaignDetails.js';
 import AutoReply from './pages/Automation/AutoReply';
 import Flow from './pages/Automation/Flow';
 import MyProfile from './pages/MyProfile.js';
+import ChangePassword from './pages/ChangePassword.js';
 import WalletRecharge from './pages/WalletRecharge.js';
 import PaymentStatus from './pages/PaymentStatus.js';
 import ProjectDetails from './pages/ProjectDetails';
@@ -141,6 +142,7 @@ root.render(
           <Route path="/auto-reply" element={<AutoReply />} />
           <Route path="/flow" element={<Flow />} />
           <Route path="/my-profile" element={<MyProfile />} />
+          <Route path="/change-password" element={<ChangePassword />} />
           <Route path="/wallet-recharge" element={<WalletRecharge />} />
           <Route path="/payment-status" element={<PaymentStatus />} />
           <Route path="/support" element={<Support />} />

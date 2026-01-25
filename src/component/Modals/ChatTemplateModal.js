@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiX, FiSearch, FiChevronDown, FiChevronUp, FiCheck, FiClock, FiAlertCircle, FiCheckCircle, FiEye } from 'react-icons/fi';
+import { FiX, FiSearch, FiChevronDown, FiChevronUp, FiCheck, FiClock, FiAlertCircle, FiCheckCircle, FiEye, FiFolder } from 'react-icons/fi';
 import axios from 'axios';
 import { Encrypt } from '../../pages/encryption/payload-encryption';
 
@@ -250,7 +250,7 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-0 sm:p-4">
             <div
-                className={`w-full h-full sm:h-auto sm:max-h-[90vh] ${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-none sm:rounded-2xl shadow-2xl flex flex-col mobile-modal-shell`}
+                className={` h-full sm:h-auto sm:max-h-[90vh] md:w-6/12 ${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-none sm:rounded-2xl shadow-2xl flex flex-col mobile-modal-shell`}
                 style={{ touchAction: 'manipulation' }}
             >
                 {/* Header */}
@@ -385,65 +385,73 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                                 return (
                                     <div
                                         key={template.id}
-                                        className={`p-4 rounded-xl border transition-all hover:shadow-md ${
+                                        className={`group p-4 rounded-xl border transition-all duration-200 hover:shadow-lg ${
                                             darkMode 
-                                                ? 'bg-gray-700 border-gray-600' 
-                                                : 'bg-white border-gray-200'
+                                                ? 'bg-gray-700 border-gray-600 hover:border-gray-500' 
+                                                : 'bg-white border-gray-200 hover:border-blue-300'
                                         }`}
                                     >
-                                        <div className="flex items-start justify-between mb-3">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <h3 className={`font-semibold text-sm sm:text-base truncate ${
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <h3 className={`font-semibold text-base truncate ${
                                                         darkMode ? 'text-white' : 'text-gray-900'
                                                     }`}>
                                                         {template.name}
                                                     </h3>
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                        darkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-100 text-gray-600'
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                                                        darkMode ? 'bg-gray-800 border-gray-600 text-gray-300' : 'bg-blue-50 border-blue-100 text-blue-600'
                                                     }`}>
                                                         {template.language}
                                                     </span>
                                                 </div>
                                                 
-                                                <div className="flex items-center gap-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                                                    <span>Category: {template.category}</span>
-                                                    <span>Updated: {template.updatedOn}</span>
+                                                <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <FiFolder className="w-4 h-4" />
+                                                        <span className="truncate">{template.category}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <FiClock className="w-4 h-4" />
+                                                        <span>{template.updatedOn}</span>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        {/* Action Buttons */}
-                                        <div className="flex items-center gap-2">
-                                            {onTemplatePreview && (
-                                                <button
-                                                    onClick={() => onTemplatePreview(template)}
-                                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                                        darkMode 
-                                                            ? 'bg-gray-600 text-gray-300 hover:bg-gray-500' 
-                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                                    }`}
-                                                >
-                                                    <FiEye className="w-4 h-4" />
-                                                    Preview
-                                                </button>
-                                            )}
-                                            {
-                                                onTemplateSelect && (
+                                            <div className="flex items-center gap-2 justify-end sm:justify-start pt-2 sm:pt-0 sm:pl-4 sm:border-l border-gray-100 dark:border-gray-600">
+                                                {onTemplatePreview && (
                                                     <button
-                                                    onClick={() => handleTemplateSelect(template)}
-                                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                                        darkMode 
-                                                            ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
-                                                            : 'bg-indigo-500 text-white hover:bg-indigo-600'
-                                                    }`}
-                                                >
-                                                    <FiCheck className="w-4 h-4" />
-                                                    Select
-                                                </button>
-                                                )
-                                            }
-
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onTemplatePreview(template);
+                                                        }}
+                                                        className={`p-2 rounded-lg transition-colors ${
+                                                            darkMode 
+                                                                ? 'hover:bg-gray-600 text-gray-400 hover:text-white' 
+                                                                : 'hover:bg-gray-100 text-gray-500 hover:text-gray-900'
+                                                        }`}
+                                                        title="Preview Template"
+                                                    >
+                                                        <FiEye className="w-5 h-5" />
+                                                    </button>
+                                                )}
+                                                {onTemplateSelect && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleTemplateSelect(template);
+                                                        }}
+                                                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm ${
+                                                            darkMode 
+                                                                ? 'bg-blue-600 text-white hover:bg-blue-500' 
+                                                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                                                        }`}
+                                                    >
+                                                        <span>Select</span>
+                                                        <FiCheck className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 );

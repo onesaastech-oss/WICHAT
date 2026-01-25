@@ -577,3 +577,52 @@ export const checkSession = async () => {
     return { error: "session expired" };
   }
 };
+
+// Change password
+export const changePassword = async ({ old_password, new_password }) => {
+  const getUserData = () => {
+    try {
+      const userData = localStorage.getItem('userData');
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      console.error('Error parsing userData from localStorage:', error);
+      return null;
+    }
+  };
+
+  const userData = getUserData();
+  const token = userData?.token;
+  const username = userData?.username;
+
+  if (!token || !username) {
+    throw new Error('Session expired');
+  }
+
+  const payload = {
+    old_password,
+    new_password
+  };
+
+  // Encrypt the payload
+  const { data, key } = Encrypt(payload);
+
+  const data_pass = JSON.stringify({
+    data,
+    key
+  });
+
+  const config = {
+    method: 'post',
+    maxBodyLength: Infinity,
+    url: 'https://api.w1chat.com/account/change-password',
+    headers: {
+      'Content-Type': 'application/json',
+      'token': token,
+      'username': username
+    },
+    data: data_pass
+  };
+
+  const response = await axios.request(config);
+  return response.data;
+};
