@@ -37,7 +37,9 @@ import {
     FiFileText,
     FiUserPlus,
     FiUserCheck,
-    FiCornerUpLeft
+    FiCornerUpLeft,
+    FiPhone,
+    FiCheckCircle
 } from 'react-icons/fi';
 import { FaRegEye } from "react-icons/fa6";
 import { MdOutlineCancel } from "react-icons/md";
@@ -48,6 +50,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { Encrypt } from './encryption/payload-encryption';
 import { dbHelper, contactDbHelper } from './db';
+import ContactFormModal from '../component/Modals/ContactFormModal';
 import ReactPlayer from 'react-player';
 import ChatTemplateModal from '../component/Modals/ChatTemplateModal';
 import TemplatePreview from '../component/Modals/TemplatePreview';
@@ -215,179 +218,6 @@ const HighlightedText = ({ text, term }) => {
         </>
     );
 };
-
-const ContactFormModal = ({
-    isOpen,
-    onClose,
-    formData,
-    onChange,
-    onSubmit,
-    loading,
-    submitting,
-    error,
-    isExistingContact
-}) => {
-    if (!isOpen) return null;
-
-    return (
-        <AnimatePresence>
-            {isOpen && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-2 sm:p-4"
-                    onClick={onClose}
-                >
-                    <motion.div
-                        initial={{ scale: 0.95, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.95, opacity: 0 }}
-                        transition={{ type: 'spring', duration: 0.25 }}
-                        className="flex h-[80vh] max-h-[90vh] w-full max-w-md flex-col rounded-2xl bg-white dark:bg-gray-800 shadow-xl overflow-hidden"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-3 py-3 sm:px-5 sm:py-4 flex-shrink-0">
-                            <div className="flex items-center space-x-2 min-w-0 flex-1">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40 flex-shrink-0">
-                                    <FiEdit2 className="h-4 w-4 text-blue-600 dark:text-blue-300" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white truncate">
-                                        {isExistingContact ? 'Edit Contact' : 'Save Contact'}
-                                    </h3>
-                                    {/* <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
-                                        Details are stored locally on this device.
-                                    </p> */}
-                                </div>
-                            </div>
-                            <button
-                                onClick={onClose}
-                                className="rounded-full p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200 flex-shrink-0 ml-2"
-                                aria-label="Close contact modal"
-                            >
-                                <FiX className="h-5 w-5" />
-                            </button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto">
-                            <div className="space-y-4 px-3 py-4 sm:px-5">
-                                {error && (
-                                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-900/30 dark:text-red-200">
-                                        {error}
-                                    </div>
-                                )}
-
-                                {loading && (
-                                    <div className="flex items-center space-x-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-600 dark:border-blue-500/30 dark:bg-blue-900/30 dark:text-blue-200">
-                                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-400 border-r-transparent" />
-                                        <span>Loading contact details…</span>
-                                    </div>
-                                )}
-
-                                <div className="grid grid-cols-1 gap-4">
-                                    <label className="flex flex-col space-y-1 text-sm">
-                                        <span className="font-medium text-gray-700 dark:text-gray-300">Name</span>
-                                        <input
-                                            value={formData.name}
-                                            onChange={(e) => onChange('name', e.target.value)}
-                                            placeholder="Contact name"
-                                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                            disabled={loading || submitting}
-                                        />
-                                    </label>
-
-                                    <label className="flex flex-col space-y-1 text-sm">
-                                        <span className="font-medium text-gray-700 dark:text-gray-300">Mobile Number</span>
-                                        <input
-                                            value={formData.number}
-                                            onChange={(e) => onChange('number', e.target.value)}
-                                            placeholder="WhatsApp number"
-                                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                            disabled={loading || submitting}
-                                        />
-                                    </label>
-
-                                    <label className="flex flex-col space-y-1 text-sm">
-                                        <span className="font-medium text-gray-700 dark:text-gray-300">Email</span>
-                                        <input
-                                            value={formData.email}
-                                            onChange={(e) => onChange('email', e.target.value)}
-                                            placeholder="Email address"
-                                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                            disabled={loading || submitting}
-                                        />
-                                    </label>
-
-                                    <label className="flex flex-col space-y-1 text-sm">
-                                        <span className="font-medium text-gray-700 dark:text-gray-300">Company / Firm</span>
-                                        <input
-                                            value={formData.firm_name}
-                                            onChange={(e) => onChange('firm_name', e.target.value)}
-                                            placeholder="Company name"
-                                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                            disabled={loading || submitting}
-                                        />
-                                    </label>
-
-                                    <label className="flex flex-col space-y-1 text-sm">
-                                        <span className="font-medium text-gray-700 dark:text-gray-300">Website</span>
-                                        <input
-                                            value={formData.website}
-                                            onChange={(e) => onChange('website', e.target.value)}
-                                            placeholder="https://example.com"
-                                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                            disabled={loading || submitting}
-                                        />
-                                    </label>
-
-                                    <label className="flex flex-col space-y-1 text-sm">
-                                        <span className="font-medium text-gray-700 dark:text-gray-300">Remark</span>
-                                        <textarea
-                                            value={formData.remark}
-                                            onChange={(e) => onChange('remark', e.target.value)}
-                                            placeholder="Internal notes"
-                                            rows={3}
-                                            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                                            disabled={loading || submitting}
-                                        />
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-gray-200 bg-gray-50 px-3 py-3 sm:px-5 sm:py-4 dark:border-gray-700 dark:bg-gray-900/60 flex-shrink-0">
-                            <div className="text-xs text-gray-500 dark:text-gray-400 text-center sm:text-left">
-
-                            </div>
-                            <button
-                                onClick={onSubmit}
-                                disabled={loading || submitting}
-                                className={`inline-flex items-center justify-center space-x-2 rounded-full px-4 py-2 text-sm font-semibold text-white transition w-full sm:w-auto ${loading || submitting
-                                    ? 'cursor-not-allowed bg-blue-300 dark:bg-blue-700'
-                                    : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'
-                                    }`}
-                            >
-                                {submitting ? (
-                                    <span className="flex items-center space-x-2">
-                                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-r-transparent" />
-                                        <span>Saving…</span>
-                                    </span>
-                                ) : (
-                                    <>
-                                        <FiCheck className="h-4 w-4" />
-                                        <span>{isExistingContact ? 'Update Contact' : 'Save Contact'}</span>
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </motion.div>
-                </motion.div>
-            )}
-        </AnimatePresence>
-    );
-};
-
 
 // Date Separator Component
 const DateSeparator = ({ displayDate, dateId }) => {
@@ -922,12 +752,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
     }, [projectId, contactDbReady]);
 
-    const handleContactFieldChange = useCallback((field, value) => {
-        setContactForm((prev) => ({
-            ...prev,
-            [field]: value
-        }));
-    }, []);
 
     const handleCloseContactModal = useCallback(() => {
         if (contactSubmitting) return;
@@ -1026,7 +850,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
     }, [activeChat, ensureContactDb, contactDetails, tokens]);
 
-    const handleContactSave = useCallback(async () => {
+    const handleContactSave = useCallback(async (formData, fullNumber, country) => {
         if (contactSubmitting) return;
 
         if (!tokens?.token || !tokens?.username) {
@@ -1034,8 +858,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             return;
         }
 
-        const trimmedNumber = contactForm.number?.trim();
-        const trimmedName = contactForm.name?.trim();
+        const trimmedNumber = fullNumber?.trim();
+        const trimmedName = formData.name?.trim();
 
         if (!trimmedNumber) {
             setContactError('Mobile number is required.');
@@ -1059,16 +883,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         try {
             const isUpdate = Boolean(existingContactId);
 
-
-
             const payload = {
                 project_id: tokens.selected_project_id || '',
                 number: trimmedNumber,
                 name: trimmedName,
-                email: contactForm.email?.trim() || '',
-                firm_name: contactForm.firm_name?.trim() || '',
-                website: contactForm.website?.trim() || '',
-                remark: contactForm.remark?.trim() || ''
+                email: formData.email?.trim() || '',
+                firm_name: formData.firm_name?.trim() || '',
+                website: formData.website?.trim() || '',
+                remark: formData.remark?.trim() || ''
             };
 
             // Add contact_id for update requests
@@ -1099,12 +921,12 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         : (response?.data?.data?.id || Date.now().toString()),
                     number: trimmedNumber,
                     name: trimmedName,
-                    email: contactForm.email?.trim() || '',
-                    firm_name: contactForm.firm_name?.trim() || '',
-                    website: contactForm.website?.trim() || '',
-                    remark: contactForm.remark?.trim() || '',
-                    language_code: contactForm.language_code?.trim() || '',
-                    country: contactForm.country?.trim() || '',
+                    email: formData.email?.trim() || '',
+                    firm_name: formData.firm_name?.trim() || '',
+                    website: formData.website?.trim() || '',
+                    remark: formData.remark?.trim() || '',
+                    language_code: country?.iso2 || '',
+                    country: country?.name || '',
                     create_date: isUpdate
                         ? undefined // Don't update create_date on edit
                         : new Date().toISOString()
@@ -1169,7 +991,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         } finally {
             setContactSubmitting(false);
         }
-    }, [contactForm, existingContactId, ensureContactDb, contactSubmitting, dbAvailable, tokens]);
+    }, [existingContactId, ensureContactDb, contactSubmitting, dbAvailable, tokens, onContactUpdate, setContactDetails]);
 
     const handleSearchMenuClick = useCallback(() => {
         setShowHeaderMenu(false);
@@ -3705,13 +3527,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 <ContactFormModal
                     isOpen={showContactModal}
                     onClose={handleCloseContactModal}
-                    formData={contactForm}
-                    onChange={handleContactFieldChange}
+                    initialData={contactForm}
+                    isExisting={Boolean(existingContactId)}
                     onSubmit={handleContactSave}
                     loading={contactLoading}
                     submitting={contactSubmitting}
                     error={contactError}
-                    isExistingContact={Boolean(existingContactId)}
+                    darkMode={darkMode}
                 />
 
                 <SearchChatModal
@@ -3958,13 +3780,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             <ContactFormModal
                 isOpen={showContactModal}
                 onClose={handleCloseContactModal}
-                formData={contactForm}
-                onChange={handleContactFieldChange}
+                initialData={contactForm}
+                isExisting={Boolean(existingContactId)}
                 onSubmit={handleContactSave}
                 loading={contactLoading}
                 submitting={contactSubmitting}
                 error={contactError}
-                isExistingContact={false}
+                darkMode={darkMode}
             />
         </div>
     );

@@ -9,6 +9,7 @@ import { useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
 import ExcelUpload from './Campaign/components/AudienceType/ExcelUpload';
 import GoogleSheet from './Campaign/components/AudienceType/GoogleSheet';
+import ContactFormModal from '../component/Modals/ContactFormModal';
 import {
   FiPlus,
   FiDownload,
@@ -146,22 +147,6 @@ function Contact() {
     remark: ''
   });
 
-  // Country selection (Create Contact) - local number input (10 digits) + dial code prefix at submission
-  const DEFAULT_CREATE_COUNTRY = { iso2: 'IN', name: 'India', dialCode: '91' };
-  const CREATE_COUNTRY_OPTIONS = [
-    DEFAULT_CREATE_COUNTRY,
-    { iso2: 'US', name: 'United States', dialCode: '1' },
-    { iso2: 'CA', name: 'Canada', dialCode: '1' },
-    { iso2: 'GB', name: 'United Kingdom', dialCode: '44' },
-    { iso2: 'AE', name: 'United Arab Emirates', dialCode: '971' },
-    { iso2: 'SA', name: 'Saudi Arabia', dialCode: '966' },
-    { iso2: 'SG', name: 'Singapore', dialCode: '65' },
-    { iso2: 'AU', name: 'Australia', dialCode: '61' },
-    { iso2: 'BD', name: 'Bangladesh', dialCode: '880' },
-    { iso2: 'NP', name: 'Nepal', dialCode: '977' },
-    { iso2: 'PK', name: 'Pakistan', dialCode: '92' }
-  ];
-  const [createCountry, setCreateCountry] = useState(DEFAULT_CREATE_COUNTRY);
 
   // Form state for editing contact
   const [editContact, setEditContact] = useState({
@@ -174,23 +159,6 @@ function Contact() {
     remark: ''
   });
 
-  // Validation errors for create modal
-  const [createErrors, setCreateErrors] = useState({
-    number: '',
-    name: '',
-    email: '',
-    website: '',
-    remark: ''
-  });
-
-  // Validation errors for edit modal
-  const [editErrors, setEditErrors] = useState({
-    number: '',
-    name: '',
-    email: '',
-    website: '',
-    remark: ''
-  });
 
   // Import state for Excel/Google Sheets
   const [importAudienceType, setImportAudienceType] = useState('excel'); // 'excel' or 'sheet'
@@ -852,138 +820,20 @@ function Contact() {
     return () => clearTimeout(t);
   }, [USE_INFINITE_CONTACTS_LIST, searchTerm, showFavoritesOnly, resetAndLoadContacts]);
 
-  // Validation functions
-  const validatePhoneNumber = (phone) => {
-    // Remove spaces, dashes, and parentheses for validation
-    const cleaned = phone.replace(/[\s\-\(\)]/g, '');
-    // Allow digits, +, and should be between 10-15 digits (international format)
-    const phoneRegex = /^\+?[1-9]\d{9,14}$/;
-    if (!phone || phone.trim() === '') {
-      return 'Mobile number is required';
-    }
-    if (!phoneRegex.test(cleaned)) {
-      return 'Please enter a valid mobile number (10-15 digits)';
-    }
-    return '';
-  };
 
-  // Create form expects local 10-digit number; dial code is selected separately.
-  const validateLocalPhoneNumber10 = (phone) => {
-    const cleaned = String(phone || '').replace(/\D/g, '');
-    if (!cleaned) return 'Mobile number is required';
-    if (!/^\d{10}$/.test(cleaned)) return 'Please enter a valid 10-digit mobile number';
-    return '';
-  };
-
-  const validateName = (name) => {
-    if (!name || name.trim() === '') {
-      return 'Name is required';
-    }
-    if (name.trim().length < 2) {
-      return 'Name must be at least 2 characters long';
-    }
-    if (name.trim().length > 100) {
-      return 'Name must be less than 100 characters';
-    }
-    // Allow letters, spaces, hyphens, apostrophes, periods, and numbers (for international names)
-    // More permissive regex that allows unicode letters and common name characters
-    const nameRegex = /^[\p{L}\s\-'\.0-9]+$/u;
-    if (!nameRegex.test(name.trim())) {
-      return 'Name contains invalid characters';
-    }
-    return '';
-  };
-
-  const validateEmail = (email) => {
-    if (!email || email.trim() === '') {
-      return ''; // Email is optional
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      return 'Please enter a valid email address';
-    }
-    if (email.trim().length > 255) {
-      return 'Email must be less than 255 characters';
-    }
-    return '';
-  };
-
-  const validateWebsite = (website) => {
-    if (!website || website.trim() === '') {
-      return ''; // Website is optional
-    }
-    try {
-      const url = website.trim();
-      // Add protocol if missing
-      const urlWithProtocol = url.startsWith('http://') || url.startsWith('https://') 
-        ? url 
-        : `https://${url}`;
-      new URL(urlWithProtocol);
-      if (url.length > 500) {
-        return 'Website URL must be less than 500 characters';
-      }
-      return '';
-    } catch (e) {
-      return 'Please enter a valid website URL';
-    }
-  };
-
-  const validateRemark = (remark) => {
-    if (!remark || remark.trim() === '') {
-      return ''; // Remark is optional
-    }
-    if (remark.trim().length > 1000) {
-      return 'Remark must be less than 1000 characters';
-    }
-    return '';
-  };
-
-  // Validate create contact form
-  const validateCreateForm = () => {
-    const errors = {
-      number: validateLocalPhoneNumber10(newContact.number),
-      name: validateName(newContact.name),
-      email: validateEmail(newContact.email),
-      website: validateWebsite(newContact.website),
-      remark: validateRemark(newContact.remark)
-    };
-    setCreateErrors(errors);
-    return !Object.values(errors).some(error => error !== '');
-  };
-
-  // Validate edit contact form
-  const validateEditForm = () => {
-    const errors = {
-      number: validatePhoneNumber(editContact.number),
-      name: validateName(editContact.name),
-      email: validateEmail(editContact.email),
-      website: validateWebsite(editContact.website),
-      remark: validateRemark(editContact.remark)
-    };
-    setEditErrors(errors);
-    return !Object.values(errors).some(error => error !== '');
-  };
 
   // Handle create contact
-  const handleCreateContact = async () => {
+  const handleCreateContact = async (formData, fullNumber, country) => {
     if (permissions && permissions.create_contact === false) {
       alert('You do not have permission to create contacts.');
       return;
     }
     if (!tokens?.token || !tokens?.username) return;
 
-    // Validate form before submitting
-    if (!validateCreateForm()) {
-      return;
-    }
-
     try {
-      const localNumber10 = String(newContact.number || '').replace(/\D/g, '').slice(0, 10);
-      const fullNumber = `${String(createCountry?.dialCode || '91').replace(/\D/g, '')}${localNumber10}`;
       const payload = {
         project_id: tokens.selected_project_id || '',
-        ...newContact,
-        number: fullNumber
+        ...formData
       };
 
       const { data, key } = Encrypt(payload);
@@ -1002,39 +852,25 @@ function Contact() {
       );
 
       if (!response?.data?.error) {
-        // Close modal and reset form
+        // Close modal
         setShowCreateModal(false);
-        setNewContact({
-          number: '',
-          name: '',
-          email: '',
-          firm_name: '',
-          website: '',
-          remark: ''
-        });
-        setCreateCountry(DEFAULT_CREATE_COUNTRY);
-        setCreateErrors({
-          number: '',
-          name: '',
-          email: '',
-          website: '',
-          remark: ''
-        });
 
         // Refresh contacts list immediately - go to page 1 to show new contact
         setCurrentPage(1);
-          setReloadTick((t) => t + 1);
+        setReloadTick((t) => t + 1);
 
-        // Show success message
+        // Show success toast
         const successMsg = response?.data?.msg || 'Contact created successfully';
-        setSuccessMessage(successMsg);
-        setShowSuccessModal(true);
+        toast.success(successMsg, {
+          duration: 3000,
+          icon: '✓'
+        });
       } else {
-        alert('Failed to create contact: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
+        toast.error('Failed to create contact: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
       }
     } catch (error) {
       console.error('Failed to create contact:', error);
-      alert('Failed to create contact. Please try again.');
+      toast.error('Failed to create contact. Please try again.');
     }
   };
 
@@ -1055,39 +891,22 @@ function Contact() {
       website: contact.website || '',
       remark: contact.remark || ''
     });
-    setEditErrors({
-      number: '',
-      name: '',
-      email: '',
-      website: '',
-      remark: ''
-    });
     setShowEditModal(true);
   };
 
   // Handle update contact
-  const handleUpdateContact = async () => {
+  const handleUpdateContact = async (formData, fullNumber, country) => {
     if (permissions && permissions.edit_contact === false) {
       alert('You do not have permission to edit contacts.');
       return;
     }
     if (!tokens?.token || !tokens?.username || !editContact.contact_id) return;
 
-    // Validate form before submitting
-    if (!validateEditForm()) {
-      return;
-    }
-
     try {
       const payload = {
         project_id: tokens.selected_project_id || '',
         contact_id: editContact.contact_id,
-        number: editContact.number,
-        name: editContact.name,
-        email: editContact.email,
-        firm_name: editContact.firm_name,
-        website: editContact.website,
-        remark: editContact.remark
+        ...formData
       };
 
       console.log('📤 Sending update payload:', payload);
@@ -1108,39 +927,25 @@ function Contact() {
       );
 
       if (!response?.data?.error) {
-        // Close modal and reset form
+        // Close modal
         setShowEditModal(false);
         setEditingContact(null);
-        setEditContact({
-          contact_id: '',
-          number: '',
-          name: '',
-          email: '',
-          firm_name: '',
-          website: '',
-          remark: ''
-        });
-        setEditErrors({
-          number: '',
-          name: '',
-          email: '',
-          website: '',
-          remark: ''
-        });
 
         // Refresh contacts list
-          setReloadTick((t) => t + 1);
+        setReloadTick((t) => t + 1);
 
-        // Show success message
+        // Show success toast
         const successMsg = response?.data?.msg || 'Contact updated successfully';
-        setSuccessMessage(successMsg);
-        setShowSuccessModal(true);
+        toast.success(successMsg, {
+          duration: 3000,
+          icon: '✓'
+        });
       } else {
-        alert('Failed to update contact: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
+        toast.error('Failed to update contact: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
       }
     } catch (error) {
       console.error('Failed to update contact:', error);
-      alert('Failed to update contact. Please try again.');
+      toast.error('Failed to update contact. Please try again.');
     }
   };
 
@@ -2140,19 +1945,11 @@ function Contact() {
                   <button
                     onClick={() => {
                       if (!permissions || permissions.create_contact) {
-                        setCreateCountry({ iso2: 'IN', name: 'India', dialCode: '91' });
                         setNewContact({
                           number: '',
                           name: '',
                           email: '',
                           firm_name: '',
-                          website: '',
-                          remark: ''
-                        });
-                        setCreateErrors({
-                          number: '',
-                          name: '',
-                          email: '',
                           website: '',
                           remark: ''
                         });
@@ -2515,459 +2312,33 @@ function Contact() {
       </div>
 
       {/* Create Contact Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-5/6 sm:w-3/6 md:w-3/6 lg:w-2/6 xl:w-6/9 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Create New Contact</h3>
-                <button
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    setCreateCountry(DEFAULT_CREATE_COUNTRY);
-                    setCreateErrors({
-                      number: '',
-                      name: '',
-                      email: '',
-                      website: '',
-                      remark: ''
-                    });
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <FiX className="h-6 w-6" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <FiPhone className="inline h-4 w-4 mr-1" />
-                    Mobile Number *
-                  </label>
-                  <div className="flex gap-2">
-                    <select
-                      value={createCountry.iso2}
-                      onChange={(e) => {
-                        const next = CREATE_COUNTRY_OPTIONS.find((c) => c.iso2 === e.target.value) || DEFAULT_CREATE_COUNTRY;
-                        setCreateCountry(next);
-                        if (newContact.number) {
-                          setCreateErrors({ ...createErrors, number: validateLocalPhoneNumber10(newContact.number) });
-                        }
-                      }}
-                      className="w-4/12 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                      aria-label="Country code"
-                    >
-                      {CREATE_COUNTRY_OPTIONS.map((c) => (
-                        <option key={c.iso2} value={c.iso2}>
-                          {c.name} ({c.dialCode})
-                        </option>
-                      ))}
-                    </select>
-
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={10}
-                      value={newContact.number}
-                      onChange={(e) => {
-                        const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
-                        setNewContact({ ...newContact, number: digits });
-                        if (createErrors.number) {
-                          setCreateErrors({ ...createErrors, number: validateLocalPhoneNumber10(digits) });
-                        }
-                      }}
-                      onBlur={() => setCreateErrors({ ...createErrors, number: validateLocalPhoneNumber10(newContact.number) })}
-                      className={`w-8/12 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                        createErrors.number
-                          ? 'border-red-500 focus:ring-red-500'
-                          : 'border-gray-300 focus:ring-indigo-500'
-                      }`}
-                      placeholder="Enter 10-digit number"
-                      required
-                    />
-                  </div>
-
-                  {!createErrors.number && /^\d{10}$/.test(newContact.number) && (
-                    <p className="mt-1 text-sm text-green-600 inline-flex items-center">
-                      <FiCheckCircle className="h-4 w-4 mr-1" />
-                      Valid number (will be saved as {String(createCountry?.dialCode || '91').replace(/\D/g, '')}
-                      {newContact.number})
-                    </p>
-                  )}
-                  {createErrors.number && (
-                    <p className="mt-1 text-sm text-red-600">{createErrors.number}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <FiUser className="inline h-4 w-4 mr-1" />
-                    Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={newContact.name}
-                    onChange={(e) => {
-                      setNewContact({ ...newContact, name: e.target.value });
-                      if (createErrors.name) {
-                        setCreateErrors({ ...createErrors, name: validateName(e.target.value) });
-                      }
-                    }}
-                    onBlur={() => setCreateErrors({ ...createErrors, name: validateName(newContact.name) })}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      createErrors.name 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
-                    placeholder="Enter full name"
-                    required
-                  />
-                  {createErrors.name && (
-                    <p className="mt-1 text-sm text-red-600">{createErrors.name}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <FiMail className="inline h-4 w-4 mr-1" />
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={newContact.email}
-                    onChange={(e) => {
-                      setNewContact({ ...newContact, email: e.target.value });
-                      if (createErrors.email) {
-                        setCreateErrors({ ...createErrors, email: validateEmail(e.target.value) });
-                      }
-                    }}
-                    onBlur={() => setCreateErrors({ ...createErrors, email: validateEmail(newContact.email) })}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      createErrors.email 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
-                    placeholder="Enter email address"
-                  />
-                  {createErrors.email && (
-                    <p className="mt-1 text-sm text-red-600">{createErrors.email}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <FiHome className="inline h-4 w-4 mr-1" />
-                    Company Name
-                  </label>
-                  <input
-                    type="text"
-                    value={newContact.firm_name}
-                    onChange={(e) => setNewContact({ ...newContact, firm_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="Enter company name"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <FiGlobe className="inline h-4 w-4 mr-1" />
-                    Website
-                  </label>
-                  <input
-                    type="url"
-                    value={newContact.website}
-                    onChange={(e) => {
-                      setNewContact({ ...newContact, website: e.target.value });
-                      if (createErrors.website) {
-                        setCreateErrors({ ...createErrors, website: validateWebsite(e.target.value) });
-                      }
-                    }}
-                    onBlur={() => setCreateErrors({ ...createErrors, website: validateWebsite(newContact.website) })}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      createErrors.website 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
-                    placeholder="Enter website URL (e.g., example.com)"
-                  />
-                  {createErrors.website && (
-                    <p className="mt-1 text-sm text-red-600">{createErrors.website}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <FiFileText className="inline h-4 w-4 mr-1" />
-                    Remark
-                  </label>
-                  <textarea
-                    value={newContact.remark}
-                    onChange={(e) => {
-                      setNewContact({ ...newContact, remark: e.target.value });
-                      if (createErrors.remark) {
-                        setCreateErrors({ ...createErrors, remark: validateRemark(e.target.value) });
-                      }
-                    }}
-                    onBlur={() => setCreateErrors({ ...createErrors, remark: validateRemark(newContact.remark) })}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      createErrors.remark 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
-                    placeholder="Enter any remarks"
-                    rows="3"
-                  />
-                  {createErrors.remark && (
-                    <p className="mt-1 text-sm text-red-600">{createErrors.remark}</p>
-                  )}
-                  <p className="mt-1 text-xs text-gray-500">
-                    {newContact.remark.length}/1000 characters
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    setCreateCountry(DEFAULT_CREATE_COUNTRY);
-                    setCreateErrors({
-                      number: '',
-                      name: '',
-                      email: '',
-                      website: '',
-                      remark: ''
-                    });
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateContact}
-                  disabled={!newContact.name || !newContact.number || newContact.number.length !== 10}
-                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Create Contact
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ContactFormModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        initialData={newContact}
+        isExisting={false}
+        onSubmit={handleCreateContact}
+        loading={false}
+        submitting={false}
+        error=""
+        darkMode={false}
+      />
 
       {/* Edit Contact Modal */}
-      {showEditModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-5/6 sm:w-3/6 md:w-3/6 lg:w-2/6 xl:w-6/9 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Edit Contact</h3>
-                <button
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setEditingContact(null);
-                    setEditErrors({
-                      number: '',
-                      name: '',
-                      email: '',
-                      website: '',
-                      remark: ''
-                    });
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <FiX className="h-6 w-6" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <FiPhone className="inline h-4 w-4 mr-1" />
-                    Mobile Number *
-                  </label>
-                  <input
-                    type="tel"
-                    value={editContact.number}
-                    onChange={(e) => {
-                      setEditContact({ ...editContact, number: e.target.value });
-                      if (editErrors.number) {
-                        setEditErrors({ ...editErrors, number: validatePhoneNumber(e.target.value) });
-                      }
-                    }}
-                    onBlur={() => setEditErrors({ ...editErrors, number: validatePhoneNumber(editContact.number) })}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      editErrors.number 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
-                    placeholder="Enter mobile number"
-                    required
-                  />
-                  {editErrors.number && (
-                    <p className="mt-1 text-sm text-red-600">{editErrors.number}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <FiUser className="inline h-4 w-4 mr-1" />
-                    Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={editContact.name}
-                    onChange={(e) => {
-                      setEditContact({ ...editContact, name: e.target.value });
-                      if (editErrors.name) {
-                        setEditErrors({ ...editErrors, name: validateName(e.target.value) });
-                      }
-                    }}
-                    onBlur={() => setEditErrors({ ...editErrors, name: validateName(editContact.name) })}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      editErrors.name 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
-                    placeholder="Enter full name"
-                    required
-                  />
-                  {editErrors.name && (
-                    <p className="mt-1 text-sm text-red-600">{editErrors.name}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <FiMail className="inline h-4 w-4 mr-1" />
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={editContact.email}
-                    onChange={(e) => {
-                      setEditContact({ ...editContact, email: e.target.value });
-                      if (editErrors.email) {
-                        setEditErrors({ ...editErrors, email: validateEmail(e.target.value) });
-                      }
-                    }}
-                    onBlur={() => setEditErrors({ ...editErrors, email: validateEmail(editContact.email) })}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      editErrors.email 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
-                    placeholder="Enter email address"
-                  />
-                  {editErrors.email && (
-                    <p className="mt-1 text-sm text-red-600">{editErrors.email}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <FiHome className="inline h-4 w-4 mr-1" />
-                    Company Name
-                  </label>
-                  <input
-                    type="text"
-                    value={editContact.firm_name}
-                    onChange={(e) => setEditContact({ ...editContact, firm_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="Enter company name"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <FiGlobe className="inline h-4 w-4 mr-1" />
-                    Website
-                  </label>
-                  <input
-                    type="url"
-                    value={editContact.website}
-                    onChange={(e) => {
-                      setEditContact({ ...editContact, website: e.target.value });
-                      if (editErrors.website) {
-                        setEditErrors({ ...editErrors, website: validateWebsite(e.target.value) });
-                      }
-                    }}
-                    onBlur={() => setEditErrors({ ...editErrors, website: validateWebsite(editContact.website) })}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      editErrors.website 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
-                    placeholder="Enter website URL (e.g., example.com)"
-                  />
-                  {editErrors.website && (
-                    <p className="mt-1 text-sm text-red-600">{editErrors.website}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <FiFileText className="inline h-4 w-4 mr-1" />
-                    Remark
-                  </label>
-                  <textarea
-                    value={editContact.remark}
-                    onChange={(e) => {
-                      setEditContact({ ...editContact, remark: e.target.value });
-                      if (editErrors.remark) {
-                        setEditErrors({ ...editErrors, remark: validateRemark(e.target.value) });
-                      }
-                    }}
-                    onBlur={() => setEditErrors({ ...editErrors, remark: validateRemark(editContact.remark) })}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      editErrors.remark 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
-                    placeholder="Enter any remarks"
-                    rows="3"
-                  />
-                  {editErrors.remark && (
-                    <p className="mt-1 text-sm text-red-600">{editErrors.remark}</p>
-                  )}
-                  <p className="mt-1 text-xs text-gray-500">
-                    {editContact.remark.length}/1000 characters
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setEditingContact(null);
-                    setEditErrors({
-                      number: '',
-                      name: '',
-                      email: '',
-                      website: '',
-                      remark: ''
-                    });
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpdateContact}
-                  disabled={!editContact.number || !editContact.name}
-                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Update Contact
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ContactFormModal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingContact(null);
+        }}
+        initialData={editContact}
+        isExisting={true}
+        onSubmit={handleUpdateContact}
+        loading={false}
+        submitting={false}
+        error=""
+        darkMode={false}
+      />
 
       {/* Import Modal */}
       {showImportModal && (
