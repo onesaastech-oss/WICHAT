@@ -777,7 +777,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
         setContactForm((prev) => ({
             ...prev,
-            name: activeChat?.name || '',
+            // If name is same as number, it means it's not saved yet, so leave name empty
+            name: (activeChat?.name && activeChat?.name !== activeChat?.number) ? activeChat.name : '',
             number: activeChat?.number || ''
         }));
 
@@ -3584,7 +3585,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                 </h3>
                                 <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center space-x-2">
                                     <span>
-                                        {contactDetails?.contact?.name || activeChat?.name} • {contactDetails?.contact?.number || activeChat?.number}
+                                        {contactDetails?.has_contact 
+                                            ? `${contactDetails.contact.name} • ${contactDetails.contact.number}`
+                                            : `${activeChat?.number || 'Unknown'}`
+                                        }
                                     </span>
                                     {contactDetailsLoading && (
                                         <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-400"></div>
@@ -3736,7 +3740,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                             onClick={() => {
                                                 setShowContactModal(true);
                                                 setContactForm({
-                                                    name: activeChat?.name || '',
+                                                    // If name is same as number, it means it's not saved yet, so leave name empty
+                                                    name: (activeChat?.name && activeChat?.name !== activeChat?.number) ? activeChat.name : '',
                                                     number: activeChat?.number || '',
                                                     email: '',
                                                     firm_name: '',

@@ -29,7 +29,7 @@ function TemplateAdd() {
   const [formData, setFormData] = useState({
     name: '',
     category: '',
-    language: '',
+    language: 'en',
     components: {
       header: {
         type: 'HEADER',
@@ -595,7 +595,7 @@ function TemplateAdd() {
         setFormData({
           name: '',
           category: '',
-          language: '',
+          language: 'en',
           components: {
             header: {
               type: 'HEADER',
