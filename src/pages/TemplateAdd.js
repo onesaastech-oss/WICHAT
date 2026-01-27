@@ -221,18 +221,198 @@ function TemplateAdd() {
   };
 
 
-  // Handle body text change
-  const handleBodyTextChange = (text) => {
+  // Get the next variable number based on current body text
+  const getNextVariableNumber = () => {
+    const regex = /\{\{(\d+)\}\}/g;
+    const existingVars = new Set();
+    let match;
+    
+    while ((match = regex.exec(formData.components.body.text)) !== null) {
+      existingVars.add(parseInt(match[1]));
+    }
+    
+    // Next number is always count + 1 (sequential)
+    return existingVars.size + 1;
+  };
+
+  // Handle body text change with cursor position preservation
+  const handleBodyTextChange = (text, cursorPosition = null) => {
+    const textarea = textareaRef.current;
+    const originalCursor = cursorPosition ?? textarea?.selectionStart ?? text.length;
+
+    // Extract all variable numbers from the body text in order of appearance
+    const variableRegex = /\{\{(\d+)\}\}/g;
+    const foundVariables = [];
+    const variableMap = new Map();
+    let match;
+    
+    while ((match = variableRegex.exec(text)) !== null) {
+      const varNum = parseInt(match[1]);
+      if (!variableMap.has(varNum)) {
+        variableMap.set(varNum, match.index);
+        foundVariables.push(varNum);
+      }
+    }
+
+    // Check if variables are sequential
+    let needsRenumbering = false;
+    if (foundVariables.length > 0) {
+      for (let i = 0; i < foundVariables.length; i++) {
+        if (foundVariables[i] !== i + 1) {
+          needsRenumbering = true;
+          break;
+        }
+      }
+    }
+
+    // Create mapping from old numbers to new numbers for sample value preservation
+    const oldToNewMap = new Map();
+    foundVariables.forEach((oldNum, index) => {
+      oldToNewMap.set(oldNum, index + 1);
+    });
+
+    // Renumber variables if needed
+    let finalText = text;
+    let cursorOffset = 0;
+
+    if (needsRenumbering && foundVariables.length > 0) {
+      const sortedOldNums = [...foundVariables].sort((a, b) => b - a);
+      
+      sortedOldNums.forEach(oldNum => {
+        const newNum = oldToNewMap.get(oldNum);
+        if (oldNum !== newNum) {
+          finalText = finalText.replace(
+            new RegExp(`\\{\\{${oldNum}\\}\\}`, 'g'),
+            `{{TEMP_${newNum}}}`
+          );
+        }
+      });
+      
+      finalText = finalText.replace(/\{\{TEMP_(\d+)\}\}/g, '{{$1}}');
+      
+      // Calculate cursor offset from renumbering
+      cursorOffset = finalText.length - text.length;
+    }
+
+    // Update form data
     setFormData(prev => ({
       ...prev,
       components: {
         ...prev.components,
         body: {
           ...prev.components.body,
-          text: text
+          text: finalText
         }
       }
     }));
+
+    // Sync variables with proper sample value preservation
+    setBodyVariables(prevVars => {
+      // Create a map of old variable number -> sample value
+      const oldSampleMap = new Map();
+      prevVars.forEach((v, index) => {
+        oldSampleMap.set(index + 1, v.sample);
+      });
+
+      // Count final variables in the text
+      const finalVarRegex = /\{\{(\d+)\}\}/g;
+      const finalVars = new Set();
+      let finalMatch;
+      while ((finalMatch = finalVarRegex.exec(finalText)) !== null) {
+        finalVars.add(parseInt(finalMatch[1]));
+      }
+
+      const sortedFinalVars = Array.from(finalVars).sort((a, b) => a - b);
+
+      if (sortedFinalVars.length === 0) {
+        return [];
+      }
+
+      // Create new variables array
+      const newVars = [];
+      
+      sortedFinalVars.forEach((newVarNum, index) => {
+        // Find the OLD variable number that became this new number
+        let oldVarNum = null;
+        for (const [oldNum, mappedNewNum] of oldToNewMap.entries()) {
+          if (mappedNewNum === newVarNum) {
+            oldVarNum = oldNum;
+            break;
+          }
+        }
+
+        // Get the sample value from the old variable
+        const sampleValue = oldVarNum !== null ? (oldSampleMap.get(oldVarNum) || '') : '';
+
+        newVars.push({
+          id: Date.now() + index,
+          name: `var${newVarNum}`,
+          sample: sampleValue
+        });
+      });
+
+      return newVars;
+    });
+
+    // Restore cursor position
+    if (textarea && cursorPosition !== null) {
+      const newCursorPos = Math.max(0, Math.min(originalCursor + cursorOffset, finalText.length));
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }, 0);
+    }
+  };
+
+  // Handle keydown for atomic variable deletion
+  const handleBodyKeyDown = (e) => {
+    const textarea = e.target;
+    const text = formData.components.body.text;
+    const cursorPos = textarea.selectionStart;
+    const selectionEnd = textarea.selectionEnd;
+    
+    // Only handle backspace and delete keys when no selection
+    if ((e.key === 'Backspace' || e.key === 'Delete') && cursorPos === selectionEnd) {
+      // Find all variables and their positions
+      const varRegex = /\{\{(\d+)\}\}/g;
+      let match;
+      
+      while ((match = varRegex.exec(text)) !== null) {
+        const varStart = match.index;
+        const varEnd = varStart + match[0].length;
+        
+        // Check if cursor is inside or at the edge of a variable
+        if (e.key === 'Backspace') {
+          // Backspace: check if cursor is inside or right after variable
+          if (cursorPos > varStart && cursorPos <= varEnd) {
+            e.preventDefault();
+            // Remove the entire variable
+            const newText = text.slice(0, varStart) + text.slice(varEnd);
+            handleBodyTextChange(newText, varStart);
+            return;
+          }
+        } else if (e.key === 'Delete') {
+          // Delete: check if cursor is inside or right before variable
+          if (cursorPos >= varStart && cursorPos < varEnd) {
+            e.preventDefault();
+            // Remove the entire variable
+            const newText = text.slice(0, varStart) + text.slice(varEnd);
+            handleBodyTextChange(newText, varStart);
+            return;
+          }
+        }
+      }
+    }
+  };
+
+  // Handle textarea input change
+  const handleBodyInputChange = (e) => {
+    const textarea = e.target;
+    const newText = e.target.value;
+    const cursorPos = textarea.selectionStart;
+
+    // Handle the change with cursor position
+    handleBodyTextChange(newText, cursorPos);
   };
 
   // Add a variable to body at cursor position
@@ -242,17 +422,23 @@ function TemplateAdd() {
     const endPos = textarea.selectionEnd;
     const currentText = formData.components.body.text;
 
-    const newVariable = {
-      id: Date.now(),
-      name: `var${bodyVariables.length + 1}`,
-      sample: ''
-    };
+    // Count existing unique variables
+    const variableRegex = /\{\{(\d+)\}\}/g;
+    const existingVars = new Set();
+    let match;
+    
+    while ((match = variableRegex.exec(currentText)) !== null) {
+      existingVars.add(parseInt(match[1]));
+    }
+
+    // Next variable number is count + 1 (always sequential)
+    const nextVarNum = existingVars.size + 1;
 
     // Insert variable at cursor position
-    const variableText = `{{${bodyVariables.length + 1}}}`;
+    const variableText = `{{${nextVarNum}}}`;
     const newBodyText = currentText.slice(0, startPos) + variableText + currentText.slice(endPos);
 
-    setBodyVariables(prev => [...prev, newVariable]);
+    // handleBodyTextChange will automatically sync and renumber if needed
     handleBodyTextChange(newBodyText);
 
     // Set cursor position after the inserted variable
@@ -271,16 +457,16 @@ function TemplateAdd() {
 
   // Remove body variable
   const removeBodyVariable = (id) => {
-    const variable = bodyVariables.find(v => v.id === id);
-    if (variable) {
-      const varIndex = bodyVariables.findIndex(v => v.id === id);
-      const varNumber = varIndex + 1;
+    const varIndex = bodyVariables.findIndex(v => v.id === id);
+    if (varIndex === -1) return;
 
-      // Remove variable from body text
-      const newBodyText = formData.components.body.text.replace(new RegExp(`\\{\\{${varNumber}\\}\\}`, 'g'), '');
-      handleBodyTextChange(newBodyText);
-      setBodyVariables(prev => prev.filter(v => v.id !== id));
-    }
+    const varNumber = varIndex + 1;
+    
+    // Remove all instances of this variable from body text
+    const newBodyText = formData.components.body.text.replace(new RegExp(`\\{\\{${varNumber}\\}\\}`, 'g'), '');
+    
+    // handleBodyTextChange will automatically renumber and sync the variables
+    handleBodyTextChange(newBodyText);
   };
 
   // Handle footer text change
@@ -878,9 +1064,11 @@ function TemplateAdd() {
                     <button
                       type="button"
                       onClick={addBodyVariable}
-                      className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200"
+                      className="flex items-center gap-1 text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-md hover:bg-indigo-200 transition-colors font-medium"
+                      title={`Add variable {{${getNextVariableNumber()}}}`}
                     >
-                      + Add Variable
+                      <FiPlus size={12} />
+                      Add Variable {`{{${getNextVariableNumber()}}}`}
                     </button>
                   </div>
                   <textarea
@@ -890,7 +1078,8 @@ function TemplateAdd() {
                       }`}
                     placeholder="Enter your message content here. Use {{1}} for variables."
                     value={formData.components.body.text}
-                    onChange={(e) => handleBodyTextChange(e.target.value)}
+                    onChange={handleBodyInputChange}
+                    onKeyDown={handleBodyKeyDown}
                     required
                   ></textarea>
 
@@ -930,36 +1119,44 @@ function TemplateAdd() {
                     </button>
                   </div>
 
-                  <p className="mt-1 text-xs text-gray-500">
-                    Use variables like {`{1}`} to personalize your message. Select text and use formatting buttons.
-                  </p>
 
                   {/* Body Variables */}
                   {bodyVariables.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      {bodyVariables.map(variable => (
-                        <div key={variable.id} className="p-3 bg-gray-50 border rounded-md">
+                    <div className="mt-3 space-y-3">
+                      {bodyVariables.map((variable, index) => (
+                        <div key={variable.id} className="p-3 bg-gray-50 border border-gray-200 rounded-md hover:border-indigo-300 transition-colors">
                           <div className="flex justify-between items-center mb-2">
-                            <span className="text-sm font-medium text-gray-700">
-                              Variable: {variable.name}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded">
+                                {`{{${index + 1}}}`}
+                              </span>
+                              <span className="text-sm font-medium text-gray-700">
+                                {variable.name}
+                              </span>
+                            </div>
                             <button
                               type="button"
                               onClick={() => removeBodyVariable(variable.id)}
-                              className="text-red-500 hover:text-red-700"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-colors"
+                              title="Remove variable"
                             >
                               <FiTrash2 size={14} />
                             </button>
                           </div>
                           <input
                             type="text"
-                            placeholder="Enter sample value"
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            placeholder={`Sample value for {{${index + 1}}}`}
+                            className={`w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${
+                              variable.sample && variable.sample.trim() !== '' 
+                                ? 'border-green-400 bg-green-50' 
+                                : 'border-gray-300 bg-white'
+                            }`}
                             value={variable.sample}
                             onChange={e => updateBodyVariable(variable.id, e.target.value)}
+                            required
                           />
                           <p className="mt-1 text-xs text-gray-500">
-                            All variable samples will be in a single array: [["value1", "value2", ...]]
+                            This value will replace <span className="font-mono text-indigo-600">{`{{${index + 1}}}`}</span> in the message preview
                           </p>
                         </div>
                       ))}
