@@ -487,10 +487,10 @@ function TemplateAdd() {
         };
 
         if (bodyVariables.length > 0) {
-          // Each variable sample wrapped in individual arrays: [["value1"], ["value2"]]
-          const bodySamples = bodyVariables.map(v => [v.sample || '']);
+          // All variable samples in a single nested array: [["value1", "value2", "value3"]]
+          const bodySamples = bodyVariables.map(v => v.sample || '');
           bodyComponent.example = {
-            body_text: bodySamples
+            body_text: [bodySamples]
           };
         }
 
@@ -959,7 +959,7 @@ function TemplateAdd() {
                             onChange={e => updateBodyVariable(variable.id, e.target.value)}
                           />
                           <p className="mt-1 text-xs text-gray-500">
-                            Each variable sample will be wrapped in individual arrays: [["value1"], ["value2"]]
+                            All variable samples will be in a single array: [["value1", "value2", ...]]
                           </p>
                         </div>
                       ))}
