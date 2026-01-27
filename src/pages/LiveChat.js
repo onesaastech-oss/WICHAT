@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';
 import ChatList from './ChatList';
 import Conversation from './Conversation';
@@ -8,10 +9,12 @@ import { socketManager } from './socket';
 import { FiArrowLeft, FiSun, FiMoon, FiLock } from 'react-icons/fi';
 import logo from '../logo.svg';
 import { Header, Sidebar } from '../component/Menu';
+import { setChats as setReduxChats } from '../store/chatSlice';
 function LiveChat() {
     const navigate = useNavigate();
     const location = useLocation();
     const { phone } = useParams();
+    const dispatch = useDispatch();
     const [tokens, setTokens] = useState(null);
     const [activeChat, setActiveChat] = useState(null);
     const [darkMode, setDarkMode] = useState(false);
@@ -167,6 +170,8 @@ function LiveChat() {
                     const updatedChats = await dbHelper.getChats();
                     console.log('✅ Refreshing chat list after status update:', updatedChats.length);
                     setChats([...updatedChats]);
+                    // Also update Redux store
+                    dispatch(setReduxChats(updatedChats));
                 }
                 return;
             }
@@ -176,6 +181,8 @@ function LiveChat() {
             if (dbAvailable) {
                 const updatedChats = await dbHelper.getChats();
                 setChats([...updatedChats]);
+                // Also update Redux store
+                dispatch(setReduxChats(updatedChats));
 
                 if (activeChat?.number) {
                     const updatedMessage = await dbHelper.getMessages(activeChat.number);
@@ -202,7 +209,7 @@ function LiveChat() {
             unsubscribeMessage();
             unsubscribeAssignment();
         };
-    }, [isInitialized, activeChat, dbAvailable]);
+    }, [isInitialized, activeChat, dbAvailable, dispatch]);
 
     // Set dark mode class on body
     useEffect(() => {
@@ -288,6 +295,8 @@ function LiveChat() {
                 console.log('✅ Updated chats fetched from DB:', updatedChats.length);
                 // Create a new array reference to trigger React re-render
                 setChats([...updatedChats]);
+                // Also update Redux store
+                dispatch(setReduxChats(updatedChats));
             }
         } catch (error) {
             console.error('Error updating chat list after status change:', error);

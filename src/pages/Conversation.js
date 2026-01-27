@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallba
 import { useDispatch } from 'react-redux';
 import { useSelector } from 'react-redux';
 import { fetchProjectInfo } from '../store/projectSlice';
+import { updateMessageStatus as updateChatMessageStatus } from '../store/chatSlice';
 import {
     FiPaperclip,
     FiMic,
@@ -41,17 +42,13 @@ import {
     FiPhone,
     FiCheckCircle
 } from 'react-icons/fi';
-import { FaRegEye } from "react-icons/fa6";
-import { MdOutlineCancel } from "react-icons/md";
 import { LuSendHorizontal } from "react-icons/lu";
-import { FaDownload, FaFilePdf, FaFileWord, FaFileExcel, FaFile, FaFileImage, FaFileVideo, FaFileAudio } from 'react-icons/fa';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { Encrypt } from './encryption/payload-encryption';
 import { dbHelper, contactDbHelper } from './db';
 import ContactFormModal from '../component/Modals/ContactFormModal';
-import ReactPlayer from 'react-player';
 import ChatTemplateModal from '../component/Modals/ChatTemplateModal';
 import TemplatePreview from '../component/Modals/TemplatePreview';
 import EmojiPickerPopover from '../component/Modals/Conversation/EmojiPicker';
@@ -533,9 +530,6 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                             )}
 
 
-
-
-
                             <div className={`flex items-center space-x-1 sm:space-x-2 mt-1 sm:mt-2 justify-between`}>
                                 <div className='left'>
                                     {msg.message_type === 'audio' && (
@@ -686,6 +680,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
     const initialScrollDoneRef = useRef(false);
+    const shouldAutoScrollRef = useRef(true); // Track if we should auto-scroll to bottom
     const emojiButtonRef = useRef(null);
     const messageInputRef = useRef(null);
     const inputSelectionRef = useRef({ start: 0, end: 0 });
@@ -1352,6 +1347,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         (async () => {
             // Reset initial scroll state for new chat so first scroll is instant
             initialScrollDoneRef.current = false;
+            shouldAutoScrollRef.current = true; // Enable auto-scroll for new chat
             // Reset pagination state for new chat
             setLastId("0");
             setHasMoreMessages(true);
@@ -1379,16 +1375,35 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     // 🔹 When a new socket-driven refresh arrives (messages for active chat)
     useEffect(() => {
         if (Array.isArray(socketMessage) && socketMessage.length > 0 && activeChat?.number) {
+            // Find the last outgoing message to update chat list status
+            const lastOutgoingMessage = socketMessage
+                .slice()
+                .reverse()
+                .find(msg => msg.type === 'out');
+            
+            if (lastOutgoingMessage && lastOutgoingMessage.status) {
+                // Update Redux store with the latest outgoing message status
+                dispatch(updateChatMessageStatus({
+                    chatNumber: activeChat.number,
+                    messageId: lastOutgoingMessage.message_id || lastOutgoingMessage.wamid || lastOutgoingMessage.id,
+                    status: lastOutgoingMessage.status,
+                    timestamp: lastOutgoingMessage.timestamp || Date.now()
+                }));
+            }
+            
             setMessages(socketMessage);
             // setTimeout(() => scrollToBottomImmediate(), 50);
         }
-    }, [socketMessage, activeChat]);
+    }, [socketMessage, activeChat, dispatch]);
 
 
 
     // Ensure we render from the bottom with no visible scroll on first paint
     useLayoutEffect(() => {
-        scrollToBottomSync();
+        // Only auto-scroll if we should (not loading previous messages or user is already at bottom)
+        if (shouldAutoScrollRef.current) {
+            scrollToBottomSync();
+        }
     }, [messages]);
 
     // Add scroll event handler for infinite scroll
@@ -1398,6 +1413,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
         const handleScroll = () => {
             const { scrollTop, scrollHeight, clientHeight } = container;
+
+            // Check if user is at or near the bottom (within 100px threshold)
+            const isAtBottom = scrollHeight - scrollTop - clientHeight <= 100;
+            shouldAutoScrollRef.current = isAtBottom;
 
             // Check if user has scrolled to the top (within 100px threshold)
             if (scrollTop <= 100 && hasMoreMessages && !loadingPrevious) {
@@ -1998,6 +2017,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         };
 
         setMessages(prev => [...prev, newMessage]);
+        shouldAutoScrollRef.current = true; // Enable auto-scroll when sending new message
         setMessageInput('');
         setReplyingToMessage(null);
         // Reset textarea height after sending
@@ -2033,6 +2053,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             if (onMessageStatusUpdate) {
                 onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
             }
+            
+            // Update Redux store for chat list
+            dispatch(updateChatMessageStatus({
+                chatNumber: activeChat.number,
+                messageId: tempMessageId,
+                status: 'pending',
+                timestamp: Date.now()
+            }));
         } catch (e) {
             console.error('Failed to persist temp message/chat row:', e);
         }
@@ -2081,6 +2109,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 if (onMessageStatusUpdate) {
                     onMessageStatusUpdate(activeChat.number, tempMessageId, 'sent');
                 }
+                
+                // Update Redux store for chat list
+                dispatch(updateChatMessageStatus({
+                    chatNumber: activeChat.number,
+                    messageId: tempMessageId,
+                    status: 'sent',
+                    timestamp: Date.now()
+                }));
             } else {
                 // Update message status to failed
                 setMessages(prev =>
@@ -2099,6 +2135,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 if (onMessageStatusUpdate) {
                     onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
                 }
+                
+                // Update Redux store for chat list
+                dispatch(updateChatMessageStatus({
+                    chatNumber: activeChat.number,
+                    messageId: tempMessageId,
+                    status: 'failed',
+                    timestamp: Date.now()
+                }));
             }
         } catch (error) {
             console.error('Failed to send message:', error);
@@ -2119,6 +2163,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             if (onMessageStatusUpdate) {
                 onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
             }
+            
+            // Update Redux store for chat list
+            dispatch(updateChatMessageStatus({
+                chatNumber: activeChat.number,
+                messageId: tempMessageId,
+                status: 'failed',
+                timestamp: Date.now()
+            }));
         }
     };
 
@@ -2422,6 +2474,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     ]);
                 }
                 setMessages(prev => [...prev, tempMessage]);
+                shouldAutoScrollRef.current = true; // Enable auto-scroll when sending file
                 setSelectedFile(null);
                 setMessageInput('');
                 // Reset textarea height after sending
@@ -2435,6 +2488,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 if (onMessageStatusUpdate) {
                     onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
                 }
+                
+                // Update Redux store for chat list
+                dispatch(updateChatMessageStatus({
+                    chatNumber: activeChat.number,
+                    messageId: tempMessageId,
+                    status: 'pending',
+                    timestamp: Date.now()
+                }));
 
                 const messagePayload = {
                     project_id: tokens.selected_project_id || '',
@@ -2515,6 +2576,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         // Use server's message_id if available, otherwise fall back to temp
                         onMessageStatusUpdate(activeChat.number, serverMessageId || tempMessageId, 'sent');
                     }
+                    
+                    // Update Redux store for chat list
+                    dispatch(updateChatMessageStatus({
+                        chatNumber: activeChat.number,
+                        messageId: serverMessageId || tempMessageId,
+                        status: 'sent',
+                        timestamp: Date.now()
+                    }));
                 } else {
                     if (dbAvailable) {
                         await dbHelper.updateMessageStatus(tempMessageId, 'failed');
@@ -2533,6 +2602,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     if (onMessageStatusUpdate) {
                         onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
                     }
+                    
+                    // Update Redux store for chat list
+                    dispatch(updateChatMessageStatus({
+                        chatNumber: activeChat.number,
+                        messageId: tempMessageId,
+                        status: 'failed',
+                        timestamp: Date.now()
+                    }));
                 }
             }
             else {
@@ -2554,6 +2631,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             if (onMessageStatusUpdate) {
                 onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
             }
+            
+            // Update Redux store for chat list
+            dispatch(updateChatMessageStatus({
+                chatNumber: activeChat.number,
+                messageId: tempMessageId,
+                status: 'failed',
+                timestamp: Date.now()
+            }));
         } finally {
             setIsUploading(false);
             setUploadProgress(0);
@@ -2652,6 +2737,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
             // Update UI immediately
             setMessages((prev) => [...prev, tempMessage]);
+            shouldAutoScrollRef.current = true; // Enable auto-scroll when sending template
             // setTimeout(() => scrollToBottomImmediate(), 50);
 
             // Persist to DB and chat list
@@ -2679,6 +2765,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 if (onMessageStatusUpdate) {
                     onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
                 }
+                
+                // Update Redux store for chat list
+                dispatch(updateChatMessageStatus({
+                    chatNumber: activeChat.number,
+                    messageId: tempMessageId,
+                    status: 'pending',
+                    timestamp: Date.now()
+                }));
             } catch (e) {
                 console.error('Failed to persist temp template message/chat row:', e);
             }
@@ -2766,6 +2860,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     // Use server's message_id if available, otherwise fall back to temp
                     onMessageStatusUpdate(activeChat.number, serverMessageId || tempMessageId, 'sent');
                 }
+                
+                // Update Redux store for chat list
+                dispatch(updateChatMessageStatus({
+                    chatNumber: activeChat.number,
+                    messageId: serverMessageId || tempMessageId,
+                    status: 'sent',
+                    timestamp: Date.now()
+                }));
             } else {
                 // Failed
                 if (dbAvailable) {
@@ -2775,6 +2877,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 if (onMessageStatusUpdate) {
                     onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
                 }
+                
+                // Update Redux store for chat list
+                dispatch(updateChatMessageStatus({
+                    chatNumber: activeChat.number,
+                    messageId: tempMessageId,
+                    status: 'failed',
+                    timestamp: Date.now()
+                }));
             }
         } catch (error) {
             console.error('Failed to send template:', error);
