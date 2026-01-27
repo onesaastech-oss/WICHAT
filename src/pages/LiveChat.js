@@ -9,7 +9,7 @@ import { socketManager } from './socket';
 import { FiArrowLeft, FiSun, FiMoon, FiLock } from 'react-icons/fi';
 import logo from '../logo.svg';
 import { Header, Sidebar } from '../component/Menu';
-import { setChats as setReduxChats } from '../store/chatSlice';
+import { setChats as setReduxChats, updateMessageStatus } from '../store/chatSlice';
 function LiveChat() {
     const navigate = useNavigate();
     const location = useLocation();
@@ -159,19 +159,42 @@ function LiveChat() {
             if (messageData.changes && ['sent', 'delivered', 'read', 'failed'].includes(messageData.changes)) {
                 console.log('📊 Message status update received:', messageData);
 
+                // Get the chat number for this status update
+                // The socket data typically contains message_id but we need to find the chat number
+                const messageId = messageData.message_id;
+                const newStatus = messageData.changes;
+
+                // Update Redux directly to avoid stale DB reads
+                // First, try to find which chat this message belongs to
+                if (dbAvailable && messageId) {
+                    try {
+                        const message = await dbHelper.getMessageByMessageId(messageId);
+                        if (message && message.chat_number) {
+                            // Update Redux directly with the new status
+                            dispatch(updateMessageStatus({
+                                chatNumber: message.chat_number,
+                                messageId: messageId,
+                                status: newStatus,
+                                timestamp: Date.now()
+                            }));
+                            console.log('✅ Redux updated directly for chat:', message.chat_number, 'status:', newStatus);
+                        }
+                    } catch (err) {
+                        console.error('Error finding message for status update:', err);
+                    }
+                }
+
                 // Refresh messages for active chat if it's affected
                 if (activeChat?.number && dbAvailable) {
                     const updatedMessage = await dbHelper.getMessages(activeChat.number);
                     setMessages([...updatedMessage]);
                 }
 
-                // Refresh chat list to show updated status
+                // Update local chats state from DB (but don't overwrite Redux - we already updated it)
                 if (dbAvailable) {
                     const updatedChats = await dbHelper.getChats();
-                    console.log('✅ Refreshing chat list after status update:', updatedChats.length);
+                    console.log('✅ Local chats updated from DB:', updatedChats.length);
                     setChats([...updatedChats]);
-                    // Also update Redux store
-                    dispatch(setReduxChats(updatedChats));
                 }
                 return;
             }
@@ -181,8 +204,8 @@ function LiveChat() {
             if (dbAvailable) {
                 const updatedChats = await dbHelper.getChats();
                 setChats([...updatedChats]);
-                // Also update Redux store
-                dispatch(setReduxChats(updatedChats));
+                // Also update Redux store with new array reference
+                dispatch(setReduxChats([...updatedChats]));
 
                 if (activeChat?.number) {
                     const updatedMessage = await dbHelper.getMessages(activeChat.number);
@@ -289,14 +312,23 @@ function LiveChat() {
     const handleMessageStatusUpdate = async (chatNumber, messageId, status) => {
         try {
             console.log('🔄 handleMessageStatusUpdate called:', { chatNumber, messageId, status });
-            // Refresh the chat list to show updated status
+            
+            // Update Redux directly to avoid race conditions with DB reads
+            dispatch(updateMessageStatus({
+                chatNumber: chatNumber,
+                messageId: messageId,
+                status: status,
+                timestamp: Date.now()
+            }));
+            console.log('✅ Redux updated directly for chat:', chatNumber, 'status:', status);
+            
+            // Update local chats state from DB (but Redux is already updated)
             if (dbAvailable) {
                 const updatedChats = await dbHelper.getChats();
                 console.log('✅ Updated chats fetched from DB:', updatedChats.length);
+                console.log('📊 First chat status:', updatedChats[0]?.status);
                 // Create a new array reference to trigger React re-render
                 setChats([...updatedChats]);
-                // Also update Redux store
-                dispatch(setReduxChats(updatedChats));
             }
         } catch (error) {
             console.error('Error updating chat list after status change:', error);

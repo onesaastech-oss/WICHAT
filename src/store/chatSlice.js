@@ -11,9 +11,42 @@ const chatSlice = createSlice({
     name: 'chat',
     initialState,
     reducers: {
-        // Set all chats
+        // Set all chats (preserves higher status values to avoid overwriting with stale data)
         setChats: (state, action) => {
-            state.chats = action.payload;
+            const newChats = action.payload;
+            console.log('🔴 Redux setChats called with', newChats.length, 'chats, first chat status:', newChats[0]?.status);
+            
+            // Define status hierarchy (higher number = higher status)
+            const statusHierarchy = {
+                'pending': 1,
+                'sent': 2,
+                'delivered': 3,
+                'read': 4,
+                'failed': 0
+            };
+            
+            // Merge new chats while preserving higher status values
+            const mergedChats = newChats.map(newChat => {
+                const existingChat = state.chats.find(c => c.number === newChat.number);
+                
+                if (existingChat) {
+                    const existingStatusLevel = statusHierarchy[existingChat.status] || 0;
+                    const newStatusLevel = statusHierarchy[newChat.status] || 0;
+                    
+                    // If existing status is higher (and not failed), preserve it
+                    if (existingStatusLevel > newStatusLevel && newChat.status !== 'failed') {
+                        console.log('🛡️ Preserving higher status for', newChat.number, ':', existingChat.status, '(incoming:', newChat.status + ')');
+                        return {
+                            ...newChat,
+                            status: existingChat.status
+                        };
+                    }
+                }
+                
+                return newChat;
+            });
+            
+            state.chats = mergedChats;
             state.lastUpdate = Date.now();
         },
 
@@ -37,19 +70,38 @@ const chatSlice = createSlice({
             const chatIndex = state.chats.findIndex(chat => chat.number === chatNumber);
             
             if (chatIndex !== -1) {
-                const updates = { status };
-                
-                // Update timestamp if provided
-                if (timestamp) {
-                    updates.timestamp = timestamp;
-                    updates.create_date = new Date(timestamp).toISOString();
-                }
-                
-                state.chats[chatIndex] = {
-                    ...state.chats[chatIndex],
-                    ...updates
+                // Define status hierarchy (higher number = higher status)
+                const statusHierarchy = {
+                    'pending': 1,
+                    'sent': 2,
+                    'delivered': 3,
+                    'read': 4,
+                    'failed': 0 // Failed can override any status
                 };
-                state.lastUpdate = Date.now();
+                
+                const currentStatus = state.chats[chatIndex].status;
+                const currentStatusLevel = statusHierarchy[currentStatus] || 0;
+                const newStatusLevel = statusHierarchy[status] || 0;
+                
+                // Only update if new status is higher or if it's a failure
+                if (newStatusLevel > currentStatusLevel || status === 'failed') {
+                    console.log('🔵 Redux updateMessageStatus:', chatNumber, currentStatus, '→', status);
+                    const updates = { status };
+                    
+                    // Update timestamp if provided
+                    if (timestamp) {
+                        updates.timestamp = timestamp;
+                        updates.create_date = new Date(timestamp).toISOString();
+                    }
+                    
+                    state.chats[chatIndex] = {
+                        ...state.chats[chatIndex],
+                        ...updates
+                    };
+                    state.lastUpdate = Date.now();
+                } else {
+                    console.log('⚠️ Redux updateMessageStatus skipped (downgrade):', chatNumber, currentStatus, '→', status);
+                }
             }
         },
 

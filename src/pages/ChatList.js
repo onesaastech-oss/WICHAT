@@ -4,13 +4,20 @@ import { FiSearch, FiStar, FiImage, FiVideo, FiFile, FiMusic, FiUser } from 'rea
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import { dbHelper } from './db';
-import { setChats, handleSocketChats, clearUnreadCount, setLoading } from '../store/chatSlice';
+import { setChats, clearUnreadCount, setLoading } from '../store/chatSlice';
 import MessageStatusIndicator from '../component/Conversation/MessageStatusIndicator';
 
 function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, socket_chats = [] }) {
     const dispatch = useDispatch();
     const chats = useSelector(state => state.chat.chats);
     const isLoading = useSelector(state => state.chat.isLoading);
+    
+    // Debug log to see what ChatList is reading
+    useEffect(() => {
+        if (chats.length > 0) {
+            console.log('🟢 ChatList reading from Redux:', chats.length, 'chats, first chat status:', chats[0]?.status);
+        }
+    }, [chats]);
     
     const [activeTab, setActiveTab] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
@@ -76,24 +83,26 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
     }, [tokens, dbAvailable, dispatch]);
 
     // 🔹 When socket_chats prop changes (including status updates)
-    useEffect(() => {
-        if (socket_chats && socket_chats.length > 0) {
-            // Dispatch to Redux to handle socket updates
-            dispatch(handleSocketChats({
-                socketChats: socket_chats,
-                activeChat: activeChatRef.current
-            }));
+    // NOTE: LiveChat.js already handles socket updates and dispatches to Redux
+    // This effect is now disabled to avoid conflicts
+    // useEffect(() => {
+    //     if (socket_chats && socket_chats.length > 0) {
+    //         // Dispatch to Redux to handle socket updates
+    //         dispatch(handleSocketChats({
+    //             socketChats: socket_chats,
+    //             activeChat: activeChatRef.current
+    //         }));
 
-            // Save updated chats to IndexedDB
-            if (dbAvailable) {
-                // Get the updated chats from Redux (we need to access them after dispatch)
-                // Since dispatch is synchronous, we can safely use the chats from selector
-                setTimeout(() => {
-                    dbHelper.saveChats(chats);
-                }, 0);
-            }
-        }
-    }, [socket_chats, dbAvailable, dispatch]);
+    //         // Save updated chats to IndexedDB
+    //         if (dbAvailable) {
+    //             // Get the updated chats from Redux (we need to access them after dispatch)
+    //             // Since dispatch is synchronous, we can safely use the chats from selector
+    //             setTimeout(() => {
+    //                 dbHelper.saveChats(chats);
+    //             }, 0);
+    //         }
+    //     }
+    // }, [socket_chats, dbAvailable, dispatch]);
 
 
 
