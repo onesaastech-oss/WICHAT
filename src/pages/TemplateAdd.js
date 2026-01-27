@@ -111,8 +111,8 @@ function TemplateAdd() {
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    // Force template name to lowercase
-    const processedValue = name === 'name' ? value.toLowerCase() : value;
+    // Force template name to lowercase and replace spaces with underscores
+    const processedValue = name === 'name' ? value.toLowerCase().replace(/\s+/g, '_') : value;
     setFormData(prev => ({
       ...prev,
       [name]: processedValue
