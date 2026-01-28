@@ -1,26 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { FiSearch, FiStar, FiImage, FiVideo, FiFile, FiMusic, FiUser } from 'react-icons/fi';
+import { FiSearch, FiStar, FiImage, FiVideo, FiFile, FiMusic, FiUser, FiCheck, FiClock, FiAlertCircle } from 'react-icons/fi';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import { dbHelper } from './db';
-import { setChats, clearUnreadCount, setLoading } from '../store/chatSlice';
-import MessageStatusIndicator from '../component/Conversation/MessageStatusIndicator';
 
 function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, socket_chats = [] }) {
-    const dispatch = useDispatch();
-    const chats = useSelector(state => state.chat.chats);
-    const isLoading = useSelector(state => state.chat.isLoading);
-    
-    // Debug log to see what ChatList is reading
-    useEffect(() => {
-        if (chats.length > 0) {
-            console.log('🟢 ChatList reading from Redux:', chats.length, 'chats, first chat status:', chats[0]?.status);
-        }
-    }, [chats]);
-    
+    const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
+    const [chats, setChats] = useState([]);
     const activeChatRef = React.useRef(activeChat);
 
     // Update ref when activeChat changes
@@ -45,15 +33,18 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
 
         const clearedChat = { ...activeChatFromState, unread_count: 0, unread: false };
 
-        // Update Redux store
-        dispatch(clearUnreadCount(activeNumber));
+        setChats(prevChats =>
+            prevChats.map(chat =>
+                chat.number === activeNumber ? clearedChat : chat
+            )
+        );
 
         activeChatRef.current = clearedChat;
 
         if (dbAvailable) {
             dbHelper.updateChat(activeNumber, { unread_count: 0 });
         }
-    }, [activeChat?.number, chats, dbAvailable, dispatch]);
+    }, [activeChat?.number, chats, dbAvailable]);
 
     // Load conversations from IndexedDB first, then sync with API
     useEffect(() => {
@@ -64,8 +55,8 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
             if (dbAvailable) {
                 const localChats = await dbHelper.getChats();
                 if (localChats.length > 0) {
-                    dispatch(setChats(localChats));
-                    dispatch(setLoading(false));
+                    setChats(localChats);
+                    setIsLoading(false);
                 }
             }
 
@@ -75,34 +66,86 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
             // 3️⃣ After API updates DB, re-fetch from local DB again
             if (dbAvailable) {
                 const updatedChats = await dbHelper.getChats();
-                dispatch(setChats(updatedChats));
+                setChats(updatedChats);
             }
 
-            dispatch(setLoading(false));
+            setIsLoading(false);
         })();
-    }, [tokens, dbAvailable, dispatch]);
+    }, [tokens]);
 
     // 🔹 When socket_chats prop changes (including status updates)
-    // NOTE: LiveChat.js already handles socket updates and dispatches to Redux
-    // This effect is now disabled to avoid conflicts
-    // useEffect(() => {
-    //     if (socket_chats && socket_chats.length > 0) {
-    //         // Dispatch to Redux to handle socket updates
-    //         dispatch(handleSocketChats({
-    //             socketChats: socket_chats,
-    //             activeChat: activeChatRef.current
-    //         }));
+    useEffect(() => {
+        if (socket_chats && socket_chats.length > 0) {
+            setChats(prevChats => {
+                const updatedChats = socket_chats.map(socketChat => {
+                    // Find existing chat to get current unread_count (for incrementing)
+                    const existingChat = prevChats.find(c => c.number === socketChat.number);
 
-    //         // Save updated chats to IndexedDB
-    //         if (dbAvailable) {
-    //             // Get the updated chats from Redux (we need to access them after dispatch)
-    //             // Since dispatch is synchronous, we can safely use the chats from selector
-    //             setTimeout(() => {
-    //                 dbHelper.saveChats(chats);
-    //             }, 0);
-    //         }
-    //     }
-    // }, [socket_chats, dbAvailable, dispatch]);
+                    // Check if this is the currently open chat
+                    const isCurrentlyOpen = activeChatRef.current?.number === socketChat.number;
+
+                    // If chat is currently open, keep count at 0 but PRESERVE status from socket/DB
+                    if (isCurrentlyOpen) {
+                        return {
+                            ...socketChat,
+                            unread_count: 0,
+                            unread: false
+                        };
+                    }
+
+                    // Check if this chat received a NEW incoming message
+                    // Compare message IDs to detect new messages
+                    const hasNewMessage = existingChat &&
+                        socketChat.type === 'in' &&
+                        (socketChat.wamid !== existingChat.wamid ||
+                            socketChat.unique_id !== existingChat.unique_id ||
+                            socketChat.last_id !== existingChat.last_id);
+
+                    // Only increment unread count if this specific chat received a new message
+                    if (hasNewMessage) {
+                        const currentUnread = existingChat?.unread_count || 0;
+                        return {
+                            ...socketChat,
+                            unread_count: currentUnread + 1,
+                            unread: true
+                        };
+                    }
+
+                    // For status updates: use the status from socket/DB (socketChat.status)
+                    // This ensures status changes (sent→delivered→read) are reflected
+                    // Only preserve unread_count from existing if socket doesn't have it
+                    const unreadCount = typeof socketChat.unread_count === 'number' 
+                        ? socketChat.unread_count 
+                        : (existingChat?.unread_count || 0);
+
+                    return {
+                        ...socketChat,
+                        unread_count: unreadCount,
+                        unread: unreadCount > 0
+                    };
+                });
+
+                // Only save unread counts back to DB, not the full chat data
+                // (status updates are already handled by socket.js)
+                if (dbAvailable) {
+                    const unreadUpdates = updatedChats
+                        .filter(chat => {
+                            const existing = prevChats.find(c => c.number === chat.number);
+                            return existing && existing.unread_count !== chat.unread_count;
+                        })
+                        .map(chat => ({ number: chat.number, unread_count: chat.unread_count }));
+                    
+                    if (unreadUpdates.length > 0) {
+                        unreadUpdates.forEach(update => {
+                            dbHelper.updateChat(update.number, { unread_count: update.unread_count });
+                        });
+                    }
+                }
+
+                return updatedChats;
+            });
+        }
+    }, [socket_chats, dbAvailable]);
 
 
 
@@ -139,7 +182,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         } catch (error) {
             console.error('Failed to sync conversations:', error);
         } finally {
-            dispatch(setLoading(false));
+            setIsLoading(false);
         }
     };
 
@@ -177,9 +220,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
             } else {
                 throw new Error("Database not available");
             }
-            
-            // Update Redux store
-            dispatch(setChats(chatList));
+            setChats(chatList);
         } catch (error) {
             console.error('Error processing API response:', error);
         }
@@ -224,6 +265,35 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         }
     };
 
+    // Get message status icon for sent messages
+    const getMessageStatusIcon = (status, isOwnMessage) => {
+        if (!isOwnMessage) return null;
+
+        switch (status) {
+            case 'pending':
+                return <FiClock className="w-3 h-3 text-gray-400" />;
+            case 'sent':
+                return <FiCheck className="w-3 h-3 text-gray-400" />;
+            case 'delivered':
+                return (
+                    <div className="flex">
+                        <FiCheck className="w-3 h-3 text-gray-400" />
+                        <FiCheck className="w-3 h-3 -ml-1 text-gray-400" />
+                    </div>
+                );
+            case 'read':
+                return (
+                    <div className="flex">
+                        <FiCheck className="w-3 h-3 text-green-500" />
+                        <FiCheck className="w-3 h-3 -ml-1 text-green-500" />
+                    </div>
+                );
+            case 'failed':
+                return <FiAlertCircle className="w-3 h-3 text-red-500" />;
+            default:
+                return <FiClock className="w-3 h-3 text-gray-400" />;
+        }
+    };
 
     // Check if the last message was sent by the current user
     const isLastMessageFromUser = (chat) => {
@@ -315,8 +385,12 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         // Immediately update the active chat ref
         activeChatRef.current = updatedChat;
 
-        // Reset unread count immediately in Redux store
-        dispatch(clearUnreadCount(chat.number));
+        // Reset unread count immediately in UI state
+        setChats(prevChats =>
+            prevChats.map(c =>
+                c.number === chat.number ? updatedChat : c
+            )
+        );
 
         // Update IndexedDB in background (non-blocking)
         if (dbAvailable && (chat.unread_count || 0) > 0) {
@@ -458,11 +532,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                                                                 </p>
                                                             </div>
                                                             <div className="flex items-center space-x-1 flex-shrink-0">
-                                                                <MessageStatusIndicator
-                                                                    status={chat.status || 'pending'}
-                                                                    isOwnMessage={isLastMessageFromUser(chat)}
-                                                                    darkMode={darkMode}
-                                                                />
+                                                                {getMessageStatusIcon(chat.status, isLastMessageFromUser(chat))}
                                                             </div>
                                                         </div>
                                                     </div>

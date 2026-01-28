@@ -393,7 +393,13 @@ export const dbHelper = {
                 console.log(`✅ Message ${message.message_id || message.wamid || message.id} status updated from ${message.status} to ${status}`);
 
                 // Update the chat's last message status if this is the latest message
-                await this.updateChatLastMessageStatus(message.chat_number, message.message_id || messageId, status);
+                // Pass both message_id and wamid for better matching
+                await this.updateChatLastMessageStatus(
+                    message.chat_number, 
+                    message.message_id || messageId, 
+                    status,
+                    message.wamid || messageId  // Also pass wamid for matching
+                );
             } else {
                 console.log(`⚠️ Message ${message.message_id || message.wamid || message.id} status not updated: ${message.status} → ${status} (downgrade not allowed)`);
             }
@@ -402,44 +408,69 @@ export const dbHelper = {
         }
     },
 
-    async updateChatLastMessageStatus(chatNumber, messageId, status) {
+    async updateChatLastMessageStatus(chatNumber, messageId, status, messageWamid = null) {
         try {
             const db = this.db;
 
-            // Try to update by matching the chat's last message identifiers first
+            if (!chatNumber) {
+                console.warn('⚠️ No chatNumber provided to updateChatLastMessageStatus');
+                return;
+            }
+
+            // Get the chat row
             const chatRow = await db.chats.where('number').equals(chatNumber).first();
-
-            let shouldUpdate = false;
-            if (chatRow) {
-                const msgIdStr = String(messageId);
-                const byWamid = chatRow.wamid && String(chatRow.wamid) === msgIdStr;
-                const byUniqueId = chatRow.unique_id && String(chatRow.unique_id) === msgIdStr;
-                const byLastId = typeof chatRow.last_id !== 'undefined' && String(chatRow.last_id) === msgIdStr;
-
-                if (byWamid || byUniqueId || byLastId) {
-                    shouldUpdate = true;
-                }
+            if (!chatRow) {
+                console.log(`ℹ️ Chat ${chatNumber} not found in chats table`);
+                return;
             }
 
-            // Fallback: compare against the latest message stored for this chat
-            if (!shouldUpdate) {
-                const latestMessage = await db.messages
-                    .where('chat_number')
-                    .equals(chatNumber)
-                    .orderBy('timestamp')
-                    .reverse()
-                    .first();
+            // Get the latest message for this chat (by timestamp, then by id)
+            const latestMessage = await db.messages
+                .where('chat_number')
+                .equals(chatNumber)
+                .reverse()
+                .sortBy('timestamp')
+                .then(msgs => msgs[0]);
 
-                if (latestMessage && latestMessage.message_id === messageId) {
-                    shouldUpdate = true;
-                }
+            if (!latestMessage) {
+                console.log(`ℹ️ No messages found for chat ${chatNumber}`);
+                return;
             }
 
-            if (shouldUpdate) {
-                await db.chats.where('number').equals(chatNumber).modify({ status, lastUpdated: Date.now() });
+            // Check if the message being updated IS the latest message
+            // Compare by multiple identifiers to be robust
+            const msgIdStr = String(messageId || '');
+            const wamidStr = String(messageWamid || '');
+            
+            const isLatestMessage = 
+                (msgIdStr && latestMessage.message_id && String(latestMessage.message_id) === msgIdStr) ||
+                (msgIdStr && latestMessage.wamid && String(latestMessage.wamid) === msgIdStr) ||
+                (wamidStr && latestMessage.wamid && String(latestMessage.wamid) === wamidStr) ||
+                (wamidStr && latestMessage.message_id && String(latestMessage.message_id) === wamidStr) ||
+                (msgIdStr && latestMessage.id && String(latestMessage.id) === msgIdStr);
+
+            if (isLatestMessage) {
+                // Update the chat's status AND sync the identifiers
+                const updateData = { 
+                    status, 
+                    lastUpdated: Date.now()
+                };
+                
+                // Also sync the chat's identifiers with the latest message
+                if (latestMessage.wamid) {
+                    updateData.wamid = latestMessage.wamid;
+                }
+                if (latestMessage.message_id) {
+                    updateData.unique_id = latestMessage.message_id;
+                }
+                if (latestMessage.id) {
+                    updateData.last_id = latestMessage.id;
+                }
+                
+                await db.chats.where('number').equals(chatNumber).modify(updateData);
                 console.log(`✅ Chat ${chatNumber} last message status updated to: ${status}`);
             } else {
-                console.log(`ℹ️ Skipped updating chat ${chatNumber} status; message ${messageId} is not the last chat message.`);
+                console.log(`ℹ️ Skipped updating chat ${chatNumber} status; message ${messageId} is not the last message (latest: ${latestMessage.message_id || latestMessage.wamid})`);
             }
         } catch (error) {
             console.error("❌ Error updating chat last message status:", error);

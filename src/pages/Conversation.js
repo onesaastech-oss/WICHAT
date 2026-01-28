@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallba
 import { useDispatch } from 'react-redux';
 import { useSelector } from 'react-redux';
 import { fetchProjectInfo } from '../store/projectSlice';
-import { updateMessageStatus as updateChatMessageStatus } from '../store/chatSlice';
 import {
     FiPaperclip,
     FiMic,
@@ -1375,26 +1374,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     // 🔹 When a new socket-driven refresh arrives (messages for active chat)
     useEffect(() => {
         if (Array.isArray(socketMessage) && socketMessage.length > 0 && activeChat?.number) {
-            // Find the last outgoing message to update chat list status
-            const lastOutgoingMessage = socketMessage
-                .slice()
-                .reverse()
-                .find(msg => msg.type === 'out');
-            
-            if (lastOutgoingMessage && lastOutgoingMessage.status) {
-                // Update Redux store with the latest outgoing message status
-                dispatch(updateChatMessageStatus({
-                    chatNumber: activeChat.number,
-                    messageId: lastOutgoingMessage.message_id || lastOutgoingMessage.wamid || lastOutgoingMessage.id,
-                    status: lastOutgoingMessage.status,
-                    timestamp: lastOutgoingMessage.timestamp || Date.now()
-                }));
-            }
-            
             setMessages(socketMessage);
             // setTimeout(() => scrollToBottomImmediate(), 50);
         }
-    }, [socketMessage, activeChat, dispatch]);
+    }, [socketMessage, activeChat]);
 
 
 
@@ -2053,14 +2036,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             if (onMessageStatusUpdate) {
                 onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
             }
-            
-            // Update Redux store for chat list
-            dispatch(updateChatMessageStatus({
-                chatNumber: activeChat.number,
-                messageId: tempMessageId,
-                status: 'pending',
-                timestamp: Date.now()
-            }));
         } catch (e) {
             console.error('Failed to persist temp message/chat row:', e);
         }
@@ -2109,14 +2084,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 if (onMessageStatusUpdate) {
                     onMessageStatusUpdate(activeChat.number, tempMessageId, 'sent');
                 }
-                
-                // Update Redux store for chat list
-                dispatch(updateChatMessageStatus({
-                    chatNumber: activeChat.number,
-                    messageId: tempMessageId,
-                    status: 'sent',
-                    timestamp: Date.now()
-                }));
             } else {
                 // Update message status to failed
                 setMessages(prev =>
@@ -2135,14 +2102,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 if (onMessageStatusUpdate) {
                     onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
                 }
-                
-                // Update Redux store for chat list
-                dispatch(updateChatMessageStatus({
-                    chatNumber: activeChat.number,
-                    messageId: tempMessageId,
-                    status: 'failed',
-                    timestamp: Date.now()
-                }));
             }
         } catch (error) {
             console.error('Failed to send message:', error);
@@ -2163,14 +2122,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             if (onMessageStatusUpdate) {
                 onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
             }
-            
-            // Update Redux store for chat list
-            dispatch(updateChatMessageStatus({
-                chatNumber: activeChat.number,
-                messageId: tempMessageId,
-                status: 'failed',
-                timestamp: Date.now()
-            }));
         }
     };
 
@@ -2488,14 +2439,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 if (onMessageStatusUpdate) {
                     onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
                 }
-                
-                // Update Redux store for chat list
-                dispatch(updateChatMessageStatus({
-                    chatNumber: activeChat.number,
-                    messageId: tempMessageId,
-                    status: 'pending',
-                    timestamp: Date.now()
-                }));
 
                 const messagePayload = {
                     project_id: tokens.selected_project_id || '',
@@ -2576,14 +2519,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         // Use server's message_id if available, otherwise fall back to temp
                         onMessageStatusUpdate(activeChat.number, serverMessageId || tempMessageId, 'sent');
                     }
-                    
-                    // Update Redux store for chat list
-                    dispatch(updateChatMessageStatus({
-                        chatNumber: activeChat.number,
-                        messageId: serverMessageId || tempMessageId,
-                        status: 'sent',
-                        timestamp: Date.now()
-                    }));
                 } else {
                     if (dbAvailable) {
                         await dbHelper.updateMessageStatus(tempMessageId, 'failed');
@@ -2602,14 +2537,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     if (onMessageStatusUpdate) {
                         onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
                     }
-                    
-                    // Update Redux store for chat list
-                    dispatch(updateChatMessageStatus({
-                        chatNumber: activeChat.number,
-                        messageId: tempMessageId,
-                        status: 'failed',
-                        timestamp: Date.now()
-                    }));
                 }
             }
             else {
@@ -2631,14 +2558,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             if (onMessageStatusUpdate) {
                 onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
             }
-            
-            // Update Redux store for chat list
-            dispatch(updateChatMessageStatus({
-                chatNumber: activeChat.number,
-                messageId: tempMessageId,
-                status: 'failed',
-                timestamp: Date.now()
-            }));
         } finally {
             setIsUploading(false);
             setUploadProgress(0);
@@ -2765,14 +2684,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 if (onMessageStatusUpdate) {
                     onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
                 }
-                
-                // Update Redux store for chat list
-                dispatch(updateChatMessageStatus({
-                    chatNumber: activeChat.number,
-                    messageId: tempMessageId,
-                    status: 'pending',
-                    timestamp: Date.now()
-                }));
             } catch (e) {
                 console.error('Failed to persist temp template message/chat row:', e);
             }
@@ -2860,14 +2771,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     // Use server's message_id if available, otherwise fall back to temp
                     onMessageStatusUpdate(activeChat.number, serverMessageId || tempMessageId, 'sent');
                 }
-                
-                // Update Redux store for chat list
-                dispatch(updateChatMessageStatus({
-                    chatNumber: activeChat.number,
-                    messageId: serverMessageId || tempMessageId,
-                    status: 'sent',
-                    timestamp: Date.now()
-                }));
             } else {
                 // Failed
                 if (dbAvailable) {
@@ -2877,14 +2780,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 if (onMessageStatusUpdate) {
                     onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
                 }
-                
-                // Update Redux store for chat list
-                dispatch(updateChatMessageStatus({
-                    chatNumber: activeChat.number,
-                    messageId: tempMessageId,
-                    status: 'failed',
-                    timestamp: Date.now()
-                }));
             }
         } catch (error) {
             console.error('Failed to send template:', error);
