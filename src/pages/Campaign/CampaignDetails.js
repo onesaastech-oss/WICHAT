@@ -145,7 +145,7 @@ const CampaignDetails = () => {
     setDetailsError(null);
     try {
       const payload = {
-        project_id: tokens.projects?.[0]?.project_id || '',
+        project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id || '',
         campaign_id: campaignId
       };
       const response = await postEncrypted('/campaign/campaign-details', payload);
