@@ -196,6 +196,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [selectedProjectName, setSelectedProjectName] = useState(null);
   const [userProfile, setUserProfile] = useState({ name: '', email: '' });
+  const profileDropdownRef = React.useRef(null);
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -305,6 +306,23 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
     fetchProfile();
   }, []);
 
+  // Handle click outside profile dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileDropdownOpen && profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+
+    if (profileDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [profileDropdownOpen]);
+
   // Get user initials for avatar
   const getUserInitials = () => {
     if (userProfile.name) {
@@ -371,7 +389,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
               <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 border-2 border-white"></span>
             </button>
 
-            <div className="relative">
+            <div className="relative" ref={profileDropdownRef}>
               <button className="flex items-center gap-2 focus:outline-none ring-offset-2 focus:ring-2 focus:ring-indigo-100 rounded-full transition-all" onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}>
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-medium text-sm shadow-md shadow-indigo-200 border-2 border-white">{getUserInitials()}</div>
               </button>

@@ -2938,7 +2938,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                                     <button
                                                         onClick={() => handleAssignmentChange('unassign')}
                                                         disabled={assignActionLoading}
-                                                        className={`flex w-full items-center space-x-3 px-4 py-2.5 text-left text-sm text-red-600 transition hover:bg-red-50 dark:hover:bg-red-900/30 ${assignActionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                                        className={`flex w-full items-center space-x-3 px-4 py-2.5 text-left text-sm text-red-600 transition hover:bg-red-50 dark:hover:bg-red-900/30 border-b border-gray-200 dark:border-gray-700 ${assignActionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                     >
                                                         {
                                                             assignmentInfo?.assigned_to_me && (
@@ -2952,7 +2952,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                                     </button>
                                                 )}
 
-                                                <div className="max-h-64 overflow-y-auto">
+                                                <div className="max-h-80 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
                                                     {assignmentUsers.length === 0 && (
                                                         <p className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">No agents found for assignment.</p>
                                                     )}

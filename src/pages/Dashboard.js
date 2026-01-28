@@ -27,9 +27,13 @@ import {
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import { getProjectMetaDetails } from '../api/auth';
+import SwitchProjectModal from '../component/Modals/SwitchProjectModal';
+import { useDispatch } from 'react-redux';
+import { setSelectedProjectId, setAuthData } from '../store/authSlice';
 
 function Dashboard() {
     const navigate = useNavigate();
+    const dispatch = useDispatch();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [tokens, setTokens] = useState(null);
     const [dashboardData, setDashboardData] = useState(null);
@@ -38,6 +42,7 @@ function Dashboard() {
     const [projectMeta, setProjectMeta] = useState(null);
     const [projectMetaLoading, setProjectMetaLoading] = useState(false);
     const [projectMetaError, setProjectMetaError] = useState(null);
+    const [switchProjectModalOpen, setSwitchProjectModalOpen] = useState(false);
 
     const [isMinimized, setIsMinimized] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -64,6 +69,29 @@ function Dashboard() {
     useEffect(() => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
     }, [isMinimized]);
+
+    // Check if selected_project_id exists, if not open project selection modal
+    useEffect(() => {
+        const checkProjectSelection = () => {
+            try {
+                const stored = localStorage.getItem('userData');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    const hasProjects = parsed.project_count > 0 || (parsed.projects?.list && parsed.projects.list.length > 0) || (Array.isArray(parsed.projects) && parsed.projects.length > 0);
+                    const selectedProjectId = parsed.selected_project_id;
+                    
+                    // Open the project selection modal if user has projects but no project is selected
+                    if (hasProjects && !selectedProjectId) {
+                        setSwitchProjectModalOpen(true);
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking project selection:', error);
+            }
+        };
+
+        checkProjectSelection();
+    }, []); // Run once on mount
 
     // Load tokens from storage
     useEffect(() => {
@@ -196,6 +224,44 @@ function Dashboard() {
 
         fetchProjectMetaDetails();
     }, [tokens?.selected_project_id, hasProjects]);
+
+    // Handle project selection from modal
+    const handleSelectCompany = (company) => {
+        if (!company) return;
+        try {
+            const stored = localStorage.getItem('userData');
+            const parsed = stored ? JSON.parse(stored) : {};
+            const selectedId = company.project_id || company.id || null;
+            const updatedUserData = { ...parsed, selected_project_id: selectedId };
+            localStorage.setItem('userData', JSON.stringify(updatedUserData));
+            if (selectedId) {
+                dispatch(setSelectedProjectId(selectedId));
+                dispatch(setAuthData(updatedUserData));
+            }
+            setSwitchProjectModalOpen(false);
+            // Reload to refresh dashboard data with new project
+            window.location.reload();
+        } catch (error) {
+            console.error('Failed to update selected project', error);
+        }
+    };
+
+    // Handle modal close - prevent closing if no project is selected
+    const handleModalClose = () => {
+        try {
+            const stored = localStorage.getItem('userData');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                const selectedProjectId = parsed.selected_project_id;
+                // Only allow closing if a project is already selected
+                if (selectedProjectId) {
+                    setSwitchProjectModalOpen(false);
+                }
+            }
+        } catch (error) {
+            console.error('Error checking project selection on close:', error);
+        }
+    };
 
     // Main Metrics Data
     const mainMetrics = dashboardData ? [
@@ -402,19 +468,6 @@ function Dashboard() {
                                     </div>
                                 </div>
                             )}
-
-                            {/* Recent Activity */}
-                            <div className="bg-white rounded-xl shadow p-6">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                                    <FiActivity className="mr-2 text-indigo-500" />
-                                    Recent Activity
-                                </h3>
-                                <div className="space-y-4">
-                                    {activities.map(activity => (
-                                        <ActivityItem key={activity.id} {...activity} />
-                                    ))}
-                                </div>
-                            </div>
                         </div>
 
                         {/* Right column - Performance Stats */}
@@ -468,6 +521,13 @@ function Dashboard() {
                     </div>
                 </div>
             </div>
+
+            {/* Project Selection Modal */}
+            <SwitchProjectModal
+                isOpen={switchProjectModalOpen}
+                onClose={handleModalClose}
+                onSelectCompany={handleSelectCompany}
+            />
         </div>
     );
 }

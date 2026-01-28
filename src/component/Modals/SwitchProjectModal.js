@@ -9,6 +9,7 @@ const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }
     const [projects, setProjects] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState(null);
+    const [activeProjectId, setActiveProjectId] = useState(null);
 
     // Load projects from localStorage immediately, then fetch from API
     useEffect(() => {
@@ -19,6 +20,11 @@ const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }
                     const userData = localStorage.getItem('userData');
                     if (userData) {
                         const parsedData = JSON.parse(userData);
+                        // Get active project ID
+                        if (parsedData.selected_project_id) {
+                            setActiveProjectId(parsedData.selected_project_id);
+                        }
+                        // Load projects
                         if (parsedData.projects?.list && Array.isArray(parsedData.projects.list)) {
                             setProjects(parsedData.projects.list);
                         } else if (parsedData.projects && Array.isArray(parsedData.projects)) {
@@ -73,6 +79,7 @@ const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }
             setProjects([]);
             setRefreshing(false);
             setError(null);
+            setActiveProjectId(null);
         }
     }, [isOpen]);
 
@@ -193,6 +200,7 @@ const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }
                                 {filteredProjects.map((project) => {
                                     const projectId = project.project_id || project.id;
                                     const isSelected = selectedCompany?.project_id === projectId || selectedCompany?.id === projectId;
+                                    const isActive = activeProjectId === projectId;
                                     return (
                                         <motion.button
                                             key={projectId}
@@ -200,6 +208,8 @@ const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }
                                             className={`w-full text-left p-4 rounded-lg border transition-all duration-200 ${
                                                 isSelected
                                                     ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                                                    : isActive
+                                                    ? 'border-indigo-300 bg-indigo-50/50 dark:bg-indigo-900/10'
                                                     : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                                             }`}
                                             whileHover={{ scale: 1.01 }}
@@ -209,17 +219,22 @@ const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }
                                                 <div className="flex-1">
                                                     <div className="flex items-center space-x-2">
                                                         <FiBriefcase className={`w-5 h-5 ${
-                                                            isSelected
+                                                            isSelected || isActive
                                                                 ? 'text-indigo-600 dark:text-indigo-400'
                                                                 : 'text-gray-400'
                                                         }`} />
                                                         <h4 className={`font-medium ${
-                                                            isSelected
+                                                            isSelected || isActive
                                                                 ? 'text-indigo-600 dark:text-indigo-400'
                                                                 : 'text-gray-900 dark:text-white'
                                                         }`}>
                                                             {project.name}
                                                         </h4>
+                                                        {isActive && (
+                                                            <span className="px-2 py-0.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/30 rounded-full">
+                                                                Active
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     {project.description && (
                                                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 ml-7">
