@@ -38,6 +38,24 @@ const Projects = () => {
     company_name: '',
     name: ''
   });
+  const [activeProjectId, setActiveProjectId] = useState(null);
+
+  // Get active project ID from localStorage
+  useEffect(() => {
+    const getUserData = () => {
+      try {
+        const userData = localStorage.getItem('userData');
+        if (userData) {
+          const parsed = JSON.parse(userData);
+          return parsed.selected_project_id || null;
+        }
+      } catch (error) {
+        console.error('Error parsing userData:', error);
+      }
+      return null;
+    };
+    setActiveProjectId(getUserData());
+  }, [userData]); // Update when userData changes
 
   // Fetch user profile data on component mount
   useEffect(() => {
@@ -327,12 +345,16 @@ const Projects = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProjects.map((project) => (
+              {filteredProjects.map((project) => {
+                const isActive = activeProjectId === project.id;
+                return (
                 <motion.div
                   key={project.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-xl shadow hover:shadow-lg transition-shadow duration-200 p-6 relative cursor-pointer"
+                  className={`bg-white rounded-xl shadow hover:shadow-lg transition-shadow duration-200 p-6 relative cursor-pointer ${
+                    isActive ? 'ring-2 ring-indigo-500 ring-offset-2' : ''
+                  }`}
                   onClick={() => navigate(`/project-details/${project.id}`)}
                 >
                   {/* Actions Menu */}
@@ -370,16 +392,6 @@ const Projects = () => {
                             <FiEye size={16} />
                             <span>View Details</span>
                           </button>
-                          <button
-                            onClick={() => {
-                              handleDeleteProject(project.id);
-                              setShowActionsMenu(null);
-                            }}
-                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
-                          >
-                            <FiTrash2 size={16} />
-                            <span>Delete</span>
-                          </button>
                         </div>
                       </>
                     )}
@@ -387,16 +399,29 @@ const Projects = () => {
 
                   {/* Project Icon */}
                   <div className="mb-4">
-                    <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
-                      <FiBriefcase className="text-indigo-600" size={24} />
+                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                      isActive ? 'bg-indigo-500' : 'bg-indigo-100'
+                    }`}>
+                      <FiBriefcase className={isActive ? 'text-white' : 'text-indigo-600'} size={24} />
                     </div>
                   </div>
 
                   {/* Project Info */}
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">{project.name}</h3>
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className={`text-xl font-semibold mb-2 flex-1 ${
+                      isActive ? 'text-indigo-600' : 'text-gray-900'
+                    }`}>
+                      {project.name}
+                    </h3>
+                  </div>
 
                   {/* Project Stats */}
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2 flex-wrap mb-4">
+                    {isActive && (
+                      <span className="px-2 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                        Active
+                      </span>
+                    )}
                     {project.owned && (
                       <span className="px-2 py-1 rounded-full text-xs font-medium border bg-indigo-100 text-indigo-800 border-indigo-200">
                         Owned
@@ -418,7 +443,8 @@ const Projects = () => {
                     </button>
                   </div>
                 </motion.div>
-              ))}
+                );
+              })}
             </div>
           )}
 

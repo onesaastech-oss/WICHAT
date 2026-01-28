@@ -384,10 +384,6 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
 
             <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
 
-            <button className="relative p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all">
-              <FiBell size={20} />
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 border-2 border-white"></span>
-            </button>
 
             <div className="relative" ref={profileDropdownRef}>
               <button className="flex items-center gap-2 focus:outline-none ring-offset-2 focus:ring-2 focus:ring-indigo-100 rounded-full transition-all" onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}>
