@@ -459,7 +459,7 @@ function LiveChat() {
                                     className="mb-8 p-6 bg-white dark:bg-gray-800 rounded-full shadow-xl relative overflow-hidden"
                                 >
                                     <div className="absolute inset-0 bg-green-500/10 dark:bg-green-500/20 blur-xl rounded-full"></div>
-                                    <img src={logo} alt="1Chat Logo" className="w-20 h-20 object-contain relative z-10" />
+                                    <img src="/onechatting.gif" alt="1Chat Logo" className="w-20 h-20 object-contain relative z-10" />
                                 </motion.div>
 
                                 <motion.h2
