@@ -31,6 +31,8 @@ const ProjectDetails = () => {
     const syncIntervalRef = useRef(null);
     const pollCountRef = useRef(0);
     const wabaIdRef = useRef(null); // Store WABA ID from Facebook event
+    const [debugLogs, setDebugLogs] = useState([]); // Debug logs for troubleshooting
+    const [showDebugPanel, setShowDebugPanel] = useState(false); // Toggle debug panel
 
     // --- Editing State ---
     const [isEditing, setIsEditing] = useState(false);
@@ -384,11 +386,18 @@ const ProjectDetails = () => {
                             }
                             // The FB.login callback will handle the code exchange
                         } else if (data.event === 'CANCEL') {
-                            console.log('Signup cancelled');
+                            console.log('Signup cancelled by user');
                             setIsLoadingSignupLink(false);
                             setIsSyncing(false);
                             setError('WhatsApp signup was cancelled');
                             toast.error('WhatsApp signup was cancelled');
+                        } else if (data.event === 'ERROR') {
+                            console.error('Signup error:', data);
+                            setIsLoadingSignupLink(false);
+                            setIsSyncing(false);
+                            const errorMsg = data.error_message || 'Failed to complete WhatsApp signup. Please check your Meta App configuration.';
+                            setError(errorMsg);
+                            toast.error(errorMsg);
                         }
                     }
                 } catch (e) {
@@ -407,6 +416,17 @@ const ProjectDetails = () => {
     // Handle Facebook login response (separated because FB.login callback cannot be async)
     const handleFBLoginResponse = async (response, activeId) => {
         try {
+            console.log('FB Login Response:', response);
+            
+            // Check if user cancelled or login failed
+            if (!response || response.status === 'unknown') {
+                console.log('Login was not completed or user cancelled');
+                setIsLoadingSignupLink(false);
+                setIsSyncing(false);
+                toast.error('Login was not completed. Please try again.');
+                return;
+            }
+            
             if (response && response.authResponse && response.authResponse.code) {
                 const code = response.authResponse.code;
                 console.log('Got authorization code:', code);
@@ -414,15 +434,21 @@ const ProjectDetails = () => {
                 // Check if we have the WABA ID from the message event
                 const wabaId = wabaIdRef.current;
                 if (!wabaId) {
-                    throw new Error('WABA ID not received. Please try again.');
+                    console.warn('WABA ID not received from event, waiting...');
+                    // Give it a moment for the event to arrive
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    if (!wabaIdRef.current) {
+                        throw new Error('WABA ID not received. The signup may not have completed successfully. Please try again.');
+                    }
                 }
 
-                console.log('Submitting WABA ID:', wabaId);
+                console.log('Submitting WABA ID:', wabaIdRef.current);
 
                 // Submit WABA ID to backend with encryption
                 const wabaResponse = await submitWabaId({
                     project_id: activeId,
-                    waba_id: wabaId
+                    waba_id: wabaIdRef.current
                 });
 
                 console.log('WABA submission result:', wabaResponse);
@@ -558,9 +584,6 @@ const ProjectDetails = () => {
                 override_default_response_type: true,
                 extras: {
                     featureType: "whatsapp_business_app_onboarding",
-                    setup: {
-                        solutionID: '799369954601524'
-                      },
                     sessionInfoVersion: "3",
                     features: [
                         {
