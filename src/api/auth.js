@@ -504,8 +504,14 @@ export const submitWabaId = async ({ project_id, waba_id }) => {
     waba_id
   };
 
+  // Log payload before encryption for debugging
+  console.log('[submitWabaId] Payload before encryption:', payload);
+
   // Encrypt the payload
   const { data, key } = Encrypt(payload);
+  
+  console.log('[submitWabaId] Encrypted data length:', data.length);
+  console.log('[submitWabaId] Encryption key length:', key.length);
 
   const data_pass = JSON.stringify({
     data,
@@ -524,7 +530,18 @@ export const submitWabaId = async ({ project_id, waba_id }) => {
     data: data_pass
   };
 
+  console.log('[submitWabaId] Making API request to:', config.url);
+  console.log('[submitWabaId] Request headers:', { 
+    'Content-Type': config.headers['Content-Type'],
+    'token': token ? `${token.substring(0, 10)}...` : 'missing',
+    'username': username || 'missing'
+  });
+
   const response = await axios.request(config);
+  
+  console.log('[submitWabaId] API response status:', response.status);
+  console.log('[submitWabaId] API response data:', response.data);
+  
   return response.data;
 };
 

@@ -51,6 +51,18 @@ const ProjectDetails = () => {
         websites: []
     });
 
+    // --- Helper Functions ---
+    const addDebugLog = (message, data = null) => {
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = {
+            time: timestamp,
+            message,
+            data: data ? JSON.stringify(data, null, 2) : null
+        };
+        setDebugLogs(prev => [...prev, logEntry]);
+        console.log(`[${timestamp}] ${message}`, data || '');
+    };
+
     // --- Effects ---
     useEffect(() => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -341,8 +353,15 @@ const ProjectDetails = () => {
 
     // Initialize Facebook SDK
     useEffect(() => {
+        addDebugLog('Component mounted', { 
+            META_APP_ID, 
+            META_CONFIG_ID, 
+            META_GRAPH_VER 
+        });
+        
         // Load Facebook SDK
         if (!window.FB) {
+            addDebugLog('Loading Facebook SDK...');
             window.fbAsyncInit = function() {
                 window.FB.init({
                     appId: META_APP_ID,
@@ -350,7 +369,7 @@ const ProjectDetails = () => {
                     xfbml: true,
                     version: META_GRAPH_VER
                 });
-                console.log("FB SDK initialized");
+                addDebugLog('FB SDK initialized successfully');
             };
 
             // Load SDK script
@@ -374,30 +393,34 @@ const ProjectDetails = () => {
                     }
                     
                     if (data && data.type === 'WA_EMBEDDED_SIGNUP') {
-                        console.log('WA_EMBEDDED_SIGNUP event:', data);
+                        addDebugLog('WA_EMBEDDED_SIGNUP event received', data);
                         
                         // Handle different events
                         if (data.event === 'FINISH') {
-                            console.log('Signup completed:', data.data);
+                            addDebugLog('Signup completed successfully', data.data);
                             // Store WABA ID from the event
                             if (data.data && data.data.waba_id) {
                                 wabaIdRef.current = data.data.waba_id;
-                                console.log('Stored WABA ID:', data.data.waba_id);
+                                addDebugLog('WABA ID stored', { waba_id: data.data.waba_id });
+                            } else {
+                                addDebugLog('WARNING: No WABA ID in FINISH event', data.data);
                             }
                             // The FB.login callback will handle the code exchange
                         } else if (data.event === 'CANCEL') {
-                            console.log('Signup cancelled by user');
+                            addDebugLog('Signup cancelled by user');
                             setIsLoadingSignupLink(false);
                             setIsSyncing(false);
                             setError('WhatsApp signup was cancelled');
                             toast.error('WhatsApp signup was cancelled');
                         } else if (data.event === 'ERROR') {
-                            console.error('Signup error:', data);
+                            addDebugLog('Signup error occurred', data);
                             setIsLoadingSignupLink(false);
                             setIsSyncing(false);
                             const errorMsg = data.error_message || 'Failed to complete WhatsApp signup. Please check your Meta App configuration.';
                             setError(errorMsg);
                             toast.error(errorMsg);
+                        } else {
+                            addDebugLog('Unknown event type', data);
                         }
                     }
                 } catch (e) {
@@ -416,11 +439,11 @@ const ProjectDetails = () => {
     // Handle Facebook login response (separated because FB.login callback cannot be async)
     const handleFBLoginResponse = async (response, activeId) => {
         try {
-            console.log('FB Login Response:', response);
+            addDebugLog('FB Login Response received', response);
             
             // Check if user cancelled or login failed
             if (!response || response.status === 'unknown') {
-                console.log('Login was not completed or user cancelled');
+                addDebugLog('Login not completed or cancelled', { status: response?.status });
                 setIsLoadingSignupLink(false);
                 setIsSyncing(false);
                 toast.error('Login was not completed. Please try again.');
@@ -429,36 +452,43 @@ const ProjectDetails = () => {
             
             if (response && response.authResponse && response.authResponse.code) {
                 const code = response.authResponse.code;
-                console.log('Got authorization code:', code);
+                addDebugLog('Authorization code received', { code: code.substring(0, 20) + '...' });
 
                 // Check if we have the WABA ID from the message event
                 const wabaId = wabaIdRef.current;
                 if (!wabaId) {
-                    console.warn('WABA ID not received from event, waiting...');
+                    addDebugLog('WABA ID not yet received, waiting 2 seconds...');
                     // Give it a moment for the event to arrive
                     await new Promise(resolve => setTimeout(resolve, 2000));
                     
                     if (!wabaIdRef.current) {
+                        addDebugLog('ERROR: WABA ID still not received after waiting');
                         throw new Error('WABA ID not received. The signup may not have completed successfully. Please try again.');
                     }
                 }
 
-                console.log('Submitting WABA ID:', wabaIdRef.current);
-
-                // Submit WABA ID to backend with encryption
-                const wabaResponse = await submitWabaId({
+                // Prepare payload
+                const submitPayload = {
                     project_id: activeId,
                     waba_id: wabaIdRef.current
-                });
+                };
+                
+                addDebugLog('Payload before encryption', submitPayload);
+                addDebugLog('Calling submitWabaId API with encryption...');
 
-                console.log('WABA submission result:', wabaResponse);
+                // Submit WABA ID to backend with encryption
+                const wabaResponse = await submitWabaId(submitPayload);
+
+                addDebugLog('WABA submission response received', wabaResponse);
 
                 // Check response
                 if (wabaResponse?.error) {
+                    addDebugLog('WABA submission failed', wabaResponse);
                     throw new Error(typeof wabaResponse.error === 'string' ? wabaResponse.error : wabaResponse.msg || 'Failed to connect WABA');
                 }
 
                 // Show success toast
+                addDebugLog('WABA connected successfully');
                 toast.success(wabaResponse?.msg || 'WABA connected successfully');
 
                 // Clear the stored WABA ID
@@ -560,19 +590,26 @@ const ProjectDetails = () => {
 
     const handleGetSignupLink = async () => {
         try {
+            addDebugLog('Signup button clicked');
             setIsLoadingSignupLink(true);
             setError(null);
             
             const activeId = projectId || JSON.parse(localStorage.getItem('userData'))?.selected_project_id;
             if (!activeId) {
+                addDebugLog('ERROR: Project ID missing');
                 throw new Error("Project ID missing");
             }
 
+            addDebugLog('Project ID found', { project_id: activeId });
+
             // Check if FB SDK is loaded
             if (!window.FB) {
+                addDebugLog('ERROR: FB SDK not loaded');
                 throw new Error("Facebook SDK not loaded yet. Please try again in a moment.");
             }
 
+            addDebugLog('Launching FB.login with embedded signup...');
+            
             // Launch Facebook Login with WhatsApp Embedded Signup
             // Note: FB.login callback must be a regular function, not async
             window.FB.login(function(response) {
@@ -1067,6 +1104,83 @@ const ProjectDetails = () => {
                     )}
                 </div>
             </div>
+
+            {/* Debug Panel - Fixed at bottom */}
+            {!isWabaConnected && (
+                <div className="fixed bottom-0 left-0 right-0 z-50">
+                    {showDebugPanel ? (
+                        <div className="bg-gray-900 text-white border-t-2 border-indigo-500 shadow-2xl" style={{ maxHeight: '400px' }}>
+                            <div className="flex justify-between items-center px-4 py-2 bg-gray-800 border-b border-gray-700">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                    <span className="font-semibold">Debug Console</span>
+                                    <span className="text-xs text-gray-400">({debugLogs.length} logs)</span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setDebugLogs([])}
+                                        className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded"
+                                    >
+                                        Clear
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const logText = debugLogs.map(log => 
+                                                `[${log.time}] ${log.message}${log.data ? '\n' + log.data : ''}`
+                                            ).join('\n\n');
+                                            navigator.clipboard.writeText(logText);
+                                            toast.success('Logs copied to clipboard');
+                                        }}
+                                        className="px-3 py-1 text-xs bg-indigo-600 hover:bg-indigo-500 rounded"
+                                    >
+                                        Copy Logs
+                                    </button>
+                                    <button
+                                        onClick={() => setShowDebugPanel(false)}
+                                        className="px-3 py-1 text-xs bg-red-600 hover:bg-red-500 rounded"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="overflow-y-auto p-4 space-y-2" style={{ maxHeight: '350px' }}>
+                                {debugLogs.length === 0 ? (
+                                    <div className="text-gray-400 text-sm text-center py-8">
+                                        No logs yet. Click "Sign Up with Facebook" to start debugging.
+                                    </div>
+                                ) : (
+                                    debugLogs.map((log, index) => (
+                                        <div key={index} className="bg-gray-800 rounded p-2 text-xs font-mono">
+                                            <div className="flex items-start gap-2">
+                                                <span className="text-gray-500">[{log.time}]</span>
+                                                <span className="text-green-400 flex-1">{log.message}</span>
+                                            </div>
+                                            {log.data && (
+                                                <pre className="mt-1 text-gray-300 overflow-x-auto whitespace-pre-wrap">
+                                                    {log.data}
+                                                </pre>
+                                            )}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => setShowDebugPanel(true)}
+                            className="fixed bottom-4 right-4 px-4 py-2 bg-gray-900 text-white rounded-lg shadow-lg hover:bg-gray-800 flex items-center gap-2 border border-indigo-500"
+                        >
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span className="text-sm font-medium">Debug Console</span>
+                            {debugLogs.length > 0 && (
+                                <span className="px-2 py-0.5 bg-indigo-600 rounded-full text-xs">
+                                    {debugLogs.length}
+                                </span>
+                            )}
+                        </button>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
