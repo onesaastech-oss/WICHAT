@@ -18,7 +18,7 @@ const ProjectDetails = () => {
         const saved = localStorage.getItem('sidebarMinimized');
         return saved ? JSON.parse(saved) : false;
     });
-    
+
     // --- Data State ---
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState(null);
@@ -98,17 +98,17 @@ const ProjectDetails = () => {
             setLoading(true);
             // Logic to get ID (kept from your original code)
             const activeId = projectId || JSON.parse(localStorage.getItem('userData'))?.selected_project_id;
-            
+
             if (!activeId) throw new Error("Project ID missing");
 
             const response = await getProjectMetaDetails({ project_id: activeId });
-            
+
             if (response?.data) {
                 setData(response.data);
                 // Check if WABA is connected
                 const wabaConnected = response.data.is_waba_connected !== false;
                 setIsWabaConnected(wabaConnected);
-                
+
                 // Only initialize form if profile exists (WABA is connected)
                 if (wabaConnected && response.data.profile) {
                     const profilePictureUrl = response.data.profile?.profile_picture_url || '';
@@ -226,7 +226,7 @@ const ProjectDetails = () => {
 
             // Get the latest profile data to ensure we have all current values
             const currentProfile = data?.profile || {};
-            
+
             // Step 1: Update profile picture first if it has changed
             const profilePictureChanged = editForm.profile_picture_url !== originalProfilePictureUrl;
             if (profilePictureChanged && editForm.profile_picture_url) {
@@ -252,23 +252,23 @@ const ProjectDetails = () => {
                 project_id: activeId,
                 // Use editForm value if it's a non-empty string, otherwise use current profile value
                 // This allows updating one field while keeping others with their current values
-                about: (editForm.about && editForm.about.trim() !== '') 
-                    ? editForm.about 
+                about: (editForm.about && editForm.about.trim() !== '')
+                    ? editForm.about
                     : (currentProfile.about || ''),
-                address: (editForm.address && editForm.address.trim() !== '') 
-                    ? editForm.address 
+                address: (editForm.address && editForm.address.trim() !== '')
+                    ? editForm.address
                     : (currentProfile.address || ''),
-                vertical: (editForm.vertical && editForm.vertical.trim() !== '') 
-                    ? editForm.vertical 
+                vertical: (editForm.vertical && editForm.vertical.trim() !== '')
+                    ? editForm.vertical
                     : (currentProfile.vertical || ''),
-                email: (editForm.email && editForm.email.trim() !== '') 
-                    ? editForm.email 
+                email: (editForm.email && editForm.email.trim() !== '')
+                    ? editForm.email
                     : (currentProfile.email || ''),
-                websites: (Array.isArray(editForm.websites) && editForm.websites.length > 0) 
-                    ? editForm.websites 
+                websites: (Array.isArray(editForm.websites) && editForm.websites.length > 0)
+                    ? editForm.websites
                     : (Array.isArray(currentProfile.websites) ? currentProfile.websites : []),
-                description: (editForm.description && editForm.description.trim() !== '') 
-                    ? editForm.description 
+                description: (editForm.description && editForm.description.trim() !== '')
+                    ? editForm.description
                     : (currentProfile.description || '')
             };
 
@@ -321,7 +321,7 @@ const ProjectDetails = () => {
     };
 
     const addWebsite = () => setEditForm({ ...editForm, websites: [...editForm.websites, ''] });
-    
+
     const removeWebsite = (index) => {
         const newWebsites = editForm.websites.filter((_, i) => i !== index);
         setEditForm({ ...editForm, websites: newWebsites });
@@ -353,16 +353,16 @@ const ProjectDetails = () => {
 
     // Initialize Facebook SDK
     useEffect(() => {
-        addDebugLog('Component mounted', { 
-            META_APP_ID, 
-            META_CONFIG_ID, 
-            META_GRAPH_VER 
+        addDebugLog('Component mounted', {
+            META_APP_ID,
+            META_CONFIG_ID,
+            META_GRAPH_VER
         });
-        
+
         // Load Facebook SDK
         if (!window.FB) {
             addDebugLog('Loading Facebook SDK...');
-            window.fbAsyncInit = function() {
+            window.fbAsyncInit = function () {
                 window.FB.init({
                     appId: META_APP_ID,
                     autoLogAppEvents: true,
@@ -384,17 +384,17 @@ const ProjectDetails = () => {
             const handleMessage = (event) => {
                 try {
                     if (!event.origin || !event.origin.includes('facebook.com')) return;
-                    
+
                     let data = event.data;
                     if (typeof data === "string") {
-                        try { 
-                            data = JSON.parse(data); 
-                        } catch {}
+                        try {
+                            data = JSON.parse(data);
+                        } catch { }
                     }
-                    
+
                     if (data && data.type === 'WA_EMBEDDED_SIGNUP') {
                         addDebugLog('WA_EMBEDDED_SIGNUP event received', data);
-                        
+
                         // Handle different events
                         if (data.event === 'FINISH') {
                             addDebugLog('Signup completed successfully', data.data);
@@ -440,7 +440,7 @@ const ProjectDetails = () => {
     const handleFBLoginResponse = async (response, activeId) => {
         try {
             addDebugLog('FB Login Response received', response);
-            
+
             // Check if user cancelled or login failed
             if (!response || response.status === 'unknown') {
                 addDebugLog('Login not completed or cancelled', { status: response?.status });
@@ -449,7 +449,7 @@ const ProjectDetails = () => {
                 toast.error('Login was not completed. Please try again.');
                 return;
             }
-            
+
             if (response && response.authResponse && response.authResponse.code) {
                 const code = response.authResponse.code;
                 addDebugLog('Authorization code received', { code: code.substring(0, 20) + '...' });
@@ -460,7 +460,7 @@ const ProjectDetails = () => {
                     addDebugLog('WABA ID not yet received, waiting 2 seconds...');
                     // Give it a moment for the event to arrive
                     await new Promise(resolve => setTimeout(resolve, 2000));
-                    
+
                     if (!wabaIdRef.current) {
                         addDebugLog('ERROR: WABA ID still not received after waiting');
                         throw new Error('WABA ID not received. The signup may not have completed successfully. Please try again.');
@@ -472,7 +472,7 @@ const ProjectDetails = () => {
                     project_id: activeId,
                     waba_id: wabaIdRef.current
                 };
-                
+
                 addDebugLog('Payload before encryption', submitPayload);
                 addDebugLog('Calling submitWabaId API with encryption...');
 
@@ -498,19 +498,19 @@ const ProjectDetails = () => {
                 setIsSyncing(true);
                 setIsLoadingSignupLink(false);
                 setShowManualRefresh(false);
-                
+
                 // Reset poll count
                 pollCountRef.current = 0;
                 const maxPolls = 60; // 3 minutes = 180 seconds / 3 seconds = 60 polls
-                
+
                 const pollConnectionStatus = async () => {
                     try {
                         const statusResponse = await getProjectMetaDetails({ project_id: activeId });
-                        
+
                         if (statusResponse?.data) {
                             const wabaConnected = statusResponse.data.is_waba_connected !== false;
                             setIsWabaConnected(wabaConnected);
-                            
+
                             // Update data if connected
                             if (wabaConnected) {
                                 setData(statusResponse.data);
@@ -540,9 +540,9 @@ const ProjectDetails = () => {
                                 return;
                             }
                         }
-                        
+
                         pollCountRef.current++;
-                        
+
                         // Stop after 3 minutes (60 polls)
                         if (pollCountRef.current >= maxPolls) {
                             if (syncIntervalRef.current) {
@@ -566,7 +566,7 @@ const ProjectDetails = () => {
                         }
                     }
                 };
-                
+
                 // Start polling every 3 seconds
                 syncIntervalRef.current = setInterval(pollConnectionStatus, 3000);
                 // Also call immediately
@@ -593,7 +593,7 @@ const ProjectDetails = () => {
             addDebugLog('Signup button clicked');
             setIsLoadingSignupLink(true);
             setError(null);
-            
+
             const activeId = projectId || JSON.parse(localStorage.getItem('userData'))?.selected_project_id;
             if (!activeId) {
                 addDebugLog('ERROR: Project ID missing');
@@ -614,7 +614,7 @@ const ProjectDetails = () => {
                 override_default_response_type: true,
                 extras: {
                     setup: {
-                        solutionID: '799369954601524'
+                        solutionID: '1369066807875953'
                     },
                     featureType: "whatsapp_business_app_onboarding",
                     sessionInfoVersion: "3",
@@ -626,12 +626,12 @@ const ProjectDetails = () => {
                     version: "v3"
                 }
             };
-            
+
             addDebugLog('Launching FB.login with embedded signup', fbLoginConfig);
-            
+
             // Launch Facebook Login with WhatsApp Embedded Signup
             // Note: FB.login callback must be a regular function, not async
-            window.FB.login(function(response) {
+            window.FB.login(function (response) {
                 // Handle the response in a separate async function
                 handleFBLoginResponse(response, activeId);
             }, fbLoginConfig);
@@ -651,18 +651,18 @@ const ProjectDetails = () => {
             setIsSyncing(true);
             setShowManualRefresh(false);
             setError(null);
-            
+
             const activeId = projectId || JSON.parse(localStorage.getItem('userData'))?.selected_project_id;
             if (!activeId) {
                 throw new Error("Project ID missing");
             }
 
             const statusResponse = await getProjectMetaDetails({ project_id: activeId });
-            
+
             if (statusResponse?.data) {
                 const wabaConnected = statusResponse.data.is_waba_connected !== false;
                 setIsWabaConnected(wabaConnected);
-                
+
                 // Update data if connected
                 if (wabaConnected) {
                     setData(statusResponse.data);
@@ -761,7 +761,7 @@ const ProjectDetails = () => {
                                     <p className="text-sm text-gray-500">Connect your WhatsApp Business Account to get started.</p>
                                 </div>
                             </div>
-                            
+
                             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
                                 <div className="text-center max-w-md mx-auto">
                                     <div className="mb-6">
@@ -773,7 +773,7 @@ const ProjectDetails = () => {
                                             You need to connect your WhatsApp Business Account to manage your business profile and settings.
                                         </p>
                                     </div>
-                                    
+
                                     {isSyncing ? (
                                         <div className="flex flex-col items-center gap-3">
                                             <button
@@ -828,7 +828,7 @@ const ProjectDetails = () => {
                                     )}
                                 </div>
                             </div>
-                            
+
                             {/* Show project info even when WABA is not connected */}
                             {data?.project && (
                                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -850,7 +850,7 @@ const ProjectDetails = () => {
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            
+
                             {/* Page Header */}
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                                 <div>
@@ -860,14 +860,14 @@ const ProjectDetails = () => {
                                 <div className="flex gap-2">
                                     {isEditing ? (
                                         <>
-                                            <button 
+                                            <button
                                                 onClick={handleCancel}
                                                 disabled={isSaving}
                                                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 Cancel
                                             </button>
-                                            <button 
+                                            <button
                                                 onClick={handleSave}
                                                 disabled={isSaving}
                                                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -885,7 +885,7 @@ const ProjectDetails = () => {
                                             </button>
                                         </>
                                     ) : (
-                                        <button 
+                                        <button
                                             onClick={() => setIsEditing(true)}
                                             className="px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 flex items-center gap-2"
                                         >
@@ -896,19 +896,19 @@ const ProjectDetails = () => {
                             </div>
 
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                
+
                                 {/* LEFT COL: Editable Profile Info */}
                                 <div className="lg:col-span-2 space-y-6">
                                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                                        
+
                                         {/* Banner/Header of Card */}
-                              
+
                                         <div className="px-4 pb-4">
                                             <div className="relative flex mt-3 mb-6  items-center">
                                                 <div className="relative group">
-                                                    <img 
-                                                        src={isEditing ? editForm.profile_picture_url : data.profile?.profile_picture_url || ''} 
-                                                        alt="Profile" 
+                                                    <img
+                                                        src={isEditing ? editForm.profile_picture_url : data.profile?.profile_picture_url || ''}
+                                                        alt="Profile"
                                                         className="h-24 w-24 rounded-xl border-4 border-white dark:border-gray-800 shadow-md object-cover bg-gray-200"
                                                         onError={(e) => e.target.src = 'https://via.placeholder.com/150'}
                                                     />
@@ -921,7 +921,7 @@ const ProjectDetails = () => {
                                                                 onChange={handleProfilePictureChange}
                                                                 className="hidden"
                                                             />
-                                                            <div 
+                                                            <div
                                                                 onClick={handleProfilePictureClick}
                                                                 className="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition cursor-pointer"
                                                             >
@@ -947,10 +947,10 @@ const ProjectDetails = () => {
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Industry / Vertical</label>
                                                         {isEditing ? (
-                                                            <input 
+                                                            <input
                                                                 type="text"
                                                                 value={editForm.vertical}
-                                                                onChange={(e) => setEditForm({...editForm, vertical: e.target.value})}
+                                                                onChange={(e) => setEditForm({ ...editForm, vertical: e.target.value })}
                                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                                             />
                                                         ) : (
@@ -960,10 +960,10 @@ const ProjectDetails = () => {
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
                                                         {isEditing ? (
-                                                            <input 
+                                                            <input
                                                                 type="email"
                                                                 value={editForm.email}
-                                                                onChange={(e) => setEditForm({...editForm, email: e.target.value})}
+                                                                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
                                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                                             />
                                                         ) : (
@@ -975,10 +975,10 @@ const ProjectDetails = () => {
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Address</label>
                                                     {isEditing ? (
-                                                        <input 
+                                                        <input
                                                             type="text"
                                                             value={editForm.address}
-                                                            onChange={(e) => setEditForm({...editForm, address: e.target.value})}
+                                                            onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
                                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                                         />
                                                     ) : (
@@ -989,11 +989,11 @@ const ProjectDetails = () => {
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">About Text</label>
                                                     {isEditing ? (
-                                                        <input 
+                                                        <input
                                                             type="text"
                                                             maxLength={139} // WA Limit
                                                             value={editForm.about}
-                                                            onChange={(e) => setEditForm({...editForm, about: e.target.value})}
+                                                            onChange={(e) => setEditForm({ ...editForm, about: e.target.value })}
                                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                                             placeholder="About text (max 139 characters)"
                                                         />
@@ -1005,10 +1005,10 @@ const ProjectDetails = () => {
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Business Description</label>
                                                     {isEditing ? (
-                                                        <textarea 
+                                                        <textarea
                                                             rows={3}
                                                             value={editForm.description}
-                                                            onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                                                            onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                                             placeholder="Business description"
                                                         />
@@ -1026,7 +1026,7 @@ const ProjectDetails = () => {
                                                                     <>
                                                                         <div className="relative flex-1">
                                                                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><FiGlobe /></div>
-                                                                            <input 
+                                                                            <input
                                                                                 type="url"
                                                                                 value={site}
                                                                                 onChange={(e) => handleWebsiteChange(idx, e.target.value)}
@@ -1096,7 +1096,7 @@ const ProjectDetails = () => {
                                                 <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">WA Official Account</dt>
                                                 <dd className="text-sm font-medium text-gray-900 dark:text-gray-100">
                                                     {data.project?.is_whatsapp_verified ? (
-                                                        <span className="flex items-center text-green-600"><FiCheckCircle className="mr-1"/> Verified</span>
+                                                        <span className="flex items-center text-green-600"><FiCheckCircle className="mr-1" /> Verified</span>
                                                     ) : "Unverified"}
                                                 </dd>
                                             </div>
@@ -1130,7 +1130,7 @@ const ProjectDetails = () => {
                                     </button>
                                     <button
                                         onClick={() => {
-                                            const logText = debugLogs.map(log => 
+                                            const logText = debugLogs.map(log =>
                                                 `[${log.time}] ${log.message}${log.data ? '\n' + log.data : ''}`
                                             ).join('\n\n');
                                             navigator.clipboard.writeText(logText);
