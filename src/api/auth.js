@@ -486,6 +486,48 @@ export const getEmbedSignupLink = async ({ project_id }) => {
   return response.data;
 };
 
+// Submit WABA ID after Facebook signup
+export const submitWabaId = async ({ project_id, waba_id }) => {
+  // Load auth tokens from localStorage
+  const stored =
+    typeof window !== 'undefined' ? localStorage.getItem('userData') : null;
+  const parsed = stored ? JSON.parse(stored) : null;
+  const token = parsed?.token;
+  const username = parsed?.username;
+
+  if (!token || !username) {
+    throw new Error('Session expired');
+  }
+
+  const payload = {
+    project_id,
+    waba_id
+  };
+
+  // Encrypt the payload
+  const { data, key } = Encrypt(payload);
+
+  const data_pass = JSON.stringify({
+    data,
+    key
+  });
+
+  const config = {
+    method: 'post',
+    maxBodyLength: Infinity,
+    url: 'https://api.w1chat.com/project/submit-waba-id',
+    headers: {
+      'Content-Type': 'application/json',
+      'token': token,
+      'username': username
+    },
+    data: data_pass
+  };
+
+  const response = await axios.request(config);
+  return response.data;
+};
+
 // Create project
 export const createProject = async ({ company_name, project_name }) => {
   // Load auth tokens from localStorage to match existing API requirements

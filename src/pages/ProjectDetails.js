@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Header, Sidebar } from '../component/Menu';
-import { getProjectMetaDetails, updateWabaProfilePicture, updateWabaProfileDetails, getEmbedSignupLink } from '../api/auth';
+import { getProjectMetaDetails, updateWabaProfilePicture, updateWabaProfileDetails, submitWabaId } from '../api/auth';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 import {
     FiArrowLeft, FiSave, FiX, FiEdit2, FiGlobe, FiInfo,
     FiCheckCircle, FiAlertCircle, FiTrash2, FiPlus, FiCamera, FiExternalLink, FiRefreshCw
@@ -29,6 +30,7 @@ const ProjectDetails = () => {
     const [showManualRefresh, setShowManualRefresh] = useState(false);
     const syncIntervalRef = useRef(null);
     const pollCountRef = useRef(0);
+    const wabaIdRef = useRef(null); // Store WABA ID from Facebook event
 
     // --- Editing State ---
     const [isEditing, setIsEditing] = useState(false);
@@ -330,30 +332,120 @@ const ProjectDetails = () => {
         setIsEditing(false);
     };
 
-    const handleGetSignupLink = async () => {
-        try {
-            setIsLoadingSignupLink(true);
-            setError(null);
-            
-            const activeId = projectId || JSON.parse(localStorage.getItem('userData'))?.selected_project_id;
-            if (!activeId) {
-                throw new Error("Project ID missing");
-            }
+    // Facebook Embedded Signup Configuration
+    const META_APP_ID = "665558946509856";
+    const META_CONFIG_ID = "1275572191131467";
+    const META_GRAPH_VER = "v24.0";
 
-            const response = await getEmbedSignupLink({ project_id: activeId });
-            
-            if (!response?.error && response?.url) {
-                // Open the signup link in a new tab
-                window.open(response.url, '_blank');
-                
-                // Start syncing after opening the link
+    // Initialize Facebook SDK
+    useEffect(() => {
+        // Load Facebook SDK
+        if (!window.FB) {
+            window.fbAsyncInit = function() {
+                window.FB.init({
+                    appId: META_APP_ID,
+                    autoLogAppEvents: true,
+                    xfbml: true,
+                    version: META_GRAPH_VER
+                });
+                console.log("FB SDK initialized");
+            };
+
+            // Load SDK script
+            const script = document.createElement('script');
+            script.src = 'https://connect.facebook.net/en_US/sdk.js';
+            script.async = true;
+            script.defer = true;
+            script.crossOrigin = 'anonymous';
+            document.body.appendChild(script);
+
+            // Listen for WhatsApp Embedded Signup events
+            const handleMessage = (event) => {
+                try {
+                    if (!event.origin || !event.origin.includes('facebook.com')) return;
+                    
+                    let data = event.data;
+                    if (typeof data === "string") {
+                        try { 
+                            data = JSON.parse(data); 
+                        } catch {}
+                    }
+                    
+                    if (data && data.type === 'WA_EMBEDDED_SIGNUP') {
+                        console.log('WA_EMBEDDED_SIGNUP event:', data);
+                        
+                        // Handle different events
+                        if (data.event === 'FINISH') {
+                            console.log('Signup completed:', data.data);
+                            // Store WABA ID from the event
+                            if (data.data && data.data.waba_id) {
+                                wabaIdRef.current = data.data.waba_id;
+                                console.log('Stored WABA ID:', data.data.waba_id);
+                            }
+                            // The FB.login callback will handle the code exchange
+                        } else if (data.event === 'CANCEL') {
+                            console.log('Signup cancelled');
+                            setIsLoadingSignupLink(false);
+                            setIsSyncing(false);
+                            setError('WhatsApp signup was cancelled');
+                            toast.error('WhatsApp signup was cancelled');
+                        }
+                    }
+                } catch (e) {
+                    console.log("message listener error:", e);
+                }
+            };
+
+            window.addEventListener('message', handleMessage);
+
+            return () => {
+                window.removeEventListener('message', handleMessage);
+            };
+        }
+    }, []);
+
+    // Handle Facebook login response (separated because FB.login callback cannot be async)
+    const handleFBLoginResponse = async (response, activeId) => {
+        try {
+            if (response && response.authResponse && response.authResponse.code) {
+                const code = response.authResponse.code;
+                console.log('Got authorization code:', code);
+
+                // Check if we have the WABA ID from the message event
+                const wabaId = wabaIdRef.current;
+                if (!wabaId) {
+                    throw new Error('WABA ID not received. Please try again.');
+                }
+
+                console.log('Submitting WABA ID:', wabaId);
+
+                // Submit WABA ID to backend with encryption
+                const wabaResponse = await submitWabaId({
+                    project_id: activeId,
+                    waba_id: wabaId
+                });
+
+                console.log('WABA submission result:', wabaResponse);
+
+                // Check response
+                if (wabaResponse?.error) {
+                    throw new Error(typeof wabaResponse.error === 'string' ? wabaResponse.error : wabaResponse.msg || 'Failed to connect WABA');
+                }
+
+                // Show success toast
+                toast.success(wabaResponse?.msg || 'WABA connected successfully');
+
+                // Clear the stored WABA ID
+                wabaIdRef.current = null;
+
+                // Start polling for connection status
                 setIsSyncing(true);
                 setIsLoadingSignupLink(false);
                 setShowManualRefresh(false);
                 
                 // Reset poll count
                 pollCountRef.current = 0;
-                const maxPolls = 60; // 1 minute = 60 seconds / 3 seconds = 20 polls
+                const maxPolls = 60; // 3 minutes = 180 seconds / 3 seconds = 60 polls
                 
                 const pollConnectionStatus = async () => {
                     try {
@@ -395,7 +487,7 @@ const ProjectDetails = () => {
                         
                         pollCountRef.current++;
                         
-                        // Stop after 1 minute (20 polls)
+                        // Stop after 3 minutes (60 polls)
                         if (pollCountRef.current >= maxPolls) {
                             if (syncIntervalRef.current) {
                                 clearInterval(syncIntervalRef.current);
@@ -423,12 +515,67 @@ const ProjectDetails = () => {
                 syncIntervalRef.current = setInterval(pollConnectionStatus, 3000);
                 // Also call immediately
                 pollConnectionStatus();
+
             } else {
-                throw new Error(response?.msg || 'Failed to get signup link');
+                console.log('Login response:', response);
+                throw new Error('Login failed or was cancelled. Please try again.');
             }
         } catch (err) {
-            console.error('Error getting signup link:', err);
-            setError(err.message || 'Failed to get signup link');
+            console.error('Error in FB login callback:', err);
+            const errorMessage = err.message || 'Failed to complete WhatsApp signup';
+            setError(errorMessage);
+            toast.error(errorMessage);
+            setIsLoadingSignupLink(false);
+            setIsSyncing(false);
+            // Clear the stored WABA ID on error
+            wabaIdRef.current = null;
+        }
+    };
+
+    const handleGetSignupLink = async () => {
+        try {
+            setIsLoadingSignupLink(true);
+            setError(null);
+            
+            const activeId = projectId || JSON.parse(localStorage.getItem('userData'))?.selected_project_id;
+            if (!activeId) {
+                throw new Error("Project ID missing");
+            }
+
+            // Check if FB SDK is loaded
+            if (!window.FB) {
+                throw new Error("Facebook SDK not loaded yet. Please try again in a moment.");
+            }
+
+            // Launch Facebook Login with WhatsApp Embedded Signup
+            // Note: FB.login callback must be a regular function, not async
+            window.FB.login(function(response) {
+                // Handle the response in a separate async function
+                handleFBLoginResponse(response, activeId);
+            }, {
+                config_id: META_CONFIG_ID,
+                response_type: 'code',
+                override_default_response_type: true,
+                extras: {
+                    featureType: "whatsapp_business_app_onboarding",
+                    setup: {
+                        solutionID: '799369954601524'
+                      },
+                    sessionInfoVersion: "3",
+                    features: [
+                        {
+                            name: "marketing_messages_lite"
+                        }
+                    ],
+                    version: "v3"
+                }
+            });
+
+        } catch (err) {
+            console.error('Error launching WhatsApp signup:', err);
+            const errorMessage = err.message || 'Failed to launch WhatsApp signup';
+            setError(errorMessage);
+            toast.error(errorMessage);
             setIsLoadingSignupLink(false);
             setIsSyncing(false);
         }
@@ -609,7 +756,7 @@ const ProjectDetails = () => {
                                                 </>
                                             ) : (
                                                 <>
-                                                    <FiExternalLink /> Get Signup Link
+                                                    <FiExternalLink /> Sign Up with FaceBook
                                                 </>
                                             )}
                                         </button>
