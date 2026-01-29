@@ -608,18 +608,14 @@ const ProjectDetails = () => {
                 throw new Error("Facebook SDK not loaded yet. Please try again in a moment.");
             }
 
-            addDebugLog('Launching FB.login with embedded signup...');
-            
-            // Launch Facebook Login with WhatsApp Embedded Signup
-            // Note: FB.login callback must be a regular function, not async
-            window.FB.login(function(response) {
-                // Handle the response in a separate async function
-                handleFBLoginResponse(response, activeId);
-            }, {
+            const fbLoginConfig = {
                 config_id: META_CONFIG_ID,
                 response_type: 'code',
                 override_default_response_type: true,
                 extras: {
+                    setup: {
+                        solutionID: '799369954601524'
+                    },
                     featureType: "whatsapp_business_app_onboarding",
                     sessionInfoVersion: "3",
                     features: [
@@ -629,7 +625,16 @@ const ProjectDetails = () => {
                     ],
                     version: "v3"
                 }
-            });
+            };
+            
+            addDebugLog('Launching FB.login with embedded signup', fbLoginConfig);
+            
+            // Launch Facebook Login with WhatsApp Embedded Signup
+            // Note: FB.login callback must be a regular function, not async
+            window.FB.login(function(response) {
+                // Handle the response in a separate async function
+                handleFBLoginResponse(response, activeId);
+            }, fbLoginConfig);
 
         } catch (err) {
             console.error('Error launching WhatsApp signup:', err);
