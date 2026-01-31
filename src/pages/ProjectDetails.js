@@ -33,6 +33,8 @@ const ProjectDetails = () => {
     const wabaIdRef = useRef(null); // Store WABA ID from Facebook event
     const [debugLogs, setDebugLogs] = useState([]); // Debug logs for troubleshooting
     const [showDebugPanel, setShowDebugPanel] = useState(false); // Toggle debug panel
+    const [showErrorModal, setShowErrorModal] = useState(false); // Error modal state
+    const [errorModalMessage, setErrorModalMessage] = useState(''); // Error modal message
 
     // --- Editing State ---
     const [isEditing, setIsEditing] = useState(false);
@@ -410,14 +412,19 @@ const ProjectDetails = () => {
                             addDebugLog('Signup cancelled by user');
                             setIsLoadingSignupLink(false);
                             setIsSyncing(false);
-                            setError('WhatsApp signup was cancelled');
-                            toast.error('WhatsApp signup was cancelled');
+                            const cancelMsg = 'WhatsApp signup was cancelled';
+                            setError(cancelMsg);
+                            setErrorModalMessage(cancelMsg);
+                            setShowErrorModal(true);
+                            toast.error(cancelMsg);
                         } else if (data.event === 'ERROR') {
                             addDebugLog('Signup error occurred', data);
                             setIsLoadingSignupLink(false);
                             setIsSyncing(false);
                             const errorMsg = data.error_message || 'Failed to complete WhatsApp signup. Please check your Meta App configuration.';
                             setError(errorMsg);
+                            setErrorModalMessage(errorMsg);
+                            setShowErrorModal(true);
                             toast.error(errorMsg);
                         } else {
                             addDebugLog('Unknown event type', data);
@@ -579,7 +586,10 @@ const ProjectDetails = () => {
         } catch (err) {
             console.error('Error in FB login callback:', err);
             const errorMessage = err.message || 'Failed to complete WhatsApp signup';
+            addDebugLog('ERROR in signup flow', { error: errorMessage });
             setError(errorMessage);
+            setErrorModalMessage(errorMessage);
+            setShowErrorModal(true);
             toast.error(errorMessage);
             setIsLoadingSignupLink(false);
             setIsSyncing(false);
@@ -639,7 +649,10 @@ const ProjectDetails = () => {
         } catch (err) {
             console.error('Error launching WhatsApp signup:', err);
             const errorMessage = err.message || 'Failed to launch WhatsApp signup';
+            addDebugLog('ERROR launching signup', { error: errorMessage });
             setError(errorMessage);
+            setErrorModalMessage(errorMessage);
+            setShowErrorModal(true);
             toast.error(errorMessage);
             setIsLoadingSignupLink(false);
             setIsSyncing(false);
@@ -748,7 +761,7 @@ const ProjectDetails = () => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
                     {loading ? (
                         <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>
-                    ) : error ? (
+                    ) : error && !showErrorModal ? (
                         <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-lg flex items-center gap-2"><FiAlertCircle /> {error}</div>
                     ) : successMessage ? (
                         <div className="bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 p-4 rounded-lg flex items-center gap-2"><FiCheckCircle /> {successMessage}</div>
@@ -1184,6 +1197,57 @@ const ProjectDetails = () => {
                             )}
                         </button>
                     )}
+                </div>
+            )}
+
+            {/* Error Modal */}
+            {showErrorModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
+                        <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/30 rounded-full">
+                            <FiAlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
+                        </div>
+                        
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white text-center mb-2">
+                            Connection Failed
+                        </h3>
+                        
+                        <p className="text-sm text-gray-600 dark:text-gray-400 text-center mb-6">
+                            {errorModalMessage}
+                        </p>
+                        
+                        <div className="space-y-3">
+                            <button
+                                onClick={() => {
+                                    setShowErrorModal(false);
+                                    navigate('/project-details');
+                                }}
+                                className="w-full px-4 py-3 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <FiArrowLeft />
+                                Go to All Projects
+                            </button>
+                            
+                            <button
+                                onClick={() => {
+                                    setShowErrorModal(false);
+                                    setError(null);
+                                }}
+                                className="w-full px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                Try Again
+                            </button>
+                        </div>
+                        
+                        {debugLogs.length > 0 && (
+                            <button
+                                onClick={() => setShowDebugPanel(true)}
+                                className="w-full mt-3 px-4 py-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                            >
+                                View Debug Logs ({debugLogs.length})
+                            </button>
+                        )}
+                    </div>
                 </div>
             )}
         </div>
