@@ -38,8 +38,10 @@ const getUserData = () => {
 };
 
 const requiresProject = (item) => {
-  const protectedPaths = ['/live-chat', '/template', '/campaigns'];
+  const protectedPaths = ['/live-chat', '/template', '/campaigns', '/contact', '/contact-group', '/auto-reply', '/flow', '/agent-management', '/permission-list'];
+  const protectedKeys = ['contact', 'automation', 'management'];
   return protectedPaths.includes(item.path) ||
+    protectedKeys.includes(item.key) ||
     (item.submenus && item.submenus.some(submenu => protectedPaths.includes(submenu.path)));
 };
 
@@ -78,20 +80,26 @@ const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubm
     return (
       <div className="mb-1">
         <button
-          onClick={() => !isMini && toggleSubmenu(isMobile ? `mobile-${item.key}` : item.key)}
+          onClick={() => !isMini && !isDisabled && toggleSubmenu(isMobile ? `mobile-${item.key}` : item.key)}
+          disabled={isDisabled}
           className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group border
-            ${isActive ? THEME.active : THEME.inactive}
+            ${isDisabled ? THEME.locked : isActive ? THEME.active : THEME.inactive}
             ${isMini ? 'justify-center px-2' : ''}`}
           onMouseEnter={() => isMini && setHoveredMenu(item.key)}
           onMouseLeave={() => isMini && setHoveredMenu(null)}
         >
           <div className={`flex items-center ${isMini ? 'justify-center w-full' : 'gap-3'}`}>
-            <span className={`${isActive ? THEME.iconActive : THEME.iconInactive} transition-colors`}>
+            <span className={`${isDisabled ? 'text-slate-300' : isActive ? THEME.iconActive : THEME.iconInactive} transition-colors`}>
               {item.icon}
             </span>
-            {!isMini && <span>{item.title}</span>}
+            {!isMini && (
+              <div className="flex-1 flex items-center justify-between">
+                <span>{item.title}</span>
+                {isDisabled && <FiLock size={12} className="text-slate-300 ml-2" />}
+              </div>
+            )}
           </div>
-          {!isMini && (
+          {!isMini && !isDisabled && (
             <motion.span animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration: 0.2 }}>
               <FiChevronRight size={16} className={isActive ? "text-indigo-400" : "text-slate-400"} />
             </motion.span>
@@ -100,13 +108,13 @@ const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubm
           {/* Tooltip for Mini Mode */}
           {isMini && hoveredMenu === item.key && (
             <div className="absolute left-16 ml-3 px-3 py-1.5 bg-slate-800 text-white text-xs rounded-md shadow-lg z-50 whitespace-nowrap animate-in fade-in zoom-in-95 duration-200">
-              {item.title}
+              {item.title} {isDisabled && '(Locked)'}
             </div>
           )}
         </button>
 
         <AnimatePresence>
-          {(!isMini && isOpen) && (
+          {(!isMini && isOpen && !isDisabled) && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}

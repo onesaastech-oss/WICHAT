@@ -390,42 +390,46 @@ function Dashboard() {
                     {/* UPDATED SECTION: Main Metrics & Project Profile Layout Fix     */}
                     {/* ------------------------------------------------------------- */}
 
-                    {loading ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                            {[1, 2, 3, 4, 5, 6].map((index) => (
-                                <div key={index} className="bg-white rounded-xl shadow p-6 animate-pulse">
-                                    <div className="h-4 bg-gray-200 rounded w-24 mb-4"></div>
-                                    <div className="h-8 bg-gray-200 rounded w-16"></div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : error ? (
-                        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-8">
-                            <p className="text-red-600">{error}</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 items-stretch">
-                            {/* Left Column: Metrics Grid (Takes 2/3 width on Desktop) */}
-                            <div className="lg:col-span-2">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 h-full">
-                                    {mainMetrics.map((metric, index) => (
-                                        <EnhancedMetricCard key={index} {...metric} />
+                    {hasProjects && (
+                        <>
+                            {loading ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                                    {[1, 2, 3, 4, 5, 6].map((index) => (
+                                        <div key={index} className="bg-white rounded-xl shadow p-6 animate-pulse">
+                                            <div className="h-4 bg-gray-200 rounded w-24 mb-4"></div>
+                                            <div className="h-8 bg-gray-200 rounded w-16"></div>
+                                        </div>
                                     ))}
                                 </div>
-                            </div>
+                            ) : error ? (
+                                <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-8">
+                                    <p className="text-red-600">{error}</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 items-stretch">
+                                    {/* Left Column: Metrics Grid (Takes 2/3 width on Desktop) */}
+                                    <div className="lg:col-span-2">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 h-full">
+                                            {mainMetrics.map((metric, index) => (
+                                                <EnhancedMetricCard key={index} {...metric} />
+                                            ))}
+                                        </div>
+                                    </div>
 
-                            {/* Right Column: Project Profile (Takes 1/3 width on Desktop) */}
-                            <div className="lg:col-span-1 h-full">
-                                <ProjectProfileCard
-                                    project={projectMeta?.project}
-                                    profile={projectMeta?.profile}
-                                    loading={projectMetaLoading}
-                                    error={projectMetaError}
-                                    projectId={tokens?.selected_project_id}
-                                    navigate={navigate}
-                                />
-                            </div>
-                        </div>
+                                    {/* Right Column: Project Profile (Takes 1/3 width on Desktop) */}
+                                    <div className="lg:col-span-1 h-full">
+                                        <ProjectProfileCard
+                                            project={projectMeta?.project}
+                                            profile={projectMeta?.profile}
+                                            loading={projectMetaLoading}
+                                            error={projectMetaError}
+                                            projectId={tokens?.selected_project_id}
+                                            navigate={navigate}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
 
                     {/* ------------------------------------------------------------- */}
@@ -433,7 +437,7 @@ function Dashboard() {
                     {/* ------------------------------------------------------------- */}
 
                     {/* Campaign Message Analytics */}
-                    {!loading && !error && dashboardData?.campaign?.message && (
+                    {hasProjects && !loading && !error && dashboardData?.campaign?.message && (
                         <div className="mb-8">
                             <div className="bg-white rounded-xl shadow p-6">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
@@ -450,75 +454,77 @@ function Dashboard() {
                     )}
 
                     {/* Template Status & Performance Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                        {/* Left column - Analytics and Activity */}
-                        <div className="lg:col-span-2 space-y-6">
-                            
-                            {/* Template Status Overview */}
-                            {!loading && !error && dashboardData?.template && (
-                                <div className="bg-white rounded-xl shadow p-6">
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
-                                        <FiFileText className="mr-2 text-orange-500" />
-                                        Template Status Overview
-                                    </h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        {templateMetrics.map((metric, index) => (
-                                            <TemplateStatusCard key={index} {...metric} />
-                                        ))}
+                    {hasProjects && (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                            {/* Left column - Analytics and Activity */}
+                            <div className="lg:col-span-2 space-y-6">
+                                
+                                {/* Template Status Overview */}
+                                {!loading && !error && dashboardData?.template && (
+                                    <div className="bg-white rounded-xl shadow p-6">
+                                        <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+                                            <FiFileText className="mr-2 text-orange-500" />
+                                            Template Status Overview
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            {templateMetrics.map((metric, index) => (
+                                                <TemplateStatusCard key={index} {...metric} />
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                        </div>
+                                )}
+                            </div>
 
-                        {/* Right column - Performance Stats */}
-                        <div className="lg:col-span-1">
-                            {!loading && !error && dashboardData && (
-                                <div className="bg-white rounded-xl shadow p-6 h-full">
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
-                                        <FiTrendingUp className="mr-2 text-green-500" />
-                                        Performance
-                                    </h3>
-                                    <div className="space-y-6">
-                                        {/* Campaign Performance */}
-                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4">
-                                            <h4 className="font-medium text-gray-900 mb-3">Campaign Success</h4>
-                                            <div className="space-y-3">
-                                                <div className="flex justify-between text-sm">
-                                                    <span className="text-gray-600">Sent Success</span>
-                                                    <span className="font-semibold text-green-600">
-                                                        {dashboardData.campaign?.message?.total > 0
-                                                            ? Math.round(((dashboardData.campaign.message.sent + dashboardData.campaign.message.delivered) / dashboardData.campaign.message.total) * 100)
-                                                            : 0}%
-                                                    </span>
+                            {/* Right column - Performance Stats */}
+                            <div className="lg:col-span-1">
+                                {!loading && !error && dashboardData && (
+                                    <div className="bg-white rounded-xl shadow p-6 h-full">
+                                        <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+                                            <FiTrendingUp className="mr-2 text-green-500" />
+                                            Performance
+                                        </h3>
+                                        <div className="space-y-6">
+                                            {/* Campaign Performance */}
+                                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4">
+                                                <h4 className="font-medium text-gray-900 mb-3">Campaign Success</h4>
+                                                <div className="space-y-3">
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-gray-600">Sent Success</span>
+                                                        <span className="font-semibold text-green-600">
+                                                            {dashboardData.campaign?.message?.total > 0
+                                                                ? Math.round(((dashboardData.campaign.message.sent + dashboardData.campaign.message.delivered) / dashboardData.campaign.message.total) * 100)
+                                                                : 0}%
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-full bg-blue-200 rounded-full h-1.5 mt-1">
+                                                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${dashboardData.campaign?.message?.total > 0 ? ((dashboardData.campaign.message.sent + dashboardData.campaign.message.delivered) / dashboardData.campaign.message.total) * 100 : 0}%` }}></div>
+                                                    </div>
                                                 </div>
-                                                <div className="w-full bg-blue-200 rounded-full h-1.5 mt-1">
-                                                    <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${dashboardData.campaign?.message?.total > 0 ? ((dashboardData.campaign.message.sent + dashboardData.campaign.message.delivered) / dashboardData.campaign.message.total) * 100 : 0}%` }}></div>
+                                            </div>
+
+                                            {/* Template Approval */}
+                                            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4">
+                                                <h4 className="font-medium text-gray-900 mb-3">Template Quality</h4>
+                                                <div className="space-y-3">
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-gray-600">Approval Rate</span>
+                                                        <span className="font-semibold text-green-600">
+                                                            {dashboardData.template?.total > 0
+                                                                ? Math.round((dashboardData.template.approved / dashboardData.template.total) * 100)
+                                                                : 0}%
+                                                        </span>
+                                                    </div>
+                                                     <div className="w-full bg-green-200 rounded-full h-1.5 mt-1">
+                                                        <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${dashboardData.template?.total > 0 ? (dashboardData.template.approved / dashboardData.template.total) * 100 : 0}%` }}></div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-
-                                        {/* Template Approval */}
-                                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4">
-                                            <h4 className="font-medium text-gray-900 mb-3">Template Quality</h4>
-                                            <div className="space-y-3">
-                                                <div className="flex justify-between text-sm">
-                                                    <span className="text-gray-600">Approval Rate</span>
-                                                    <span className="font-semibold text-green-600">
-                                                        {dashboardData.template?.total > 0
-                                                            ? Math.round((dashboardData.template.approved / dashboardData.template.total) * 100)
-                                                            : 0}%
-                                                    </span>
-                                                </div>
-                                                 <div className="w-full bg-green-200 rounded-full h-1.5 mt-1">
-                                                    <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${dashboardData.template?.total > 0 ? (dashboardData.template.approved / dashboardData.template.total) * 100 : 0}%` }}></div>
-                                                </div>
-                                            </div>
-                                        </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
 

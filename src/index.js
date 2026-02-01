@@ -125,13 +125,46 @@ root.render(
               <CreateCampaign />
             </ProtectedRoute>
           } />
+          {/* Protected routes that require project - Audience */}
+          <Route path="/contact" element={
+            <ProtectedRoute requiresProject={true}>
+              <Contact />
+            </ProtectedRoute>
+          } />
+          <Route path="/contact-group" element={
+            <ProtectedRoute requiresProject={true}>
+              <ContactGroup />
+            </ProtectedRoute>
+          } />
+          <Route path="/contact-group-list" element={
+            <ProtectedRoute requiresProject={true}>
+              <ContactGroupList />
+            </ProtectedRoute>
+          } />
+          {/* Protected routes that require project - Automation */}
+          <Route path="/auto-reply" element={
+            <ProtectedRoute requiresProject={true}>
+              <AutoReply />
+            </ProtectedRoute>
+          } />
+          <Route path="/flow" element={
+            <ProtectedRoute requiresProject={true}>
+              <Flow />
+            </ProtectedRoute>
+          } />
+          {/* Protected routes that require project - Management */}
+          <Route path="/agent-management" element={
+            <ProtectedRoute requiresProject={true}>
+              <AgentManagement />
+            </ProtectedRoute>
+          } />
+          <Route path="/permission-list" element={
+            <ProtectedRoute requiresProject={true}>
+              <PermissionsList />
+            </ProtectedRoute>
+          } />
           {/* Regular protected routes */}
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/contact-group" element={<ContactGroup />} />
-          <Route path="/contact-group-list" element={<ContactGroupList />} />
-          <Route path="/agent-management" element={<AgentManagement />} />
           <Route path="/my-plan" element={<MyPlan />} />
-          <Route path="/permission-list" element={<PermissionsList />} />
           <Route path="/blank" element={<Blank />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/project-details/:projectId" element={<ProjectDetails />} />
@@ -139,8 +172,6 @@ root.render(
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/transactions" element={<Transactions />} />
-          <Route path="/auto-reply" element={<AutoReply />} />
-          <Route path="/flow" element={<Flow />} />
           <Route path="/my-profile" element={<MyProfile />} />
           <Route path="/change-password" element={<ChangePassword />} />
           <Route path="/wallet-recharge" element={<WalletRecharge />} />
