@@ -685,3 +685,86 @@ export const changePassword = async ({ old_password, new_password }) => {
   const response = await axios.request(config);
   return response.data;
 };
+
+// Get subscription packs
+export const getSubscriptionPacks = async () => {
+  const getUserData = () => {
+    try {
+      const userData = localStorage.getItem('userData');
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      console.error('Error parsing userData from localStorage:', error);
+      return null;
+    }
+  };
+
+  const userData = getUserData();
+  const token = userData?.token;
+  const username = userData?.username;
+
+  if (!token || !username) {
+    throw new Error('Session expired');
+  }
+
+  const config = {
+    method: 'get',
+    maxBodyLength: Infinity,
+    url: 'https://api.w1chat.com/payment/subscription/packs',
+    headers: {
+      'Content-Type': 'application/json',
+      'token': token,
+      'username': username
+    }
+  };
+
+  const response = await axios.request(config);
+  return response.data;
+};
+
+// Get total unread message count
+export const getTotalUnreadCount = async ({ project_id }) => {
+  const getUserData = () => {
+    try {
+      const userData = localStorage.getItem('userData');
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      console.error('Error parsing userData from localStorage:', error);
+      return null;
+    }
+  };
+
+  const userData = getUserData();
+  const token = userData?.token;
+  const username = userData?.username;
+
+  if (!token || !username) {
+    throw new Error('Session expired');
+  }
+
+  const payload = {
+    project_id
+  };
+
+  // Encrypt the payload
+  const { data, key } = Encrypt(payload);
+
+  const data_pass = JSON.stringify({
+    data,
+    key
+  });
+
+  const config = {
+    method: 'post',
+    maxBodyLength: Infinity,
+    url: 'https://api.w1chat.com/message/total-unread-count',
+    headers: {
+      'Content-Type': 'application/json',
+      'token': token,
+      'username': username
+    },
+    data: data_pass
+  };
+
+  const response = await axios.request(config);
+  return response.data;
+};

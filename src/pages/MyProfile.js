@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
 import { fetchUserProfile, updateUserProfile } from '../api/auth';
+import toast from 'react-hot-toast';
 import {
     FiUser,
     FiMail,
@@ -143,13 +144,13 @@ const MyProfile = () => {
                         gender: profileData.gender || prev.gender
                     }));
                 }
-                alert('Profile updated successfully');
+                toast.success('Profile updated successfully');
             } else {
-                alert(response?.message || 'Failed to update profile');
+                toast.error(response?.message || 'Failed to update profile');
             }
         } catch (error) {
             console.error('Error updating profile:', error);
-            alert('Error updating profile. Please try again.');
+            toast.error('Error updating profile. Please try again.');
         } finally {
             setSaving(false);
         }
@@ -159,22 +160,22 @@ const MyProfile = () => {
         e.preventDefault();
 
         if (!security.currentPassword || !security.newPassword || !security.confirmPassword) {
-            alert('Please fill in all password fields');
+            toast.error('Please fill in all password fields');
             return;
         }
 
         if (security.newPassword.length < 8) {
-            alert('New password should be at least 8 characters');
+            toast.error('New password should be at least 8 characters');
             return;
         }
 
         if (security.newPassword !== security.confirmPassword) {
-            alert('New password and confirmation do not match');
+            toast.error('New password and confirmation do not match');
             return;
         }
 
         // Here you would call your API to change the password securely.
-        alert('Password updated (demo only – connect to backend API)');
+        toast.success('Password updated (demo only – connect to backend API)');
         setSecurity({
             currentPassword: '',
             newPassword: '',

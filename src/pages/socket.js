@@ -103,10 +103,19 @@ class SocketManager {
         this.messageCallbacks = [];
         this.chatUpdateCallbacks = [];
         this.assignmentCallbacks = [];
+        this.unreadCountCallbacks = [];
     }
 
     connect(token, username) {
         try {
+            // If socket already exists, just return (listeners are set up once below)
+            if (this.socket) {
+                console.log("🔄 Socket already exists, reusing connection");
+                return;
+            }
+
+            console.log("🔌 Creating new socket connection...");
+
             this.socket = io("https://api.w1chat.com", {
                 transports: ["polling"],
                 auth: {
@@ -145,6 +154,18 @@ class SocketManager {
             this.socket.on("chat_assigned", async (data) => {
                 console.log("📌 chat_assigned socket event:", data);
                 this.assignmentCallbacks.forEach(callback => callback(data));
+            });
+
+            // Listen for total unread count updates (GLOBAL - set up once)
+            this.socket.on("total_unread_count", (data) => {
+                console.log("📬 Unread count update received:", data);
+                this.unreadCountCallbacks.forEach(callback => {
+                    try {
+                        callback(data);
+                    } catch (err) {
+                        console.error("Error in unread count callback:", err);
+                    }
+                });
             });
 
             this.socket.on("connect_error", (error) => {
@@ -248,7 +269,6 @@ class SocketManager {
                 status: messageData.message.status || '',
                 id: messageData.message.id || '',
 
-                // ✅ Nested send_by fields with safe checks
                 send_by_username: messageData.message.send_by?.username || '',
                 send_by_name: messageData.message.send_by?.name || '',
                 send_by_mobile: messageData.message.send_by?.mobile || '',
@@ -258,7 +278,6 @@ class SocketManager {
 
                 is_read: messageData.message.is_read || false,
 
-                // ✅ Nested read_by fields with safe checks
                 read_by_username: messageData.message.read_by?.username || '',
                 read_by_name: messageData.message.read_by?.name || '',
                 read_by_mobile: messageData.message.read_by?.mobile || '',
@@ -385,6 +404,13 @@ class SocketManager {
         };
     }
 
+    onUnreadCount(callback) {
+        this.unreadCountCallbacks.push(callback);
+        return () => {
+            this.unreadCountCallbacks = this.unreadCountCallbacks.filter(cb => cb !== callback);
+        };
+    }
+
     disconnect() {
         if (this.socket) {
             this.socket.disconnect();
@@ -392,7 +418,7 @@ class SocketManager {
         }
     }
 
-    isConnected() {
+    getConnectionStatus() {
         return this.isConnected;
     }
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   FiMenu, FiBriefcase, FiChevronDown, FiCreditCard,
@@ -12,9 +12,10 @@ import {
 // Adjust these import paths if necessary
 import { fetchProjectInfo } from '../store/projectSlice';
 import { setSelectedProjectId, setAuthData } from '../store/authSlice';
-import { fetchUserProfile } from '../api/auth';
+import { fetchUserProfile, getTotalUnreadCount } from '../api/auth';
 import SwitchProjectModal from './Modals/SwitchProjectModal';
 import { dbHelper } from '../pages/db';
+import { socketManager } from '../pages/socket';
 
 // ==========================================
 // 1. Constants & Styles (Modern Indigo Theme)
@@ -67,13 +68,14 @@ const isSubmenuItemActive = (submenuPath, currentPath) => {
 // ==========================================
 // 3. NavItem Component (MOVED OUTSIDE)
 // ==========================================
-const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubmenus, toggleSubmenu, setHoveredMenu, hoveredMenu, setMobileMenuOpen, hasProjects, unreadCount, navigate }) => {
+const NavItem = React.memo(({ item, isMobile, isMinimized, isHovered, currentPath, openSubmenus, toggleSubmenu, setHoveredMenu, hoveredMenu, setMobileMenuOpen, hasProjects, unreadCount, navigate }) => {
   const isActive = isItemActive(item, currentPath);
   const isDisabled = requiresProject(item) && !hasProjects;
   const hasSubmenu = item.submenus && item.submenus.length > 0;
   const isOpen = isMobile ? openSubmenus[`mobile-${item.key}`] : openSubmenus[item.key];
   const isMini = !isMobile && isMinimized && !isHovered;
   const showUnreadBadge = item.key === 'live-chat' && unreadCount > 0;
+
 
   // Render Submenu Item (Parent)
   if (hasSubmenu) {
@@ -193,7 +195,9 @@ const NavItem = ({ item, isMobile, isMinimized, isHovered, currentPath, openSubm
       </div>
     </div>
   );
-};
+});
+
+NavItem.displayName = 'NavItem';
 
 // ==========================================
 // 4. Header Component
@@ -442,16 +446,91 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
   );
 };
 
+// Global state for unread count (shared across all Sidebar instances)
+let globalUnreadCount = 0;
+let unreadCountListeners = [];
+let isSocketInitialized = false;
+let lastFetchTime = 0;
+const FETCH_COOLDOWN = 10000; // 10 seconds cooldown between fetches
+
+const notifyUnreadCountListeners = (count) => {
+  globalUnreadCount = count;
+  unreadCountListeners.forEach(listener => listener(count));
+};
+
 // ==========================================
 // 5. Sidebar Component
 // ==========================================
-export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized }) => {
+export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized, totalUnreadCount: propUnreadCount }) => {
   const [openSubmenus, setOpenSubmenus] = useState({});
   const [hoveredMenu, setHoveredMenu] = useState(null);
   const [isHovered, setIsHovered] = useState(false);
-  const [currentPath, setCurrentPath] = useState('');
-  const [totalUnreadCount, setTotalUnreadCount] = useState(0);
+  const [totalUnreadCount, setTotalUnreadCount] = useState(globalUnreadCount);
   const navigate = useNavigate();
+  const location = useLocation();
+  const currentPath = location.pathname;
+
+  // Initialize global socket connection and unread count management (once)
+  useEffect(() => {
+    // Register this component's state setter
+    const listenerId = setTotalUnreadCount;
+    unreadCountListeners.push(listenerId);
+
+    const userData = getUserData();
+    const token = userData?.token;
+    const username = userData?.username;
+    const selectedProjectId = userData?.selected_project_id;
+
+    // Only fetch if we haven't fetched recently
+    const shouldFetch = (Date.now() - lastFetchTime) > FETCH_COOLDOWN;
+
+    if (shouldFetch) {
+      // Fetch initial unread count from API (in background)
+      const fetchInitialUnreadCount = async () => {
+        if (!selectedProjectId) {
+          notifyUnreadCountListeners(0);
+          return;
+        }
+
+        try {
+          lastFetchTime = Date.now();
+          const response = await getTotalUnreadCount({ project_id: selectedProjectId });
+          if (!response.error && typeof response.count === 'number') {
+            notifyUnreadCountListeners(response.count);
+          }
+        } catch (error) {
+          console.error('❌ Failed to fetch unread count:', error);
+        }
+      };
+
+      fetchInitialUnreadCount();
+    } else {
+      // Use cached value
+      setTotalUnreadCount(globalUnreadCount);
+    }
+
+    // Initialize socket connection only once
+    if (!isSocketInitialized && token && username) {
+      isSocketInitialized = true;
+      
+      // Connect socket (singleton - will reuse if already exists)
+      socketManager.connect(token, username);
+
+      // Register global callback for unread count updates
+      socketManager.onUnreadCount((data) => {
+        if (data && typeof data.count === 'number') {
+          notifyUnreadCountListeners(data.count);
+        }
+      });
+    }
+
+    // Cleanup function
+    return () => {
+      // Remove this component's listener
+      unreadCountListeners = unreadCountListeners.filter(l => l !== listenerId);
+    };
+  }, []);
+
 
   // Check if user is the owner of the project
   const isOwner = useSelector((state) => state.project?.owned ?? true);
@@ -459,76 +538,6 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
   const userData = getUserData();
   const projectList = userData?.projects?.list || (Array.isArray(userData?.projects) ? userData.projects : []);
   const hasProjects = projectList.length > 0 || (userData?.projects?.project_count > 0);
-
-  useEffect(() => {
-    setCurrentPath(window.location.pathname);
-    const handleLocationChange = () => setCurrentPath(window.location.pathname);
-    window.addEventListener('popstate', handleLocationChange);
-    return () => window.removeEventListener('popstate', handleLocationChange);
-  }, []);
-
-  // Fetch and calculate total unread count
-  useEffect(() => {
-    const fetchUnreadCount = async () => {
-      try {
-        const userData = getUserData();
-        const selectedProjectId = userData?.selected_project_id;
-
-        if (!selectedProjectId) {
-          setTotalUnreadCount(0);
-          return;
-        }
-
-        // Initialize database if needed
-        try {
-          await dbHelper.init(selectedProjectId);
-        } catch (error) {
-          // Database might not be initialized yet, that's okay
-          setTotalUnreadCount(0);
-          return;
-        }
-
-        // Get chats from database
-        const chats = await dbHelper.getChats();
-
-        // Calculate total unread count
-        const totalUnread = chats.reduce((total, chat) => {
-          const unreadValueRaw = Number(chat.unread_count ?? 0);
-          const unreadCount = Number.isFinite(unreadValueRaw) ? Math.max(0, unreadValueRaw) : 0;
-          return total + unreadCount;
-        }, 0);
-
-        setTotalUnreadCount(totalUnread);
-      } catch (error) {
-        // Silently handle errors - database might not be available
-        setTotalUnreadCount(0);
-      }
-    };
-
-    fetchUnreadCount();
-
-    // Set up database change listener to update count when chats change
-    let unsubscribe;
-    try {
-      unsubscribe = dbHelper.setOnDataChange((table, operation, data) => {
-        if (table === 'chats') {
-          fetchUnreadCount();
-        }
-      });
-    } catch (error) {
-      // Listener setup might fail if DB not initialized, that's okay
-    }
-
-    // Poll for updates every 5 seconds as a fallback
-    const interval = setInterval(fetchUnreadCount, 5000);
-
-    return () => {
-      if (unsubscribe && typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
-      clearInterval(interval);
-    };
-  }, []);
 
   const toggleSubmenu = (menuKey) => {
     setOpenSubmenus(prev => ({ ...prev, [menuKey]: !prev[menuKey] }));

@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Header, Sidebar } from '../component/Menu';
 import toast from 'react-hot-toast';
-import { createPaymentOrder, checkPaymentStatus } from '../api/auth';
+import { createPaymentOrder, checkPaymentStatus, getSubscriptionPacks } from '../api/auth';
 import QRCode from 'react-qr-code';
 
 function MyPlan() {
@@ -16,12 +16,14 @@ function MyPlan() {
         const saved = localStorage.getItem('sidebarMinimized');
         return saved ? JSON.parse(saved) : false;
     });
+    const [basePlan, setBasePlan] = useState(null);
     const [addons, setAddons] = useState([]);
     const [purchasedAddons, setPurchasedAddons] = useState([]);
     const [selectedAddons, setSelectedAddons] = useState([]);
     const [expandedAddons, setExpandedAddons] = useState([]);
     const [billingCycle, setBillingCycle] = useState('monthly');
     const [loading, setLoading] = useState(true);
+    const [allPacks, setAllPacks] = useState([]);
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
     const [processing, setProcessing] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -177,104 +179,150 @@ function MyPlan() {
         }
     }, []);
 
-    const basePlan = {
-        id: 1,
-        name: 'Basic Plan',
-        priceMonthly: 299,
-        priceYearly: 2999,
-        currency: 'INR',
-        features: [
-            '500 Contacts',
-            '30 Monthly Campaigns',
-            '5 Bot Replies',
-            '5 Bot Flows',
-            '5 Contact Custom Fields',
-            '5 Team Members/Agents',
-            'Basic Support'
-        ]
+    // Icon mapping for addons
+    const iconMap = {
+        'bot': FiZap,
+        'flow': FiGitBranch,
+        'api': FiCode,
+        'lead': FiTrendingUp,
+        'email': FiMail,
+        'ai': FiCpu,
+        'default': FiZap
+    };
+
+    // Get icon based on addon name or features
+    const getAddonIcon = (packName) => {
+        const name = packName.toLowerCase();
+        if (name.includes('bot') || name.includes('reply')) return iconMap.bot;
+        if (name.includes('flow') || name.includes('builder')) return iconMap.flow;
+        if (name.includes('api') || name.includes('webhook')) return iconMap.api;
+        if (name.includes('lead') || name.includes('management')) return iconMap.lead;
+        if (name.includes('email') || name.includes('campaign')) return iconMap.email;
+        if (name.includes('ai') || name.includes('chat')) return iconMap.ai;
+        return iconMap.default;
+    };
+
+    // Calculate discount percentage for yearly vs monthly plans
+    const calculateYearlyDiscount = () => {
+        if (!allPacks || allPacks.length === 0) return null;
+        
+        // Find monthly and yearly platform packs
+        const monthlyPlatform = allPacks.find(
+            pack => pack.pack_type === 'platform' && pack.billing_cycle === 'monthly'
+        );
+        const yearlyPlatform = allPacks.find(
+            pack => pack.pack_type === 'platform' && pack.billing_cycle === 'yearly'
+        );
+
+        if (!monthlyPlatform || !yearlyPlatform) return null;
+
+        // Calculate savings: (Monthly * 12 - Yearly) / (Monthly * 12) * 100
+        const monthlyAnnual = monthlyPlatform.amount * 12;
+        const yearlyCost = yearlyPlatform.amount;
+        const savings = monthlyAnnual - yearlyCost;
+        const discountPercent = Math.round((savings / monthlyAnnual) * 100);
+
+        return discountPercent > 0 ? discountPercent : null;
     };
 
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                const response = await getSubscriptionPacks();
+                
+                if (response.error) {
+                    throw new Error(response.msg || 'Failed to fetch subscription packs');
+                }
 
-                const mockAddons = [
-                    {
-                        id: 1,
-                        name: 'Bot Auto Reply',
-                        description: 'Automated responses for customer queries',
-                        priceMonthly: 149,
-                        priceYearly: 1499,
-                        currency: 'INR',
-                        icon: FiZap,
-                        features: ['Unlimited Auto Replies', 'Custom Response Templates', '24/7 Automation']
-                    },
-                    {
-                        id: 2,
-                        name: 'Flow Builder',
-                        description: 'Visual workflow automation builder',
-                        priceMonthly: 199,
-                        priceYearly: 1999,
-                        currency: 'INR',
-                        icon: FiGitBranch,
-                        features: ['Unlimited Bot Flows', 'Drag & Drop Builder', 'Advanced Logic']
-                    },
-                    {
-                        id: 3,
-                        name: 'API Access',
-                        description: 'Full API and webhook integration',
-                        priceMonthly: 249,
-                        priceYearly: 2499,
-                        currency: 'INR',
-                        icon: FiCode,
-                        features: ['REST API Access', 'Webhooks', 'Developer Documentation']
-                    },
-                    {
-                        id: 4,
-                        name: 'Lead Management',
-                        description: 'Advanced lead tracking and nurturing',
-                        priceMonthly: 179,
-                        priceYearly: 1799,
-                        currency: 'INR',
-                        icon: FiTrendingUp,
-                        features: ['Lead Scoring', 'Pipeline Management', 'Analytics Dashboard']
-                    },
-                    {
-                        id: 5,
-                        name: 'Email Campaigns',
-                        description: 'Unlimited email marketing campaigns',
-                        priceMonthly: 129,
-                        priceYearly: 1299,
-                        currency: 'INR',
-                        icon: FiMail,
-                        features: ['Unlimited Campaigns', 'Email Templates', 'A/B Testing']
-                    },
-                    {
-                        id: 6,
-                        name: 'AI Chat Bot',
-                        description: 'Intelligent AI-powered conversations',
-                        priceMonthly: 299,
-                        priceYearly: 2999,
-                        currency: 'INR',
-                        icon: FiCpu,
-                        features: ['Natural Language Processing', 'Smart Learning', 'Multi-language Support']
+                const packs = response.data || [];
+                
+                // Store all packs for discount calculation
+                setAllPacks(packs);
+                
+                // Filter packs by current billing cycle
+                const currentCyclePacks = packs.filter(pack => pack.billing_cycle === billingCycle);
+                
+                // Separate platform (base plan) and addons for current billing cycle
+                const platformPacks = currentCyclePacks.filter(pack => pack.pack_type === 'platform');
+                const addonPacks = currentCyclePacks.filter(pack => pack.pack_type === 'addon');
+
+                // Set base plan - use the first platform pack for current billing cycle
+                const currentPlatformPack = platformPacks[0];
+
+                if (currentPlatformPack) {
+                    // Transform features - handle both array and object formats
+                    let featuresList = [];
+                    if (Array.isArray(currentPlatformPack.features)) {
+                        featuresList = currentPlatformPack.features;
+                    } else if (typeof currentPlatformPack.features === 'object') {
+                        featuresList = Object.entries(currentPlatformPack.features).map(([key, value]) => {
+                            // Format feature text
+                            const formattedKey = key.split('_').map(word => 
+                                word.charAt(0).toUpperCase() + word.slice(1)
+                            ).join(' ');
+                            return `${value} ${formattedKey}`;
+                        });
                     }
-                ];
 
-                setAddons(mockAddons);
-                setPurchasedAddons([1, 6]);
-                setSelectedAddons([1, 6]);
+                    setBasePlan({
+                        id: currentPlatformPack.pack_id,
+                        name: currentPlatformPack.pack_name,
+                        price: currentPlatformPack.amount,
+                        currency: 'INR',
+                        billingCycle: currentPlatformPack.billing_cycle,
+                        description: currentPlatformPack.description,
+                        features: featuresList
+                    });
+                } else {
+                    setBasePlan(null);
+                }
+
+                // Transform addons for current billing cycle only
+                const transformedAddons = addonPacks.map((pack, index) => {
+                    // Transform features - handle both array and object formats
+                    let featuresList = [];
+                    if (Array.isArray(pack.features)) {
+                        featuresList = pack.features;
+                    } else if (typeof pack.features === 'object') {
+                        featuresList = Object.entries(pack.features).map(([key, value]) => {
+                            const formattedKey = key.split('_').map(word => 
+                                word.charAt(0).toUpperCase() + word.slice(1)
+                            ).join(' ');
+                            return `${value} ${formattedKey}`;
+                        });
+                    }
+
+                    return {
+                        id: index + 1,
+                        packId: pack.pack_id,
+                        name: pack.pack_name,
+                        description: pack.description || '',
+                        priceMonthly: billingCycle === 'monthly' ? pack.amount : 0,
+                        priceYearly: billingCycle === 'yearly' ? pack.amount : 0,
+                        currency: 'INR',
+                        icon: getAddonIcon(pack.pack_name),
+                        features: featuresList,
+                        billingCycle: pack.billing_cycle
+                    };
+                });
+
+                setAddons(transformedAddons);
+                
+                // TODO: Fetch user's purchased addons from API
+                // For now, using empty array - you'll need to add an API endpoint for this
+                setPurchasedAddons([]);
+                setSelectedAddons([]);
             } catch (error) {
-                console.error('Failed to fetch data:', error);
+                console.error('Failed to fetch subscription packs:', error);
+                toast.error(error.message || 'Failed to load subscription plans');
             } finally {
                 setLoading(false);
             }
         };
 
         fetchData();
-    }, []);
+    }, [billingCycle]);
 
     const handleAddonToggle = (addonId) => {
         setSelectedAddons(prev => {
@@ -306,7 +354,9 @@ function MyPlan() {
     };
 
     const calculateTotal = () => {
-        const basePrice = billingCycle === 'monthly' ? basePlan.priceMonthly : basePlan.priceYearly;
+        if (!basePlan) return 0;
+        
+        const basePrice = basePlan.price || 0;
         const addonsPrice = selectedAddons.reduce((sum, addonId) => {
             const addon = addons.find(a => a.id === addonId);
             if (addon) {
@@ -660,13 +710,15 @@ function MyPlan() {
                             }`}
                         >
                             Yearly
-                            <span className={`ml-1.5 sm:ml-2 text-xs px-1.5 py-0.5 rounded ${
-                                billingCycle === 'yearly' 
-                                    ? 'bg-green-500 text-white' 
-                                    : 'bg-green-50 text-green-700'
-                            }`}>
-                                -16%
-                            </span>
+                            {calculateYearlyDiscount() && (
+                                <span className={`ml-1.5 sm:ml-2 text-xs px-1.5 py-0.5 rounded ${
+                                    billingCycle === 'yearly' 
+                                        ? 'bg-green-500 text-white' 
+                                        : 'bg-green-50 text-green-700'
+                                }`}>
+                                    -{calculateYearlyDiscount()}%
+                                </span>
+                            )}
                         </button>
                     </div>
                 </div>
@@ -696,59 +748,64 @@ function MyPlan() {
                 ) : (
                     <>
                         {/* Base Plan Card */}
-                        <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 mb-6">
-                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
-                                <div className="flex-1">
-                                    <div className="inline-flex items-center px-2.5 py-0.5 bg-gray-100 rounded text-xs font-medium text-gray-700 mb-2">
-                                        Base Plan
+                        {basePlan && (
+                            <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 mb-6">
+                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+                                    <div className="flex-1">
+                                        <div className="inline-flex items-center px-2.5 py-0.5 bg-gray-100 rounded text-xs font-medium text-gray-700 mb-2">
+                                            Base Plan
+                                        </div>
+                                        <h2 className="text-base sm:text-lg font-semibold text-gray-900">{basePlan.name}</h2>
+                                        <p className="text-xs sm:text-sm text-gray-500 mt-1">{basePlan.description || 'Essential features to get started'}</p>
                                     </div>
-                                    <h2 className="text-base sm:text-lg font-semibold text-gray-900">{basePlan.name}</h2>
-                                    <p className="text-xs sm:text-sm text-gray-500 mt-1">Essential features to get started</p>
+                                    <div className="text-left sm:text-right">
+                                        <div className="text-xl sm:text-2xl font-bold text-gray-900">
+                                            ₹{basePlan.price?.toLocaleString()}
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                            per {billingCycle === 'monthly' ? 'month' : 'year'}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="text-left sm:text-right">
-                                    <div className="text-xl sm:text-2xl font-bold text-gray-900">
-                                        ₹{(billingCycle === 'monthly' ? basePlan.priceMonthly : basePlan.priceYearly).toLocaleString()}
-                                    </div>
-                                    <div className="text-xs text-gray-500">
-                                        per {billingCycle === 'monthly' ? 'month' : 'year'}
-                                    </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {basePlan.features.map((feature, index) => (
+                                        <div key={index} className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
+                                            <FiCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
+                                            {feature}
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                {basePlan.features.map((feature, index) => (
-                                    <div key={index} className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
-                                        <FiCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
-                                        {feature}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                        )}
 
                         {/* Add-ons List */}
-                        <div className="bg-white border border-gray-200 rounded-lg mb-6">
-                            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
-                                <h3 className="text-sm sm:text-base font-semibold text-gray-900">Available Add-ons</h3>
-                                <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Select additional features to enhance your plan</p>
+                        {addons.length > 0 && (
+                            <div className="bg-white border border-gray-200 rounded-lg mb-6">
+                                <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
+                                    <h3 className="text-sm sm:text-base font-semibold text-gray-900">Available Add-ons</h3>
+                                    <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Select additional features to enhance your plan</p>
+                                </div>
+                                <div className="px-3 sm:px-5">
+                                    {addons.map((addon) => (
+                                        <AddonListItem key={addon.id} addon={addon} />
+                                    ))}
+                                </div>
                             </div>
-                            <div className="px-3 sm:px-5">
-                                {addons.map((addon) => (
-                                    <AddonListItem key={addon.id} addon={addon} />
-                                ))}
-                            </div>
-                        </div>
+                        )}
 
                         {/* Payment Summary - Fixed on mobile, static on desktop */}
-                        <div ref={paymentSectionRef} className="fixed sm:static bottom-0 left-0 right-0 bg-gray-50 border-t sm:border sm:border-gray-200 sm:rounded-lg p-4 sm:p-6 shadow-lg sm:shadow-none z-10">
-                            <div className="flex flex-col gap-4">
-                                <div className="flex-1">
-                                    <h3 className="text-sm font-semibold text-gray-900 mb-3">Plan Summary</h3>
-                                    <div className="space-y-2 max-h-32 sm:max-h-none overflow-y-auto">
-                                        <div className="flex items-center justify-between text-xs sm:text-sm">
-                                            <span className="text-gray-600">Base Plan</span>
-                                            <span className="font-medium text-gray-900">
-                                                ₹{(billingCycle === 'monthly' ? basePlan.priceMonthly : basePlan.priceYearly).toLocaleString()}
-                                            </span>
-                                        </div>
+                        {basePlan && (
+                            <div ref={paymentSectionRef} className="fixed sm:static bottom-0 left-0 right-0 bg-gray-50 border-t sm:border sm:border-gray-200 sm:rounded-lg p-4 sm:p-6 shadow-lg sm:shadow-none z-10">
+                                <div className="flex flex-col gap-4">
+                                    <div className="flex-1">
+                                        <h3 className="text-sm font-semibold text-gray-900 mb-3">Plan Summary</h3>
+                                        <div className="space-y-2 max-h-32 sm:max-h-none overflow-y-auto">
+                                            <div className="flex items-center justify-between text-xs sm:text-sm">
+                                                <span className="text-gray-600">Base Plan</span>
+                                                <span className="font-medium text-gray-900">
+                                                    ₹{basePlan.price?.toLocaleString()}
+                                                </span>
+                                            </div>
                                         {selectedAddons.length > 0 && (
                                             <>
                                                 {selectedAddons.map(addonId => {
@@ -801,6 +858,7 @@ function MyPlan() {
                                 </div>
                             </div>
                         </div>
+                        )}
                     </>
                 )}
                 </div>
@@ -841,12 +899,14 @@ function MyPlan() {
                             <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
                                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Order Summary</h3>
                                 <div className="space-y-2">
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className="text-gray-600">Base Plan</span>
-                                        <span className="font-medium text-gray-900">
-                                            ₹{(billingCycle === 'monthly' ? basePlan.priceMonthly : basePlan.priceYearly).toLocaleString()}
-                                        </span>
-                                    </div>
+                                    {basePlan && (
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-gray-600">Base Plan</span>
+                                            <span className="font-medium text-gray-900">
+                                                ₹{basePlan.price?.toLocaleString()}
+                                            </span>
+                                        </div>
+                                    )}
                                     {selectedAddons.filter(id => !purchasedAddons.includes(id)).map(addonId => {
                                         const addon = addons.find(a => a.id === addonId);
                                         const price = billingCycle === 'monthly' ? addon.priceMonthly : addon.priceYearly;

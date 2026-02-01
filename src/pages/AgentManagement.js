@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header, Sidebar } from '../component/Menu';
 import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
     FiMessageSquare,
     FiMail,
@@ -264,7 +265,7 @@ function AgentManagement() {
             setPermissionOptions(arr)
 
         } catch (error) {
-            alert('Failed to load permission list');
+            toast.error('Failed to load permission list');
         }
     };
 
@@ -294,7 +295,7 @@ function AgentManagement() {
             console.log(res_data);
 
             if (res_data.error) {
-                alert(res_data.error);
+                toast.error(res_data.error);
             }
 
             if (res_data.data && res_data.count > 0) {
@@ -304,7 +305,7 @@ function AgentManagement() {
             setLoading(false);
 
         } catch (error) {
-            alert('Failed to load agent list');
+            toast.error('Failed to load agent list');
         }
     };
 
@@ -470,11 +471,12 @@ function AgentManagement() {
             }
 
             if (res_data?.msg) {
-                alert(res_data?.msg);
+                toast.success(res_data?.msg);
                 return null;
             }
         } catch (error) {
             console.log('Failed to delete agent:', error);
+            toast.error('Failed to delete agent. Please try again.');
         } finally {
             fetchAgents();
             setShowDeleteModal(false);
@@ -585,11 +587,13 @@ function AgentManagement() {
             }
 
             if (res_data.msg) {
+                toast.success(res_data.msg || 'Permission updated successfully');
                 fetchAgents();
             }
             return null;
         } catch (error) {
-            console.error('Failed to fetch agent by email:', error);
+            console.error('Failed to update permission:', error);
+            toast.error('Failed to update permission. Please try again.');
             throw error;
         } finally {
             setShowPermissionModal(false);
@@ -679,11 +683,11 @@ function AgentManagement() {
 
             const res_data = response.data;
             if (res_data?.error) {
-                alert(res_data?.error);
+                toast.error(res_data?.error);
             }
 
             if (res_data.msg) {
-                alert(res_data.msg);
+                toast.success(res_data.msg);
                 fetchAgents();
             }
 
@@ -696,6 +700,7 @@ function AgentManagement() {
             setFetchedAgent(null);
         } catch (error) {
             console.error('Failed to add agent:', error);
+            toast.error('Failed to add agent. Please try again.');
             setFormErrors({ general: 'Failed to add agent. Please try again.' });
         } finally {
             setAddingAgent(false);

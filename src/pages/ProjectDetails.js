@@ -150,12 +150,14 @@ const ProjectDetails = () => {
         // Validate file type
         if (!file.type.startsWith('image/')) {
             setError('Please select an image file');
+            toast.error('Please select an image file');
             return;
         }
 
         // Validate file size (e.g., 5MB limit)
         if (file.size > 5 * 1024 * 1024) {
             setError('Image size must be less than 5MB');
+            toast.error('Image size must be less than 5MB');
             return;
         }
 
@@ -170,7 +172,7 @@ const ProjectDetails = () => {
             const username = parsed?.username;
 
             if (!token || !username) {
-                throw new Error('Session expired ddd');
+                throw new Error('Session expired');
             }
 
             // Upload file first
@@ -204,10 +206,12 @@ const ProjectDetails = () => {
                 profile_picture_url: imageUrl
             }));
             setProfilePictureFile(file);
+            toast.success('Profile picture uploaded successfully');
 
         } catch (err) {
             console.error('Error uploading profile picture:', err);
             setError(err.message || 'Failed to upload profile picture');
+            toast.error(err.message || 'Failed to upload profile picture');
         } finally {
             setIsUploadingPicture(false);
         }
@@ -304,6 +308,7 @@ const ProjectDetails = () => {
             setProfilePictureFile(null);
             setIsEditing(false);
             setSuccessMessage('Profile updated successfully');
+            toast.success('WABA profile updated successfully');
 
             // Clear success message after 3 seconds
             setTimeout(() => setSuccessMessage(null), 5000);
@@ -311,6 +316,7 @@ const ProjectDetails = () => {
         } catch (err) {
             console.error('Error saving profile:', err);
             setError(err.message || 'Failed to save profile');
+            toast.error(err.message || 'Failed to save WABA profile');
         } finally {
             setIsSaving(false);
         }
