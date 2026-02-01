@@ -24,6 +24,7 @@ function MyPlan() {
     const [billingCycle, setBillingCycle] = useState('monthly');
     const [loading, setLoading] = useState(true);
     const [allPacks, setAllPacks] = useState([]);
+    const [activeSubscriptionsCount, setActiveSubscriptionsCount] = useState(0);
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
     const [processing, setProcessing] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -240,6 +241,9 @@ function MyPlan() {
                 // Store all packs for discount calculation
                 setAllPacks(packs);
                 
+                // Set active subscriptions count
+                setActiveSubscriptionsCount(response.active_subscriptions_count || 0);
+                
                 // Filter packs by current billing cycle
                 const currentCyclePacks = packs.filter(pack => pack.billing_cycle === billingCycle);
                 
@@ -272,7 +276,9 @@ function MyPlan() {
                         currency: 'INR',
                         billingCycle: currentPlatformPack.billing_cycle,
                         description: currentPlatformPack.description,
-                        features: featuresList
+                        features: featuresList,
+                        subscribed: currentPlatformPack.subscribed || false,
+                        activeSubscription: currentPlatformPack.active_subscription || null
                     });
                 } else {
                     setBasePlan(null);
@@ -303,16 +309,21 @@ function MyPlan() {
                         currency: 'INR',
                         icon: getAddonIcon(pack.pack_name),
                         features: featuresList,
-                        billingCycle: pack.billing_cycle
+                        billingCycle: pack.billing_cycle,
+                        subscribed: pack.subscribed || false,
+                        activeSubscription: pack.active_subscription || null
                     };
                 });
 
                 setAddons(transformedAddons);
                 
-                // TODO: Fetch user's purchased addons from API
-                // For now, using empty array - you'll need to add an API endpoint for this
-                setPurchasedAddons([]);
-                setSelectedAddons([]);
+                // Set purchased addons based on subscribed status
+                const subscribedAddonIds = transformedAddons
+                    .filter(addon => addon.subscribed)
+                    .map(addon => addon.id);
+                
+                setPurchasedAddons(subscribedAddonIds);
+                setSelectedAddons(subscribedAddonIds);
             } catch (error) {
                 console.error('Failed to fetch subscription packs:', error);
                 toast.error(error.message || 'Failed to load subscription plans');
@@ -356,10 +367,13 @@ function MyPlan() {
     const calculateTotal = () => {
         if (!basePlan) return 0;
         
-        const basePrice = basePlan.price || 0;
+        // Only include base plan price if not already subscribed
+        const basePrice = basePlan.subscribed ? 0 : (basePlan.price || 0);
+        
+        // Only calculate price for new (non-subscribed) addons
         const addonsPrice = selectedAddons.reduce((sum, addonId) => {
             const addon = addons.find(a => a.id === addonId);
-            if (addon) {
+            if (addon && !addon.subscribed) {
                 const price = billingCycle === 'monthly' ? addon.priceMonthly : addon.priceYearly;
                 return sum + price;
             }
@@ -450,7 +464,11 @@ function MyPlan() {
 
     // Initialize payment
     const initializePayment = async (methodId = null) => {
-        const newAddons = selectedAddons.filter(id => !purchasedAddons.includes(id));
+        const newAddons = selectedAddons.filter(id => {
+            const addon = addons.find(a => a.id === id);
+            return addon && !addon.subscribed;
+        });
+        
         if (newAddons.length === 0) {
             toast.error('No new addons to purchase');
             return;
@@ -581,26 +599,29 @@ function MyPlan() {
 
     const AddonListItem = ({ addon }) => {
         const isSelected = selectedAddons.includes(addon.id);
-        const isPurchased = purchasedAddons.includes(addon.id);
+        const isPurchased = addon.subscribed || false;
         const isExpanded = expandedAddons.includes(addon.id);
         const price = billingCycle === 'monthly' ? addon.priceMonthly : addon.priceYearly;
         const billingText = billingCycle === 'monthly' ? 'month' : 'year';
         const IconComponent = addon.icon;
 
         return (
-                            <div className="border-b border-gray-200 last:border-b-0">
+            <div className="border-b border-gray-200 last:border-b-0">
                 <div className="flex items-start gap-3 sm:gap-4 py-4 px-1 hover:bg-gray-50 transition-colors">
                     {/* Checkbox */}
                     <div className="flex-shrink-0 pt-0.5">
                         <button
                             onClick={() => handleAddonToggle(addon.id)}
+                            disabled={isPurchased}
                             className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
                                 isSelected 
                                     ? 'bg-indigo-600 border-indigo-600' 
+                                    : isPurchased
+                                    ? 'bg-green-100 border-green-300 cursor-not-allowed'
                                     : 'border-gray-300 hover:border-indigo-400'
                             }`}
                         >
-                            {isSelected && <FiCheck className="w-3 h-3 text-white" />}
+                            {(isSelected || isPurchased) && <FiCheck className={`w-3 h-3 ${isPurchased ? 'text-green-700' : 'text-white'}`} />}
                         </button>
                     </div>
 
@@ -625,6 +646,30 @@ function MyPlan() {
                                     )}
                                 </div>
                                 <p className="text-xs text-gray-500">{addon.description}</p>
+                                
+                                {/* Subscription Details */}
+                                {isPurchased && addon.activeSubscription && (
+                                    <div className="mt-2 flex flex-col gap-1 text-xs">
+                                        <div className="flex items-center gap-2 text-gray-600">
+                                            <span className="font-medium">
+                                                {addon.activeSubscription.auto_renew ? 'Renews on:' : 'Valid until:'}
+                                            </span>
+                                            <span className="text-gray-900 font-semibold">
+                                                {new Date(addon.activeSubscription.end_date).toLocaleDateString('en-US', {
+                                                    year: 'numeric',
+                                                    month: 'short',
+                                                    day: 'numeric'
+                                                })}
+                                            </span>
+                                        </div>
+                                        {addon.activeSubscription.auto_renew && (
+                                            <div className="flex items-center gap-1 text-green-600">
+                                                <FiRefreshCw className="w-3 h-3" />
+                                                <span>Auto-renewal enabled</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             
                             {/* Price and Expand Button */}
@@ -749,14 +794,52 @@ function MyPlan() {
                     <>
                         {/* Base Plan Card */}
                         {basePlan && (
-                            <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 mb-6">
+                            <div className={`bg-white border rounded-lg p-4 sm:p-6 mb-6 ${
+                                basePlan.subscribed 
+                                    ? 'border-green-300 bg-green-50/30' 
+                                    : 'border-gray-200'
+                            }`}>
                                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
                                     <div className="flex-1">
-                                        <div className="inline-flex items-center px-2.5 py-0.5 bg-gray-100 rounded text-xs font-medium text-gray-700 mb-2">
-                                            Base Plan
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="inline-flex items-center px-2.5 py-0.5 bg-gray-100 rounded text-xs font-medium text-gray-700">
+                                                Base Plan
+                                            </div>
+                                            {basePlan.subscribed && (
+                                                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
+                                                    <FiCheck className="w-3 h-3" />
+                                                    Active
+                                                </div>
+                                            )}
                                         </div>
                                         <h2 className="text-base sm:text-lg font-semibold text-gray-900">{basePlan.name}</h2>
                                         <p className="text-xs sm:text-sm text-gray-500 mt-1">{basePlan.description || 'Essential features to get started'}</p>
+                                        
+                                        {/* Subscription Details */}
+                                        {basePlan.subscribed && basePlan.activeSubscription && (
+                                            <div className="mt-3 pt-3 border-t border-gray-200">
+                                                <div className="flex flex-col gap-1 text-xs">
+                                                    <div className="flex items-center gap-2 text-gray-600">
+                                                        <span className="font-medium">
+                                                            {basePlan.activeSubscription.auto_renew ? 'Renews on:' : 'Valid until:'}
+                                                        </span>
+                                                        <span className="text-gray-900 font-semibold">
+                                                            {new Date(basePlan.activeSubscription.end_date).toLocaleDateString('en-US', {
+                                                                year: 'numeric',
+                                                                month: 'short',
+                                                                day: 'numeric'
+                                                            })}
+                                                        </span>
+                                                    </div>
+                                                    {basePlan.activeSubscription.auto_renew && (
+                                                        <div className="flex items-center gap-1 text-green-600">
+                                                            <FiRefreshCw className="w-3 h-3" />
+                                                            <span>Auto-renewal enabled</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="text-left sm:text-right">
                                         <div className="text-xl sm:text-2xl font-bold text-gray-900">
@@ -815,7 +898,7 @@ function MyPlan() {
                                                         <div key={addonId} className="flex items-center justify-between text-xs sm:text-sm">
                                                             <span className="flex items-center gap-1.5 sm:gap-2 text-gray-600">
                                                                 <span className="truncate">{addon.name}</span>
-                                                                {purchasedAddons.includes(addonId) && (
+                                                                {addon.subscribed && (
                                                                     <span className="flex-shrink-0 text-xs bg-green-50 text-green-700 px-1.5 py-0.5 rounded">Active</span>
                                                                 )}
                                                             </span>
@@ -836,25 +919,31 @@ function MyPlan() {
                                 </div>
                                 
                                 <div className="flex items-center justify-between sm:justify-end gap-3">
-                                    {selectedAddons.filter(id => !purchasedAddons.includes(id)).length > 0 ? (
-                                        <>
-                                            <p className="text-xs text-gray-500">
-                                                {selectedAddons.filter(id => !purchasedAddons.includes(id)).length} new add-on(s)
-                                            </p>
-                                            <button
-                                                onClick={() => setShowPaymentModal(true)}
-                                                className="inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-2.5 border border-transparent rounded-lg text-xs sm:text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors whitespace-nowrap"
-                                            >
-                                                <FiCreditCard className="mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                                Continue to Payment
-                                            </button>
-                                        </>
-                                    ) : (
-                                        <div className="w-full sm:w-auto inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium text-gray-600 bg-gray-200">
-                                            <FiCheck className="mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                            Current Plan
-                                        </div>
-                                    )}
+                                    {(() => {
+                                        const newAddons = selectedAddons.filter(id => {
+                                            const addon = addons.find(a => a.id === id);
+                                            return addon && !addon.subscribed;
+                                        });
+                                        return newAddons.length > 0 ? (
+                                            <>
+                                                <p className="text-xs text-gray-500">
+                                                    {newAddons.length} new add-on(s)
+                                                </p>
+                                                <button
+                                                    onClick={() => setShowPaymentModal(true)}
+                                                    className="inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-2.5 border border-transparent rounded-lg text-xs sm:text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors whitespace-nowrap"
+                                                >
+                                                    <FiCreditCard className="mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                                    Continue to Payment
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <div className="w-full sm:w-auto inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium text-gray-600 bg-gray-200">
+                                                <FiCheck className="mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                                Current Plan
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -907,7 +996,10 @@ function MyPlan() {
                                             </span>
                                         </div>
                                     )}
-                                    {selectedAddons.filter(id => !purchasedAddons.includes(id)).map(addonId => {
+                                    {selectedAddons.filter(id => {
+                                        const addon = addons.find(a => a.id === id);
+                                        return addon && !addon.subscribed;
+                                    }).map(addonId => {
                                         const addon = addons.find(a => a.id === addonId);
                                         const price = billingCycle === 'monthly' ? addon.priceMonthly : addon.priceYearly;
                                         return (
