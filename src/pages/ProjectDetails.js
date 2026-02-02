@@ -358,7 +358,7 @@ const ProjectDetails = () => {
     // const META_APP_ID = "665558946509856";
     // const META_CONFIG_ID = "1275572191131467";
     const META_APP_ID = "4269135816705946";
-    const META_CONFIG_ID = "4339693159509524";
+    const META_CONFIG_ID = "1432383791689294";
     const META_GRAPH_VER = "v24.0";
 
     // Initialize Facebook SDK
