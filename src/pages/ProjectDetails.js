@@ -355,8 +355,10 @@ const ProjectDetails = () => {
     };
 
     // Facebook Embedded Signup Configuration
-    const META_APP_ID = "665558946509856";
-    const META_CONFIG_ID = "1275572191131467";
+    // const META_APP_ID = "665558946509856";
+    // const META_CONFIG_ID = "1275572191131467";
+    const META_APP_ID = "4269135816705946";
+    const META_CONFIG_ID = "4339693159509524";
     const META_GRAPH_VER = "v24.0";
 
     // Initialize Facebook SDK
@@ -630,7 +632,8 @@ const ProjectDetails = () => {
                 override_default_response_type: true,
                 extras: {
                     setup: {
-                        solutionID: '1369066807875953'
+                        // solutionID: '1369066807875953'
+                        solutionID: '887791134017383'
                     },
                     featureType: "whatsapp_business_app_onboarding",
                     sessionInfoVersion: "3",
@@ -1213,15 +1216,15 @@ const ProjectDetails = () => {
                         <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/30 rounded-full">
                             <FiAlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
                         </div>
-                        
+
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white text-center mb-2">
                             Connection Failed
                         </h3>
-                        
+
                         <p className="text-sm text-gray-600 dark:text-gray-400 text-center mb-6">
                             {errorModalMessage}
                         </p>
-                        
+
                         <div className="space-y-3">
                             <button
                                 onClick={() => {
@@ -1233,7 +1236,7 @@ const ProjectDetails = () => {
                                 <FiArrowLeft />
                                 Go to All Projects
                             </button>
-                            
+
                             <button
                                 onClick={() => {
                                     setShowErrorModal(false);
@@ -1244,7 +1247,7 @@ const ProjectDetails = () => {
                                 Try Again
                             </button>
                         </div>
-                        
+
                         {debugLogs.length > 0 && (
                             <button
                                 onClick={() => setShowDebugPanel(true)}
