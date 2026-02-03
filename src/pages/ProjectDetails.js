@@ -355,10 +355,8 @@ const ProjectDetails = () => {
     };
 
     // Facebook Embedded Signup Configuration
-    // const META_APP_ID = "665558946509856";
-    // const META_CONFIG_ID = "1275572191131467";
-    const META_APP_ID = "4269135816705946";
-    const META_CONFIG_ID = "1432383791689294";
+    const META_APP_ID = "665558946509856";
+    const META_CONFIG_ID = "1275572191131467";
     const META_GRAPH_VER = "v24.0";
 
     // Initialize Facebook SDK
@@ -632,7 +630,7 @@ const ProjectDetails = () => {
                 override_default_response_type: true,
                 extras: {
                     setup: {
-                        solutionID: '887791134017383'
+                        solutionID: '1369066807875953'
                     },
                     featureType: "whatsapp_business_app_onboarding",
                     sessionInfoVersion: "3",
@@ -641,7 +639,7 @@ const ProjectDetails = () => {
                             name: "marketing_messages_lite"
                         }
                     ],
-                    version: "v24.0"
+                    version: "v3"
                 }
             };
 
