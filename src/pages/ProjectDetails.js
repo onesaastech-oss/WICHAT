@@ -632,7 +632,6 @@ const ProjectDetails = () => {
                 override_default_response_type: true,
                 extras: {
                     setup: {
-                        // solutionID: '1369066807875953'
                         solutionID: '887791134017383'
                     },
                     featureType: "whatsapp_business_app_onboarding",
@@ -642,7 +641,7 @@ const ProjectDetails = () => {
                             name: "marketing_messages_lite"
                         }
                     ],
-                    version: "v3"
+                    version: "v24.0"
                 }
             };
 
