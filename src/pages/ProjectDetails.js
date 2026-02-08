@@ -35,6 +35,8 @@ const ProjectDetails = () => {
     const [showDebugPanel, setShowDebugPanel] = useState(false); // Toggle debug panel
     const [showErrorModal, setShowErrorModal] = useState(false); // Error modal state
     const [errorModalMessage, setErrorModalMessage] = useState(''); // Error modal message
+    const [countdownSeconds, setCountdownSeconds] = useState(0); // Countdown timer state
+    const countdownIntervalRef = useRef(null); // Countdown interval reference
 
     // --- Editing State ---
     const [isEditing, setIsEditing] = useState(false);
@@ -86,11 +88,14 @@ const ProjectDetails = () => {
         fetchData();
     }, [projectId]);
 
-    // Cleanup interval on unmount
+    // Cleanup intervals on unmount
     useEffect(() => {
         return () => {
             if (syncIntervalRef.current) {
                 clearInterval(syncIntervalRef.current);
+            }
+            if (countdownIntervalRef.current) {
+                clearInterval(countdownIntervalRef.current);
             }
         };
     }, []);
@@ -487,7 +492,32 @@ const ProjectDetails = () => {
                 };
 
                 addDebugLog('Payload before encryption', submitPayload);
-                addDebugLog('Calling submitWabaId API with encryption...');
+                addDebugLog('Starting 1-minute countdown before calling submitWabaId API...');
+
+                // Start countdown timer (60 seconds)
+                setCountdownSeconds(60);
+                setIsSyncing(true);
+                setIsLoadingSignupLink(false);
+
+                // Wait for countdown to complete
+                await new Promise((resolve) => {
+                    let remainingSeconds = 60;
+                    countdownIntervalRef.current = setInterval(() => {
+                        remainingSeconds--;
+                        setCountdownSeconds(remainingSeconds);
+
+                        if (remainingSeconds <= 0) {
+                            if (countdownIntervalRef.current) {
+                                clearInterval(countdownIntervalRef.current);
+                                countdownIntervalRef.current = null;
+                            }
+                            setCountdownSeconds(0);
+                            resolve();
+                        }
+                    }, 1000);
+                });
+
+                addDebugLog('Countdown completed. Calling submitWabaId API with encryption...');
 
                 // Submit WABA ID to backend with encryption
                 const wabaResponse = await submitWabaId(submitPayload);
@@ -599,6 +629,12 @@ const ProjectDetails = () => {
             toast.error(errorMessage);
             setIsLoadingSignupLink(false);
             setIsSyncing(false);
+            // Clear countdown if it's running
+            if (countdownIntervalRef.current) {
+                clearInterval(countdownIntervalRef.current);
+                countdownIntervalRef.current = null;
+            }
+            setCountdownSeconds(0);
             // Clear the stored WABA ID on error
             wabaIdRef.current = null;
         }
@@ -795,15 +831,55 @@ const ProjectDetails = () => {
 
                                     {isSyncing ? (
                                         <div className="flex flex-col items-center gap-3">
-                                            <button
-                                                disabled
-                                                className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg disabled:opacity-100"
-                                            >
-                                                <div className="animate-spin rounded-full h-8 w-8 border-2 border-white border-t-transparent"></div>
-                                            </button>
-                                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                Updating/Syncing...
-                                            </p>
+                                            {countdownSeconds > 0 ? (
+                                                <>
+                                                    <div className="relative w-20 h-20 flex items-center justify-center">
+                                                        <svg className="transform -rotate-90 w-20 h-20">
+                                                            <circle
+                                                                cx="40"
+                                                                cy="40"
+                                                                r="36"
+                                                                stroke="currentColor"
+                                                                strokeWidth="4"
+                                                                fill="none"
+                                                                className="text-gray-200 dark:text-gray-700"
+                                                            />
+                                                            <circle
+                                                                cx="40"
+                                                                cy="40"
+                                                                r="36"
+                                                                stroke="currentColor"
+                                                                strokeWidth="4"
+                                                                fill="none"
+                                                                strokeDasharray={`${2 * Math.PI * 36}`}
+                                                                strokeDashoffset={`${2 * Math.PI * 36 * (1 - (60 - countdownSeconds) / 60)}`}
+                                                                className="text-indigo-600 dark:text-indigo-400 transition-all duration-1000"
+                                                                strokeLinecap="round"
+                                                            />
+                                                        </svg>
+                                                        <div className="absolute inset-0 flex items-center justify-center">
+                                                            <span className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                                                                {countdownSeconds}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                        Waiting before submission... {countdownSeconds}s
+                                                    </p>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <button
+                                                        disabled
+                                                        className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg disabled:opacity-100"
+                                                    >
+                                                        <div className="animate-spin rounded-full h-8 w-8 border-2 border-white border-t-transparent"></div>
+                                                    </button>
+                                                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                        Updating/Syncing...
+                                                    </p>
+                                                </>
+                                            )}
                                         </div>
                                     ) : showManualRefresh ? (
                                         <div className="flex flex-col items-center gap-3">
