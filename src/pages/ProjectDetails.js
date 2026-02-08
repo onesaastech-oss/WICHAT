@@ -409,7 +409,7 @@ const ProjectDetails = () => {
                         addDebugLog('WA_EMBEDDED_SIGNUP event received', data);
 
                         // Handle different events
-                        if (data.event === 'FINISH') {
+                        if (data.event === 'FINISH' || data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
                             addDebugLog('Signup completed successfully', data.data);
                             // Store WABA ID from the event
                             if (data.data && data.data.waba_id) {
@@ -473,17 +473,27 @@ const ProjectDetails = () => {
                 addDebugLog('Authorization code received', { code: code.substring(0, 20) + '...' });
 
                 // Check if we have the WABA ID from the message event
-                const wabaId = wabaIdRef.current;
-                if (!wabaId) {
-                    addDebugLog('WABA ID not yet received, waiting 2 seconds...');
-                    // Give it a moment for the event to arrive
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-
-                    if (!wabaIdRef.current) {
-                        addDebugLog('ERROR: WABA ID still not received after waiting');
-                        throw new Error('WABA ID not received. The signup may not have completed successfully. Please try again.');
+                // Wait for the WABA ID with polling (up to 5 seconds)
+                let attempts = 0;
+                const maxAttempts = 10; // 10 attempts * 500ms = 5 seconds max wait
+                while (!wabaIdRef.current && attempts < maxAttempts) {
+                    if (attempts === 0) {
+                        addDebugLog('WABA ID not yet received, waiting for event...');
                     }
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    attempts++;
                 }
+
+                if (!wabaIdRef.current) {
+                    addDebugLog('ERROR: WABA ID still not received after waiting', {
+                        attempts,
+                        maxAttempts,
+                        waitedSeconds: attempts * 0.5
+                    });
+                    throw new Error('WABA ID not received. The signup may not have completed successfully. Please try again.');
+                }
+
+                addDebugLog('WABA ID received successfully', { waba_id: wabaIdRef.current });
 
                 // Prepare payload
                 const submitPayload = {
