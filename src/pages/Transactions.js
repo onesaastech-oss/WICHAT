@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Header, Sidebar } from '../component/Menu';
-import { FiDownload, FiFileText, FiCalendar, FiDollarSign, FiRefreshCw } from 'react-icons/fi';
+import { 
+  FiDownload, FiFileText, FiCalendar, FiDollarSign, 
+  FiRefreshCw, FiX, FiUser, FiCreditCard, FiHash, 
+  FiMail, FiPhone, FiCalendar as FiCalendarIcon, 
+  FiMessageSquare, FiCopy 
+} from 'react-icons/fi';
 import moment from 'moment';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -10,6 +15,7 @@ import Pagination from '../component/Pagination';
 import DateRangePicker from '../component/DateRangePicker';
 import MultiSelect from '../component/MultiSelect';
 // import logo from "../../public/logo-main.png";
+
 const Transactions = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(() => {
@@ -26,11 +32,16 @@ const Transactions = () => {
   const [totalRecords, setTotalRecords] = useState(0);
   const [totalCredit, setTotalCredit] = useState(0);
   const [totalDebit, setTotalDebit] = useState(0);
+  // Modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  // Copy feedback state
+  const [copiedField, setCopiedField] = useState(null);
 
   // Server-side filters (payload options)
   const [fromDate, setFromDate] = useState(() => moment().subtract(30, 'days').format('YYYY-MM-DD'));
   const [toDate, setToDate] = useState(() => moment().format('YYYY-MM-DD'));
-  const [transactionType, setTransactionType] = useState('all'); // template send | wallet topup | project renewal | all
+  const [transactionType, setTransactionType] = useState('all'); // template send | wallet topup | project renewal | project create | all
   const [entryType, setEntryType] = useState('all'); // Credit=1, Debit=0, all
   const [selectedProjects, setSelectedProjects] = useState([]); // Array of project_ids, empty array = all projects
 
@@ -95,9 +106,6 @@ const Transactions = () => {
         ...(effectiveTransactionType !== 'all' ? { transaction_type: effectiveTransactionType } : {}),
         ...(effectiveEntryType !== 'all' ? { type: effectiveEntryType } : {})
       };
-
-
-
 
       console.log('📤 Fetching transactions:', payload);
 
@@ -193,251 +201,260 @@ const Transactions = () => {
   }));
 
   // Generate PDF Invoice
-// ============= PDF GENERATION – FAST & PERFECTLY ALIGNED =============
-const generatePDF = async (transaction) => {
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4'
-  });
-
-  // --- ULTRA-FAST LOGO LOAD (0ms timeout – if not ready, skip) ---
-  const getLogoFast = () => {
-    return new Promise((resolve) => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 0); // abort immediately if not cached
-      const logoUrl = `${window.location.origin}/1Chatting%20Logo%20PNG.png`;
-      fetch(logoUrl, { signal: controller.signal, cache: 'force-cache' })
-        .then(res => res.blob())
-        .then(blob => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = () => resolve(null);
-          reader.readAsDataURL(blob);
-        })
-        .catch(() => resolve(null))
-        .finally(() => clearTimeout(timeout));
+  const generatePDF = async (transaction) => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
     });
+
+    // --- ULTRA-FAST LOGO LOAD (0ms timeout – if not ready, skip) ---
+    const getLogoFast = () => {
+      return new Promise((resolve) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 0); // abort immediately if not cached
+        const logoUrl = `${window.location.origin}/1Chatting%20Logo%20PNG.png`;
+        fetch(logoUrl, { signal: controller.signal, cache: 'force-cache' })
+          .then(res => res.blob())
+          .then(blob => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          })
+          .catch(() => resolve(null))
+          .finally(() => clearTimeout(timeout));
+      });
+    };
+
+    const logoBase64 = await getLogoFast();
+
+    // --- HEADER: Logo on RIGHT (bigger), Title on LEFT ---
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(31, 41, 55);
+    doc.text('1Chat Transaction Receipt', 15, 20);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text('WhatsApp Business API Platform', 15, 27);
+    doc.text('support@1chat.com  |  www.1chat.com', 15, 32);
+
+    if (logoBase64) {
+      const logoWidth = 55;
+      const logoHeight = 20;
+      doc.addImage(logoBase64, 'PNG', 195 - logoWidth, 6, logoWidth, logoHeight);
+    }
+
+    doc.setDrawColor(99, 102, 241);
+    doc.setLineWidth(0.5);
+    doc.line(15, 42, 195, 42);
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(79, 70, 229);
+    doc.text('TRANSACTION RECEIPT', 105, 52, { align: 'center' });
+
+    const overviewRows = [
+      ['Transaction ID:', transaction.id || 'N/A'],
+      ['Date:', moment(transaction.date).format('MMMM DD, YYYY HH:mm')],
+      ['Type:', transaction.type],
+      ['Transaction Type:', getTransactionTypeDisplay(transaction.description)]
+    ];
+
+    autoTable(doc, {
+      startY: 62,
+      body: overviewRows,
+      theme: 'plain',
+      styles: {
+        fontSize: 10,
+        cellPadding: 2.5,
+        textColor: [31, 41, 55],
+        fontStyle: 'normal',
+        valign: 'middle'
+      },
+      columnStyles: {
+        0: { fontStyle: 'bold', textColor: [107, 114, 128], cellWidth: 45, halign: 'left' },
+        1: { cellWidth: 130, halign: 'left' }
+      },
+      margin: { left: 15, right: 15 },
+      tableWidth: 'auto'
+    });
+
+    let finalY = doc.lastAutoTable.finalY + 12;
+
+    if (transaction.message_details) {
+      const md = transaction.message_details;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(99, 102, 241);
+      doc.text('Message Details', 15, finalY);
+
+      doc.setDrawColor(209, 213, 219);
+      doc.line(15, finalY + 2, 195, finalY + 2);
+
+      const details = [
+        ['Unique ID:', md.unique_id || md.message_details_id || 'N/A'],
+        ['WAMID:', md.wamid || 'N/A'],
+        ['Project ID:', md.project_id || 'N/A'],
+        ['Message By:', md.message_by || 'N/A'],
+        ['Number:', md.number || 'N/A'],
+        ['Template Name:', md.template_name || 'N/A'],
+        ['Language:', md.language_code || 'N/A'],
+        ['Category:', md.category || 'N/A'],
+        ['Message Date:', md.create_date ? moment(md.create_date).format('MMMM DD, YYYY HH:mm') : 'N/A']
+      ];
+
+      autoTable(doc, {
+        startY: finalY + 5,
+        body: details,
+        theme: 'plain',
+        styles: {
+          fontSize: 9,
+          cellPadding: 2,
+          textColor: [31, 41, 55],
+          valign: 'middle'
+        },
+        columnStyles: {
+          0: { fontStyle: 'bold', textColor: [107, 114, 128], cellWidth: 35, halign: 'left' },
+          1: { cellWidth: 140, halign: 'left' }
+        },
+        margin: { left: 15, right: 15 },
+        tableWidth: 'auto'
+      });
+      finalY = doc.lastAutoTable.finalY + 12;
+    }
+
+    if (transaction.payment_details) {
+      const pd = transaction.payment_details;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(99, 102, 241);
+      doc.text('Payment Details', 15, finalY);
+
+      doc.setDrawColor(209, 213, 219);
+      doc.line(15, finalY + 2, 195, finalY + 2);
+
+      const details = [
+        ['Payment ID:', pd.payment_id || 'N/A'],
+        ['UTR:', pd.utr || 'N/A'],
+        ['Name:', pd.name || 'N/A'],
+        ['Email:', pd.email || 'N/A'],
+        ['Mobile:', pd.mobile || 'N/A'],
+        ['Payment Date:', pd.create_date ? moment(pd.create_date).format('MMMM DD, YYYY HH:mm') : 'N/A']
+      ];
+
+      autoTable(doc, {
+        startY: finalY + 5,
+        body: details,
+        theme: 'plain',
+        styles: {
+          fontSize: 9,
+          cellPadding: 2,
+          textColor: [31, 41, 55],
+          valign: 'middle'
+        },
+        columnStyles: {
+          0: { fontStyle: 'bold', textColor: [107, 114, 128], cellWidth: 35, halign: 'left' },
+          1: { cellWidth: 140, halign: 'left' }
+        },
+        margin: { left: 15, right: 15 },
+        tableWidth: 'auto'
+      });
+      finalY = doc.lastAutoTable.finalY + 12;
+    }
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(99, 102, 241);
+    doc.text('Transaction Details', 15, finalY);
+
+    doc.setDrawColor(209, 213, 219);
+    doc.line(15, finalY + 2, 195, finalY + 2);
+
+    const lineData = [
+      [
+        getTransactionTypeDisplay(transaction.description),
+        transaction.type,
+        `₹${transaction.amount.toFixed(2)}`,
+        transaction.remark || 'N/A'
+      ]
+    ];
+
+    autoTable(doc, {
+      startY: finalY + 5,
+      head: [['Description', 'Type', 'Amount (₹)', 'Remark']],
+      body: lineData,
+      headStyles: {
+        fillColor: [99, 102, 241],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 10,
+        halign: 'center',
+        valign: 'middle'
+      },
+      styles: {
+        fontSize: 9,
+        cellPadding: 5,
+        halign: 'center',
+        valign: 'middle',
+        textColor: [31, 41, 55]
+      },
+      columnStyles: {
+        0: { halign: 'center' },
+        1: { halign: 'center' },
+        2: { halign: 'center' },
+        3: { halign: 'center' }
+      },
+      margin: { left: 15, right: 15 },
+      tableWidth: 'auto'
+    });
+
+    finalY = doc.lastAutoTable.finalY + 12;
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(31, 41, 55);
+    doc.text(`Total Amount: ₹${transaction.amount.toFixed(2)}`, 175, finalY, { align: 'right' });
+
+    const pageHeight = doc.internal.pageSize.height;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text('support@1chat.com  |  www.1chat.com', 105, pageHeight - 15, { align: 'center' });
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(156, 163, 175);
+    doc.text('This is a system generated receipt and does not require a signature.', 105, pageHeight - 8, { align: 'center' });
+
+    const fileName = `receipt_${transaction.id || 'transaction'}_${moment().format('YYYYMMDDHHmmss')}.pdf`;
+    doc.save(fileName);
   };
 
-  const logoBase64 = await getLogoFast();
+  // Modal handlers
+  const openDetailsModal = (transaction) => {
+    setSelectedTransaction(transaction);
+    setIsModalOpen(true);
+    document.body.style.overflow = 'hidden';
+  };
 
-  // --- HEADER: Logo on RIGHT (bigger), Title on LEFT ---
-  // Left aligned title
-  doc.setFontSize(22);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(31, 41, 55);
-  doc.text('1Chat Transaction Receipt', 15, 20);
+  const closeDetailsModal = () => {
+    setIsModalOpen(false);
+    setSelectedTransaction(null);
+    document.body.style.overflow = 'auto';
+  };
 
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(107, 114, 128);
-  doc.text('WhatsApp Business API Platform', 15, 27);
-  doc.text('support@1chat.com  |  www.1chat.com', 15, 32);
-
-  // Logo – significantly larger (55x20 mm) – still fits perfectly
-  if (logoBase64) {
-    const logoWidth = 55;
-    const logoHeight = 20;
-    doc.addImage(logoBase64, 'PNG', 195 - logoWidth, 6, logoWidth, logoHeight);
-  }
-
-  // --- Decorative line ---
-  doc.setDrawColor(99, 102, 241);
-  doc.setLineWidth(0.5);
-  doc.line(15, 42, 195, 42);
-
-  // --- Main title ---
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(79, 70, 229);
-  doc.text('TRANSACTION RECEIPT', 105, 52, { align: 'center' });
-
-  // --- TRANSACTION OVERVIEW – VERTICAL (line by line, clean) ---
-  // Each field on its own row – more readable and premium
-  const overviewRows = [
-    ['Transaction ID:', transaction.id || 'N/A'],
-    ['Date:', moment(transaction.date).format('MMMM DD, YYYY HH:mm')],
-    ['Type:', transaction.type],
-    ['Transaction Type:', getTransactionTypeDisplay(transaction.description)]
-  ];
-
-  autoTable(doc, {
-    startY: 62,
-    body: overviewRows,
-    theme: 'plain',
-    styles: {
-      fontSize: 10,
-      cellPadding: 2.5,
-      textColor: [31, 41, 55],
-      fontStyle: 'normal',
-      valign: 'middle'
-    },
-    columnStyles: {
-      0: { fontStyle: 'bold', textColor: [107, 114, 128], cellWidth: 45, halign: 'left' },
-      1: { cellWidth: 130, halign: 'left' }
-    },
-    margin: { left: 15, right: 15 },
-    tableWidth: 'auto'
-  });
-
-  let finalY = doc.lastAutoTable.finalY + 12; // generous gap
-
-  // --- MESSAGE DETAILS (if present) ---
-  if (transaction.message_details) {
-    const md = transaction.message_details;
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(99, 102, 241);
-    doc.text('Message Details', 15, finalY);
-
-    doc.setDrawColor(209, 213, 219);
-    doc.line(15, finalY + 2, 195, finalY + 2);
-
-    const details = [
-      ['Unique ID:', md.unique_id || md.message_details_id || 'N/A'],
-      ['WAMID:', md.wamid || 'N/A'],
-      ['Project ID:', md.project_id || 'N/A'],
-      ['Message By:', md.message_by || 'N/A'],
-      ['Number:', md.number || 'N/A'],
-      ['Template Name:', md.template_name || 'N/A'],
-      ['Language:', md.language_code || 'N/A'],
-      ['Category:', md.category || 'N/A'],
-      ['Message Date:', md.create_date ? moment(md.create_date).format('MMMM DD, YYYY HH:mm') : 'N/A']
-    ];
-
-    autoTable(doc, {
-      startY: finalY + 5,
-      body: details,
-      theme: 'plain',
-      styles: {
-        fontSize: 9,
-        cellPadding: 2,
-        textColor: [31, 41, 55],
-        valign: 'middle'
-      },
-      columnStyles: {
-        0: { fontStyle: 'bold', textColor: [107, 114, 128], cellWidth: 35, halign: 'left' },
-        1: { cellWidth: 140, halign: 'left' }
-      },
-      margin: { left: 15, right: 15 },
-      tableWidth: 'auto'
+  // Copy to clipboard function
+  const copyToClipboard = (text, field) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 1500);
+    }).catch(err => {
+      console.error('Failed to copy:', err);
     });
-    finalY = doc.lastAutoTable.finalY + 12;
-  }
-
-  // --- PAYMENT DETAILS (if present) ---
-  if (transaction.payment_details) {
-    const pd = transaction.payment_details;
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(99, 102, 241);
-    doc.text('Payment Details', 15, finalY);
-
-    doc.setDrawColor(209, 213, 219);
-    doc.line(15, finalY + 2, 195, finalY + 2);
-
-    const details = [
-      ['Payment ID:', pd.payment_id || 'N/A'],
-      ['UTR:', pd.utr || 'N/A'],
-      ['Name:', pd.name || 'N/A'],
-      ['Email:', pd.email || 'N/A'],
-      ['Mobile:', pd.mobile || 'N/A'],
-      ['Payment Date:', pd.create_date ? moment(pd.create_date).format('MMMM DD, YYYY HH:mm') : 'N/A']
-    ];
-
-    autoTable(doc, {
-      startY: finalY + 5,
-      body: details,
-      theme: 'plain',
-      styles: {
-        fontSize: 9,
-        cellPadding: 2,
-        textColor: [31, 41, 55],
-        valign: 'middle'
-      },
-      columnStyles: {
-        0: { fontStyle: 'bold', textColor: [107, 114, 128], cellWidth: 35, halign: 'left' },
-        1: { cellWidth: 140, halign: 'left' }
-      },
-      margin: { left: 15, right: 15 },
-      tableWidth: 'auto'
-    });
-    finalY = doc.lastAutoTable.finalY + 12;
-  }
-
-  // --- TRANSACTION DETAILS TABLE (FULLY CENTERED) ---
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(99, 102, 241);
-  doc.text('Transaction Details', 15, finalY);
-
-  doc.setDrawColor(209, 213, 219);
-  doc.line(15, finalY + 2, 195, finalY + 2);
-
-  const lineData = [
-    [
-      getTransactionTypeDisplay(transaction.description),
-      transaction.type,
-      `₹${transaction.amount.toFixed(2)}`,
-      transaction.remark || 'N/A'
-    ]
-  ];
-
-  autoTable(doc, {
-    startY: finalY + 5,
-    head: [['Description', 'Type', 'Amount (₹)', 'Remark']],
-    body: lineData,
-    headStyles: {
-      fillColor: [99, 102, 241],
-      textColor: [255, 255, 255],
-      fontStyle: 'bold',
-      fontSize: 10,
-      halign: 'center',
-      valign: 'middle'
-    },
-    styles: {
-      fontSize: 9,
-      cellPadding: 5,
-      halign: 'center',        // EVERYTHING CENTERED
-      valign: 'middle',
-      textColor: [31, 41, 55]
-    },
-    columnStyles: {
-      0: { halign: 'center' }, // Description centered
-      1: { halign: 'center' }, // Type centered
-      2: { halign: 'center' }, // Amount centered (rupee symbol inside value)
-      3: { halign: 'center' }  // Remark centered
-    },
-    margin: { left: 15, right: 15 },
-    tableWidth: 'auto'
-  });
-
-  finalY = doc.lastAutoTable.finalY + 12; // generous gap before total
-
-  // --- TOTAL AMOUNT – ALIGNED EXACTLY WITH TABLE RIGHT EDGE ---
-  // Table's right edge is at 195 (since margin left=15, right=15, width=180)
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(31, 41, 55);
-  doc.text(`Total Amount: ₹${transaction.amount.toFixed(2)}`, 175, finalY, { align: 'right' });
-
-  // --- FOOTER: CONTACT + SYSTEM GENERATED NOTE ---
-  const pageHeight = doc.internal.pageSize.height;
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(107, 114, 128);
-  doc.text('support@1chat.com  |  www.1chat.com', 105, pageHeight - 15, { align: 'center' });
-
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'italic');
-  doc.setTextColor(156, 163, 175);
-  doc.text('This is a system generated receipt and does not require a signature.', 105, pageHeight - 8, { align: 'center' });
-
-  // --- INSTANT SAVE ---
-  const fileName = `receipt_${transaction.id || 'transaction'}_${moment().format('YYYYMMDDHHmmss')}.pdf`;
-  doc.save(fileName);
-};
+  };
 
   const getTransactionTypeDisplay = (transactionType) => {
     return (transactionType || '').split(' ').map(word =>
@@ -488,7 +505,7 @@ const generatePDF = async (transaction) => {
   // Handle page size change
   const handlePageSizeChange = (newPageSize) => {
     setPageSize(newPageSize);
-    setCurrentPage(1); // Reset to first page when changing page size
+    setCurrentPage(1);
   };
 
   // Skeleton Loading Component for Desktop Table
@@ -497,7 +514,7 @@ const generatePDF = async (transaction) => {
       <table className="w-full">
         <thead className="bg-gray-50">
           <tr>
-            {[1, 2, 3, 4, 5, 6, 7].map((col) => (
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((col) => (
               <th key={col} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
               </th>
@@ -507,7 +524,7 @@ const generatePDF = async (transaction) => {
         <tbody className="bg-white divide-y divide-gray-200">
           {Array.from({ length: pageSize }).map((_, rowIndex) => (
             <tr key={rowIndex} className="hover:bg-gray-50">
-              {Array.from({ length: 7 }).map((_, colIndex) => (
+              {Array.from({ length: 8 }).map((_, colIndex) => (
                 <td key={colIndex} className="px-6 py-4 whitespace-nowrap">
                   <div className={`h-4 bg-gray-100 rounded animate-pulse ${
                     colIndex === 5 ? 'w-3/4' : 'w-full'
@@ -537,12 +554,10 @@ const generatePDF = async (transaction) => {
             <div className="h-4 bg-gray-100 rounded animate-pulse"></div>
             <div className="h-3 bg-gray-100 rounded animate-pulse w-2/3"></div>
           </div>
-          <div className="space-y-2 mb-4">
-            <div className="h-3 bg-gray-100 rounded animate-pulse"></div>
-            <div className="h-3 bg-gray-100 rounded animate-pulse w-5/6"></div>
-            <div className="h-3 bg-gray-100 rounded animate-pulse w-4/5"></div>
+          <div className="flex gap-2">
+            <div className="flex-1 h-10 bg-gray-100 rounded-lg animate-pulse"></div>
+            <div className="flex-1 h-10 bg-gray-100 rounded-lg animate-pulse"></div>
           </div>
-          <div className="h-10 bg-gray-100 rounded-lg animate-pulse"></div>
         </div>
       ))}
     </div>
@@ -566,6 +581,231 @@ const generatePDF = async (transaction) => {
       ))}
     </div>
   );
+
+  // ============= MODAL – VERTICAL LAYOUT, RECEIPT COLOR SCHEME, COPY BUTTONS =============
+  const TransactionDetailsModal = () => {
+    if (!selectedTransaction) return null;
+
+    const { payment_details, message_details, create_by, remark } = selectedTransaction;
+
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+          <div className="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity" onClick={closeDetailsModal}></div>
+          <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+          <div className="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl w-full">
+            {/* Header – indigo gradient (matches receipt header line) */}
+            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-indigo-600 to-indigo-700">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <FiFileText className="w-5 h-5" />
+                Transaction Details
+              </h3>
+              <button
+                onClick={closeDetailsModal}
+                className="text-white/80 hover:text-white transition-colors"
+              >
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body – clean, vertical layout with receipt color accents */}
+            <div className="px-6 py-5 max-h-[70vh] overflow-y-auto bg-white">
+              
+              {/* ----- BASIC INFO – LINE BY LINE (like receipt overview) ----- */}
+              <div className="mb-6">
+                <h4 className="text-md font-semibold text-indigo-600 mb-3 flex items-center gap-2 border-b border-indigo-200 pb-2">
+                  <FiFileText className="w-4 h-4" />
+                  Transaction Overview
+                </h4>
+                <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+                  {/* Transaction ID with copy */}
+                  <div className="flex flex-col sm:flex-row sm:items-start group">
+                    <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Transaction ID:</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-mono text-gray-900 break-all">{selectedTransaction.id}</span>
+                      <button
+                        onClick={() => copyToClipboard(selectedTransaction.id, 'transactionId')}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100 transition-colors"
+                      >
+                        <FiCopy className="w-3.5 h-3.5" />
+                        {copiedField === 'transactionId' ? 'Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-start">
+                    <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Date & Time:</span>
+                    <span className="text-sm text-gray-900">{moment(selectedTransaction.date).format('MMMM DD, YYYY hh:mm A')}</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-start">
+                    <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Type:</span>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      selectedTransaction.type === 'Credit' 
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                        : 'bg-rose-100 text-rose-800 border border-rose-200'
+                    }`}>
+                      {selectedTransaction.type}
+                    </span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-start">
+                    <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Amount:</span>
+                    <span className={`text-sm font-semibold ${
+                      selectedTransaction.type === 'Credit' ? 'text-emerald-600' : 'text-rose-600'
+                    }`}>
+                      {selectedTransaction.type === 'Credit' ? '+' : '-'}₹{selectedTransaction.amount.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-start">
+                    <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Transaction Type:</span>
+                    <span className="text-sm text-gray-900">{getTransactionTypeDisplay(selectedTransaction.description)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ----- PAYMENT DETAILS – if available ----- */}
+              {payment_details && (
+                <div className="mb-6">
+                  <h4 className="text-md font-semibold text-indigo-600 mb-3 flex items-center gap-2 border-b border-indigo-200 pb-2">
+                    <FiCreditCard className="w-4 h-4" />
+                    Payment Details
+                  </h4>
+                  <div className="bg-blue-50 rounded-xl p-4 border border-blue-100 space-y-2">
+                    {/* Payment ID with copy */}
+                    <div className="flex flex-col sm:flex-row sm:items-start group">
+                      <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Payment ID:</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-mono bg-white px-2 py-0.5 rounded border border-blue-200 text-gray-800 break-all">
+                          {payment_details.payment_id || 'N/A'}
+                        </span>
+                        {payment_details.payment_id && (
+                          <button
+                            onClick={() => copyToClipboard(payment_details.payment_id, 'paymentId')}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
+                          >
+                            <FiCopy className="w-3.5 h-3.5" />
+                            {copiedField === 'paymentId' ? 'Copied!' : 'Copy'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {/* UTR with copy */}
+                    <div className="flex flex-col sm:flex-row sm:items-start group">
+                      <span className="text-sm font-medium text-gray-500 w-32 shrink-0">UTR:</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-mono bg-white px-2 py-0.5 rounded border border-blue-200 text-gray-800 break-all">
+                          {payment_details.utr || 'N/A'}
+                        </span>
+                        {payment_details.utr && (
+                          <button
+                            onClick={() => copyToClipboard(payment_details.utr, 'utr')}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
+                          >
+                            <FiCopy className="w-3.5 h-3.5" />
+                            {copiedField === 'utr' ? 'Copied!' : 'Copy'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Name:</span>
+                      <span className="text-sm text-gray-900">{payment_details.name || 'N/A'}</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Email:</span>
+                      <span className="text-sm text-gray-900 break-all">{payment_details.email || 'N/A'}</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Mobile:</span>
+                      <span className="text-sm text-gray-900">{payment_details.mobile || 'N/A'}</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Payment Date:</span>
+                      <span className="text-sm text-gray-900">
+                        {payment_details.create_date ? moment(payment_details.create_date).format('MMMM DD, YYYY hh:mm A') : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ----- MESSAGE DETAILS – if available ----- */}
+              {message_details && (
+                <div className="mb-6">
+                  <h4 className="text-md font-semibold text-indigo-600 mb-3 flex items-center gap-2 border-b border-indigo-200 pb-2">
+                    <FiMessageSquare className="w-4 h-4" />
+                    Message Details
+                  </h4>
+                  <div className="bg-purple-50 rounded-xl p-4 border border-purple-100 space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Template Name:</span>
+                      <span className="text-sm text-gray-900">{message_details.template_name || 'N/A'}</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Number:</span>
+                      <span className="text-sm text-gray-900">{message_details.number || 'N/A'}</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Category:</span>
+                      <span className="text-sm text-gray-900">{message_details.category || 'N/A'}</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Language:</span>
+                      <span className="text-sm text-gray-900">{message_details.language_code || 'N/A'}</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Message By:</span>
+                      <span className="text-sm text-gray-900">{message_details.message_by || 'N/A'}</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="text-sm font-medium text-gray-500 w-32 shrink-0">WAMID:</span>
+                      <span className="text-sm font-mono bg-white px-2 py-0.5 rounded border border-purple-200 text-gray-800 break-all">{message_details.wamid || 'N/A'}</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Message Date:</span>
+                      <span className="text-sm text-gray-900">
+                        {message_details.create_date ? moment(message_details.create_date).format('MMMM DD, YYYY hh:mm A') : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ----- REMARK & CREATED BY – side by side on large screens, stacked on mobile ----- */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {remark && (
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1 mb-1">
+                      <FiFileText className="w-3 h-3" />
+                      Remark
+                    </span>
+                    <p className="text-sm text-gray-900">{remark}</p>
+                  </div>
+                )}
+                {create_by && (
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1 mb-1">
+                      <FiUser className="w-3 h-3" />
+                      Created By
+                    </span>
+                    <p className="text-sm font-medium text-indigo-600">{create_by.username || 'N/A'}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-50 flex justify-end border-t border-gray-100">
+              <button
+                onClick={closeDetailsModal}
+                className="px-5 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors shadow-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -670,7 +910,7 @@ const generatePDF = async (transaction) => {
                   maxDate={moment().format('YYYY-MM-DD')}
                 />
 
-                {/* Transaction Type Dropdown - Premium */}
+                {/* Transaction Type Dropdown - with Project Create */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Transaction Type</label>
                   <div className="relative group">
@@ -687,14 +927,15 @@ const generatePDF = async (transaction) => {
                       <option value="template send">Template Send</option>
                       <option value="wallet topup">Wallet Topup</option>
                       <option value="project renewal">Project Renewal</option>
+                      <option value="project create">Project Create</option>
                     </select>
                     <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                      <svg className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <svg className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                       </svg>
                     </div>
                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                      <svg className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <svg className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </div>
@@ -719,12 +960,12 @@ const generatePDF = async (transaction) => {
                       <option value="0">Debit</option>
                     </select>
                     <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                      <svg className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <svg className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                      <svg className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <svg className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </div>
@@ -740,14 +981,11 @@ const generatePDF = async (transaction) => {
                     }))}
                     selectedValues={selectedProjects}
                     onChange={(newSelectedProjects) => {
-                      // Only update local state, no API call
                       setSelectedProjects([...newSelectedProjects]);
                     }}
                     onSearch={(selectedProjectIds) => {
-                      // This will be called when search button is clicked
                       console.log('Searching with projects:', selectedProjectIds);
-                      // Call fetchTransactions with the selected projects
-                      setCurrentPage(1); // Reset to first page
+                      setCurrentPage(1);
                       fetchTransactions(1, pageSize, {
                         selectedProjects: selectedProjectIds
                       });
@@ -765,13 +1003,11 @@ const generatePDF = async (transaction) => {
           {/* Transactions Table with Skeleton Loading */}
           <div className="bg-white rounded-xl shadow overflow-hidden">
             {loading ? (
-              // Show skeleton when loading
               <>
                 <DesktopTableSkeleton />
                 <MobileCardsSkeleton />
               </>
             ) : error ? (
-              // Show error state
               <div className="p-8">
                 <div className="text-center">
                   <div className="text-red-500 mb-4">
@@ -788,7 +1024,6 @@ const generatePDF = async (transaction) => {
                 </div>
               </div>
             ) : (
-              // Show actual data when loaded
               <>
                 {/* Desktop Table */}
                 <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 shadow-sm bg-white">
@@ -836,17 +1071,18 @@ const generatePDF = async (transaction) => {
                         <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-200/50">
                           <div className="flex flex-col items-center justify-center gap-1">
                             <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
-                            <div>Details</div>
+                            <div>Receipt</div>
                           </div>
                         </th>
                         <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
                           <div className="flex flex-col items-center justify-center gap-1">
                             <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
-                            <div>Receipt</div>
+                            <div>Details</div>
                           </div>
                         </th>
                       </tr>
@@ -854,7 +1090,7 @@ const generatePDF = async (transaction) => {
                     <tbody className="bg-white divide-y divide-gray-100">
                       {transformedTransactions.length === 0 ? (
                         <tr>
-                          <td colSpan="7" className="px-6 py-12 text-center">
+                          <td colSpan="8" className="px-6 py-12 text-center">
                             <div className="flex flex-col items-center justify-center gap-3">
                               <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
@@ -922,92 +1158,7 @@ const generatePDF = async (transaction) => {
                                 <span>{transaction.type === 'Credit' ? '+' : '-'}₹{transaction.amount.toFixed(2)}</span>
                               </div>
                             </td>
-                            <td className="px-6 py-4 border-r border-gray-100 align-middle">
-                              {/* Payment Details for wallet topup */}
-                              {transaction.payment_details && (
-                                <div className="space-y-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
-                                  <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 uppercase tracking-wide justify-center">
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                                    </svg>
-                                    Payment Details
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div className="text-center">
-                                      <div className="text-xs text-gray-500">Payment ID</div>
-                                      <div className="text-xs font-medium text-gray-900 truncate">{transaction.payment_details.payment_id || 'N/A'}</div>
-                                    </div>
-                                    <div className="text-center">
-                                      <div className="text-xs text-gray-500">UTR</div>
-                                      <div className="text-xs font-medium text-gray-900 truncate">{transaction.payment_details.utr || 'N/A'}</div>
-                                    </div>
-                                    <div className="col-span-2 text-center">
-                                      <div className="text-xs text-gray-500">Name</div>
-                                      <div className="text-xs font-medium text-gray-900">{transaction.payment_details.name || 'N/A'}</div>
-                                    </div>
-                                  </div>
-                                  {transaction.payment_details.create_date && (
-                                    <div className="text-xs text-gray-500 flex items-center justify-center gap-1 pt-1 border-t border-blue-100">
-                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                      </svg>
-                                      {moment(transaction.payment_details.create_date).format('MMM DD, YYYY hh:mm A')}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {/* Message Details for template send */}
-                              {transaction.message_details && (
-                                <div className="space-y-2 p-3 bg-purple-50/50 rounded-lg border border-purple-100">
-                                  <div className="flex items-center gap-2 text-xs font-semibold text-purple-700 uppercase tracking-wide justify-center">
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                    </svg>
-                                    Message Details
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div className="text-center">
-                                      <div className="text-xs text-gray-500">Template</div>
-                                      <div className="text-xs font-medium text-gray-900 truncate">{transaction.message_details.template_name || 'N/A'}</div>
-                                    </div>
-                                    <div className="text-center">
-                                      <div className="text-xs text-gray-500">Number</div>
-                                      <div className="text-xs font-medium text-gray-900">{transaction.message_details.number || 'N/A'}</div>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {/* Remark and Created By */}
-                              {(transaction.remark || transaction.create_by) && (
-                                <div className="mt-2 space-y-2">
-                                  {transaction.remark && (
-                                    <div className="flex flex-col items-center text-xs p-2 bg-gray-50 rounded-md">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                                        </svg>
-                                        <div className="text-gray-500">Remark</div>
-                                      </div>
-                                      <div className="text-gray-900 font-medium text-center">{transaction.remark}</div>
-                                    </div>
-                                  )}
-                                  {transaction.create_by && (
-                                    <div className="flex flex-col items-center text-xs p-2 bg-blue-50/50 rounded-md">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                        </svg>
-                                        <div className="text-gray-500">Created By</div>
-                                      </div>
-                                      <div className="text-blue-600 font-semibold">{transaction.create_by.username || 'N/A'}</div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-center align-middle">
+                            <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100 text-center align-middle">
                               <button
                                 onClick={() => generatePDF(transaction)}
                                 className="group/btn inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-50 to-indigo-50/50 hover:from-indigo-100 hover:to-indigo-100/80 text-indigo-700 hover:text-indigo-800 font-semibold text-sm rounded-lg border border-indigo-200 hover:border-indigo-300 transition-all duration-200 shadow-sm hover:shadow mx-auto"
@@ -1016,6 +1167,18 @@ const generatePDF = async (transaction) => {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
                                 Receipt
+                              </button>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center align-middle">
+                              <button
+                                onClick={() => openDetailsModal(transaction)}
+                                className="group/btn inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-50 to-indigo-50/50 hover:from-indigo-100 hover:to-indigo-100/80 text-indigo-700 hover:text-indigo-800 font-semibold text-sm rounded-lg border border-indigo-200 hover:border-indigo-300 transition-all duration-200 shadow-sm hover:shadow mx-auto"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                                View
                               </button>
                             </td>
                           </tr>
@@ -1047,69 +1210,32 @@ const generatePDF = async (transaction) => {
                           </span>
                         </div>
                         <p className="text-sm text-gray-700 mb-2">{getTransactionTypeDisplay(transaction.description)}</p>
-
-                        {/* Payment Details for wallet topup */}
-                        {transaction.payment_details && (
-                          <div className="bg-indigo-50 rounded-lg p-3 mb-2">
-                            <div className="text-xs font-semibold text-indigo-600 mb-1">Payment Details:</div>
-                            <div className="text-xs text-gray-700">Payment ID: {transaction.payment_details.payment_id || 'N/A'}</div>
-                            <div className="text-xs text-gray-700">UTR: {transaction.payment_details.utr || 'N/A'}</div>
-                            <div className="text-xs text-gray-700">Name: {transaction.payment_details.name || 'N/A'}</div>
-                            <div className="text-xs text-gray-700">Email: {transaction.payment_details.email || 'N/A'}</div>
-                            <div className="text-xs text-gray-700">Mobile: {transaction.payment_details.mobile || 'N/A'}</div>
-                            {transaction.payment_details.create_date && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                Payment Date: {moment(transaction.payment_details.create_date).format('MMM DD, YYYY hh:mm A')}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Message Details for template send */}
-                        {transaction.message_details && (
-                          <div className="bg-indigo-50 rounded-lg p-3 mb-2">
-                            <div className="text-xs font-semibold text-indigo-600 mb-1">Message Details:</div>
-                            <div className="text-xs text-gray-700">Template: {transaction.message_details.template_name || 'N/A'}</div>
-                            <div className="text-xs text-gray-700">Number: {transaction.message_details.number || 'N/A'}</div>
-                            <div className="text-xs text-gray-700">Category: {transaction.message_details.category || 'N/A'}</div>
-                            <div className="text-xs text-gray-700">Language: {transaction.message_details.language_code || 'N/A'}</div>
-                            <div className="text-xs text-gray-700">Message By: {transaction.message_details.message_by || 'N/A'}</div>
-                            {transaction.message_details.wamid && (
-                              <div className="text-xs text-gray-600 break-all mt-1">
-                                WAMID: {transaction.message_details.wamid.length > 30
-                                  ? transaction.message_details.wamid.substring(0, 30) + '...'
-                                  : transaction.message_details.wamid}
-                              </div>
-                            )}
-                            {transaction.message_details.create_date && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                Message Date: {moment(transaction.message_details.create_date).format('MMM DD, YYYY hh:mm A')}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {transaction.remark && (
-                          <p className="text-xs text-gray-500 mb-2">Remark: {transaction.remark}</p>
-                        )}
+                        
                         <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-3">
                           <span>{moment(transaction.date).format('MMM DD, YYYY hh:mm A')}</span>
                           <span>•</span>
                           <span className={getTypeColor(transaction.type)}>{transaction.type}</span>
-                          {transaction.create_by && (
-                            <>
-                              <span>•</span>
-                              <span>By: {transaction.create_by.username}</span>
-                            </>
-                          )}
                         </div>
-                        <button
-                          onClick={() => generatePDF(transaction)}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
-                        >
-                          <FiDownload size={16} />
-                          <span>Download Receipt</span>
-                        </button>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => generatePDF(transaction)}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+                          >
+                            <FiDownload size={16} />
+                            <span>Receipt</span>
+                          </button>
+                          <button
+                            onClick={() => openDetailsModal(transaction)}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            Details
+                          </button>
+                        </div>
                       </div>
                     ))
                   )}
@@ -1134,6 +1260,9 @@ const generatePDF = async (transaction) => {
           )}
         </div>
       </div>
+
+      {/* Transaction Details Modal */}
+      {isModalOpen && <TransactionDetailsModal />}
     </div>
   );
 };
