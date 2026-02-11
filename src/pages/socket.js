@@ -1,6 +1,26 @@
 import { io } from "socket.io-client";
 import { dbHelper } from './db';
 
+/** Get currently selected project ID from localStorage (used to filter socket payloads by project). */
+const getSelectedProjectId = () => {
+    try {
+        const userData = localStorage.getItem('userData');
+        if (!userData) return null;
+        const parsed = JSON.parse(userData);
+        return parsed?.selected_project_id || null;
+    } catch (e) {
+        return null;
+    }
+};
+
+/** Return true only if payload is for the currently selected project (or has no project_id for backward compat). */
+const isPayloadForSelectedProject = (payloadProjectId) => {
+    if (payloadProjectId == null || payloadProjectId === '') return true;
+    const selected = getSelectedProjectId();
+    if (selected == null || selected === '') return true;
+    return String(payloadProjectId) === String(selected);
+};
+
 const normalizeSocketMessagePayload = (message = {}) => {
     const isTemplate = message.message_type === 'template' || message.is_template;
     let resolvedMessage = message.message || '';
@@ -137,28 +157,38 @@ class SocketManager {
             });
 
             this.socket.on("chat", async (data) => {
-                await this.handleIncomingMessage(data);
-
-                // Notify all registered callbacks
-                this.messageCallbacks.forEach(callback => callback(data));
+                const processed = await this.handleIncomingMessage(data);
+                if (processed) {
+                    this.messageCallbacks.forEach(callback => callback(data));
+                }
             });
 
             // Handle message status updates
             this.socket.on("message_status", async (data) => {
-                await this.handleMessageStatusUpdate(data);
-
-                // Notify all registered callbacks
-                this.messageCallbacks.forEach(callback => callback(data));
+                const processed = await this.handleMessageStatusUpdate(data);
+                if (processed) {
+                    this.messageCallbacks.forEach(callback => callback(data));
+                }
             });
 
             this.socket.on("chat_assigned", async (data) => {
+                if (!isPayloadForSelectedProject(data?.project_id)) return;
                 console.log("📌 chat_assigned socket event:", data);
                 this.assignmentCallbacks.forEach(callback => callback(data));
             });
 
-            // Listen for total unread count updates (GLOBAL - set up once)
+            // Listen for total unread count updates: only update when payload.project_id matches selected project
+            // Payload format: { count: number, project_id: string }
             this.socket.on("total_unread_count", (data) => {
-                console.log("📬 Unread count update received:", data);
+                const payloadProjectId = data?.project_id;
+                const selectedProjectId = getSelectedProjectId();
+                const isForSelectedProject =
+                    payloadProjectId != null &&
+                    payloadProjectId !== '' &&
+                    selectedProjectId != null &&
+                    selectedProjectId !== '' &&
+                    String(payloadProjectId) === String(selectedProjectId);
+                if (!isForSelectedProject) return;
                 this.unreadCountCallbacks.forEach(callback => {
                     try {
                         callback(data);
@@ -185,11 +215,15 @@ class SocketManager {
 
     async handleIncomingMessage(messageData) {
         try {
-            console.log(messageData);
+            // Only process messages for the currently selected project
+            if (!isPayloadForSelectedProject(messageData?.project_id)) {
+                return false;
+            }
+
             const chatNumber = messageData.contact?.number;
             if (!chatNumber) {
                 console.warn('Could not determine chat number for message:', messageData);
-                return;
+                return false;
             }
 
             const {
@@ -211,7 +245,7 @@ class SocketManager {
                 if (existingMessage) {
                     console.log('Outgoing message already exists, updating status only');
                     await dbHelper.updateMessageStatus(messageData.message.message_id, messageData.message.status, '', messageData.message.id);
-                    return;
+                    return true;
                 }
 
                 // Merge echoed server message into temp outgoing if same media
@@ -252,7 +286,7 @@ class SocketManager {
                     template: messageData.message.template || null,
                     component: (normalizedComponent?.length ? normalizedComponent : (messageData.message.component || null))
                 });
-                return;
+                return true;
             }
 
             // New Message
@@ -318,24 +352,28 @@ class SocketManager {
             }]
 
             // Save to IndexedDB if available
-            console.log("DB Available");
             await dbHelper.saveMessage(messageList);
             await dbHelper.saveChats(chatList);
+            return true;
 
         } catch (error) {
             console.error('Error handling incoming message:', error);
+            return false;
         }
     }
 
     async handleMessageStatusUpdate(statusData) {
         try {
-            console.log('📊 Message status update received:', statusData);
+            // Only process status updates for the currently selected project
+            if (!isPayloadForSelectedProject(statusData?.project_id)) {
+                return false;
+            }
 
             const { message_id, changes, failed_reason, last_id } = statusData;
 
             if (!message_id && !last_id) {
                 console.warn('No message_id or last_id in status update:', statusData);
-                return;
+                return false;
             }
 
             // Map status changes to our internal status
@@ -352,11 +390,11 @@ class SocketManager {
 
             // Update message status in database (try message_id, wamid, or last_id)
             await dbHelper.updateMessageStatus(message_id || '', newStatus, failed_reason, last_id);
-
-            console.log(`✅ Message ${message_id || last_id} status updated to: ${newStatus}`);
+            return true;
 
         } catch (error) {
             console.error('Error handling message status update:', error);
+            return false;
         }
     }
 

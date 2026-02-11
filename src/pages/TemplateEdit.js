@@ -101,7 +101,6 @@ function TemplateEdit() {
   // Categories
   const categories = [
     { code: 'MARKETING', name: 'Marketing' },
-    { code: 'TRANSACTIONAL', name: 'Transactional' },
     { code: 'UTILITY', name: 'Utility' },
   ];
 
@@ -155,7 +154,7 @@ function TemplateEdit() {
             const { Encrypt } = await import('./encryption/payload-encryption');
 
             const payload = {
-              project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
+              project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
               template_id: templateId
             };
 
@@ -178,7 +177,7 @@ function TemplateEdit() {
             if (!response?.data?.error) {
               const templateData = response.data.data || {};
               const templateObj = response.data.template || templateData.template || {};
-              
+
               const template = {
                 id: templateData.template_id,
                 name: templateData.template_name || templateObj.name || '',
@@ -857,10 +856,10 @@ function TemplateEdit() {
       // Check for successful response - only show success when !error
       // Exception: If template is REJECTED and error is about category update, allow it
       const errorMessage = response.data?.error;
-      const isCategoryUpdateError = errorMessage && 
-        (errorMessage.includes('cannot update') || errorMessage.includes('update an approved template category')) && 
+      const isCategoryUpdateError = errorMessage &&
+        (errorMessage.includes('cannot update') || errorMessage.includes('update an approved template category')) &&
         errorMessage.includes('category');
-      
+
       if (!response.data?.error || (isCategoryUpdateError && templateStatus === 'REJECTED')) {
         // Set success data and show popup
         setSuccessData({
@@ -981,7 +980,7 @@ function TemplateEdit() {
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">Edit WhatsApp Template</h2>
                 <p className="mt-1 text-sm text-gray-600">
-                  Edit your WhatsApp message template - Template ID: {templateId}
+                  Edit your WhatsApp message template
                 </p>
               </div>
             </div>

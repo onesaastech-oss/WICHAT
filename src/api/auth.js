@@ -509,7 +509,7 @@ export const submitWabaId = async ({ project_id, waba_id }) => {
 
   // Encrypt the payload
   const { data, key } = Encrypt(payload);
-  
+
   console.log('[submitWabaId] Encrypted data length:', data.length);
   console.log('[submitWabaId] Encryption key length:', key.length);
 
@@ -531,17 +531,17 @@ export const submitWabaId = async ({ project_id, waba_id }) => {
   };
 
   console.log('[submitWabaId] Making API request to:', config.url);
-  console.log('[submitWabaId] Request headers:', { 
+  console.log('[submitWabaId] Request headers:', {
     'Content-Type': config.headers['Content-Type'],
     'token': token ? `${token.substring(0, 10)}...` : 'missing',
     'username': username || 'missing'
   });
 
   const response = await axios.request(config);
-  
+
   console.log('[submitWabaId] API response status:', response.status);
   console.log('[submitWabaId] API response data:', response.data);
-  
+
   return response.data;
 };
 
@@ -707,14 +707,64 @@ export const getSubscriptionPacks = async () => {
   }
 
   const config = {
-    method: 'get',
+    method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/payment/subscription/packs',
+    url: 'https://api.w1chat.com/plan',
     headers: {
       'Content-Type': 'application/json',
       'token': token,
       'username': username
     }
+  };
+
+  const response = await axios.request(config);
+  return response.data;
+};
+
+// Purchase plan - subscribe selected projects to packages
+export const purchasePlan = async ({ project }) => {
+  const getUserData = () => {
+    try {
+      const userData = localStorage.getItem('userData');
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      console.error('Error parsing userData from localStorage:', error);
+      return null;
+    }
+  };
+
+  const userData = getUserData();
+  const token = userData?.token;
+  const username = userData?.username;
+
+  if (!token || !username) {
+    throw new Error('Session expired');
+  }
+
+
+
+  const payload = {
+    projects: project
+  };
+
+  // Encrypt the payload
+  const { data, key } = Encrypt(payload);
+
+  const data_pass = JSON.stringify({
+    data,
+    key
+  });
+
+  const config = {
+    method: 'post',
+    maxBodyLength: Infinity,
+    url: 'https://api.w1chat.com/plan/purchase',
+    headers: {
+      'Content-Type': 'application/json',
+      token,
+      username
+    },
+    data: data_pass
   };
 
   const response = await axios.request(config);

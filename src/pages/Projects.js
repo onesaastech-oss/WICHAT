@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header, Sidebar } from '../component/Menu';
-import { 
-  FiPlus, 
-  FiSearch, 
-  FiBriefcase, 
-  FiEdit2, 
-  FiTrash2, 
-  FiX, 
-  FiMoreVertical,
+import {
+  FiPlus,
+  FiSearch,
+  FiBriefcase,
+  FiX,
   FiCheck,
-  FiEye
+  FiEye,
+  FiUser,
+  FiShield,
+  FiUserCheck
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -26,7 +26,6 @@ const Projects = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
-  const [showActionsMenu, setShowActionsMenu] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -63,25 +62,27 @@ const Projects = () => {
       try {
         setLoading(true);
         const response = await fetchUserProfile();
-        
+
         if (response && !response.error) {
           const profileData = response;
           setUserData(profileData);
-          
-          
+
+
           // Set projects from API response
           if (Array.isArray(profileData.projects?.list)) {
             setProjects(profileData.projects.list.map(project => ({
               id: project.project_id,
+              project_id: project.project_id,
               name: project.name,
-              owned: project.owned
+              owned: project.owned,
+              owner_name: project.owner_name
             })));
           }
         }
       } catch (error) {
         console.error('Error fetching user profile:', error);
         toast.error('Failed to load projects');
-        
+
       } finally {
         setLoading(false);
       }
@@ -105,10 +106,14 @@ const Projects = () => {
     };
   }, [mobileMenuOpen]);
 
-  // Filter projects based on search
+  // Filter projects based on search (name, owner)
   const filteredProjects = projects.filter(project =>
-    project.name.toLowerCase().includes(searchTerm.toLowerCase())
+    project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (project.owner_name && project.owner_name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  const ownedCount = filteredProjects.filter(p => p.owned === true).length;
+  const sharedCount = filteredProjects.filter(p => p.owned === false).length;
 
   const handleCreateProject = () => {
     setEditingProject(null);
@@ -119,37 +124,18 @@ const Projects = () => {
     setShowCreateModal(true);
   };
 
-  const handleEditProject = (project) => {
-    setEditingProject(project);
-    setFormData({
-      company_name: project.company_name || '',
-      name: project.name
-    });
-    setShowActionsMenu(null);
-    setShowCreateModal(true);
-  };
-
-  const handleDeleteProject = (projectId) => {
-    if (window.confirm('Are you sure you want to delete this project?')) {
-      // TODO: Implement API call to delete project
-      setProjects(projects.filter(p => p.id !== projectId));
-      setShowActionsMenu(null);
-      toast.success('Project deleted successfully');
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (editingProject) {
       // TODO: Implement API call for update project
-      setProjects(projects.map(p => 
-        p.id === editingProject.id 
-          ? { 
-              ...p, 
-              ...formData, 
-              updatedAt: new Date().toISOString() 
-            }
+      setProjects(projects.map(p =>
+        p.id === editingProject.id
+          ? {
+            ...p,
+            ...formData,
+            updatedAt: new Date().toISOString()
+          }
           : p
       ));
       toast.success('Project updated successfully');
@@ -164,25 +150,27 @@ const Projects = () => {
           company_name: formData.company_name,
           project_name: formData.name
         });
-        
+
         if (response && !response.error) {
           toast.success('Project created successfully');
-          
+
           // Refresh the projects list by fetching user profile again
           const profileResponse = await fetchUserProfile();
           if (profileResponse && !profileResponse.error) {
             const profileData = profileResponse;
             setUserData(profileData);
-            
+
             if (Array.isArray(profileData.projects?.list)) {
               setProjects(profileData.projects.list.map(project => ({
                 id: project.project_id,
+                project_id: project.project_id,
                 name: project.name,
-                owned: project.owned
+                owned: project.owned,
+                owner_name: project.owner_name
               })));
             }
           }
-          
+
           setShowCreateModal(false);
           setFormData({ company_name: '', name: '' });
           setEditingProject(null);
@@ -233,18 +221,25 @@ const Projects = () => {
         setIsMinimized={setIsMinimized}
       />
 
-      {/* Main content */}
+      {/* Main content - same layout as Switch Project Modal */}
       <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
-          {/* Header Section */}
-          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Projects</h1>
-              <p className="text-gray-600">Manage your projects and teams</p>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+          {/* Header - same style as modal */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                <FiBriefcase className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Projects</h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                  {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''} · {sharedCount} agent
+                </p>
+              </div>
             </div>
             <button
               onClick={handleCreateProject}
-              className="flex items-center justify-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              className="flex items-center justify-center space-x-2 bg-indigo-600 text-white px-4 py-2.5 rounded-lg hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
             >
               <FiPlus size={20} />
               <span>Create Project</span>
@@ -260,196 +255,154 @@ const Projects = () => {
 
           {!loading && (
             <>
-
-          {/* No Projects Warning */}
-          {!hasUserProjects && (
-            <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <div className="flex items-start">
-                <div className="flex-shrink-0">
-                  <FiBriefcase className="h-5 w-5 text-amber-400" />
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-amber-800">
-                    No Projects Found
-                  </h3>
-                  <div className="mt-2 text-sm text-amber-700">
-                    <p>
-                      You need to create at least one project to access Live Chat, Templates, and Campaigns features. 
-                      Create your first project to unlock these features.
-                    </p>
-                  </div>
-                  <div className="mt-4">
-                    <button
-                      onClick={handleCreateProject}
-                      className="bg-amber-600 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-amber-700 transition-colors"
-                    >
-                      Create Your First Project
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Search Bar */}
-          <div className="mb-6">
-            <div className="relative">
-              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search projects..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-
-                    {/* Stats Summary */}
-          {filteredProjects.length > 0 && (
-            <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-white rounded-xl shadow p-4">
-                <p className="text-sm text-gray-600 mb-1">Total Projects</p>
-                <p className="text-2xl font-bold text-gray-900">{filteredProjects.length}</p>
-              </div>
-              <div className="bg-white rounded-xl shadow p-4">
-                <p className="text-sm text-gray-600 mb-1">Owned Projects</p>
-                <p className="text-2xl font-bold text-indigo-600">
-                  {filteredProjects.filter(p => p.owned).length}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Projects Grid */}
-          {filteredProjects.length === 0 ? (
-            <div className="bg-white rounded-xl shadow p-12 text-center">
-              <FiBriefcase className="mx-auto text-gray-400 mb-4" size={48} />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {searchTerm ? 'No projects found' : 'No projects yet'}
-              </h3>
-              <p className="text-gray-600 mb-4">
-                {searchTerm 
-                  ? 'Try adjusting your search terms' 
-                  : 'Get started by creating your first project'}
-              </p>
-              {!searchTerm && (
-                <button
-                  onClick={handleCreateProject}
-                  className="inline-flex items-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
-                >
-                  <FiPlus size={18} />
-                  <span>Create Project</span>
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProjects.map((project) => {
-                const isActive = activeProjectId === project.id;
-                return (
-                <motion.div
-                  key={project.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`bg-white rounded-xl shadow hover:shadow-lg transition-shadow duration-200 p-6 relative cursor-pointer ${
-                    isActive ? 'ring-2 ring-indigo-500 ring-offset-2' : ''
-                  }`}
-                  onClick={() => navigate(`/project-details/${project.id}`)}
-                >
-                  {/* Actions Menu */}
-                  <div className="absolute top-4 right-4" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={() => setShowActionsMenu(showActionsMenu === project.id ? null : project.id)}
-                      className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      <FiMoreVertical size={18} />
-                    </button>
-                    {showActionsMenu === project.id && (
-                      <>
-                        <div 
-                          className="fixed inset-0 z-10" 
-                          onClick={() => setShowActionsMenu(null)}
-                        />
-                        <div className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-gray-200 z-20">
-                          <button
-                            onClick={() => {
-                              handleEditProject(project);
-                              setShowActionsMenu(null);
-                            }}
-                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                          >
-                            <FiEdit2 size={16} />
-                            <span>Edit</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              navigate(`/project-details/${project.id}`);
-                              setShowActionsMenu(null);
-                            }}
-                            className="w-full text-left px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 flex items-center space-x-2"
-                          >
-                            <FiEye size={16} />
-                            <span>View Details</span>
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Project Icon */}
-                  <div className="mb-4">
-                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                      isActive ? 'bg-indigo-500' : 'bg-indigo-100'
-                    }`}>
-                      <FiBriefcase className={isActive ? 'text-white' : 'text-indigo-600'} size={24} />
+              {/* No Projects Warning */}
+              {!hasUserProjects && (
+                <div className="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0">
+                      <FiBriefcase className="h-5 w-5 text-amber-500 dark:text-amber-400" />
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                        No Projects Found
+                      </h3>
+                      <div className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                        <p>
+                          You need to create at least one project to access Live Chat, Templates, and Campaigns features.
+                        </p>
+                      </div>
+                      <div className="mt-4">
+                        <button
+                          onClick={handleCreateProject}
+                          className="bg-amber-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors"
+                        >
+                          Create Your First Project
+                        </button>
+                      </div>
                     </div>
                   </div>
+                </div>
+              )}
 
-                  {/* Project Info */}
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className={`text-xl font-semibold mb-2 flex-1 ${
-                      isActive ? 'text-indigo-600' : 'text-gray-900'
-                    }`}>
-                      {project.name}
-                    </h3>
+              {/* Search Bar - same style as modal */}
+              <div className="mb-6 px-0 py-0">
+                <div className="relative">
+                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" size={20} />
+                  <input
+                    type="text"
+                    placeholder="Search by project name or owner..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Stats Summary - Total, Owned, Shared */}
+              {filteredProjects.length > 0 && (
+                <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-4">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Projects</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{filteredProjects.length}</p>
                   </div>
-
-                  {/* Project Stats */}
-                  <div className="flex items-center gap-2 flex-wrap mb-4">
-                    {isActive && (
-                      <span className="px-2 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
-                        Active
-                      </span>
-                    )}
-                    {project.owned && (
-                      <span className="px-2 py-1 rounded-full text-xs font-medium border bg-indigo-100 text-indigo-800 border-indigo-200">
-                        Owned
-                      </span>
-                    )}
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-4">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Owned</p>
+                    <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{ownedCount}</p>
                   </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-4">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Agent</p>
+                    <p className="text-2xl font-bold text-gray-700 dark:text-gray-300">{sharedCount}</p>
+                  </div>
+                </div>
+              )}
 
-                  {/* Project Actions */}
-                  <div className="pt-4 border-t border-gray-200">
+              {/* Projects Grid - same card design as Switch Project Modal */}
+              {filteredProjects.length === 0 ? (
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-12 text-center">
+                  <FiBriefcase className="mx-auto text-gray-400 dark:text-gray-500 mb-4" size={48} />
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    {searchTerm ? 'No projects found' : 'No projects yet'}
+                  </h3>
+                  <p className="text-gray-500 dark:text-gray-400 mb-4">
+                    {searchTerm ? 'Try a different search term' : 'Get started by creating your first project'}
+                  </p>
+                  {!searchTerm && (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/project-details/${project.id}`);
-                      }}
-                      className="flex items-center space-x-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                      onClick={handleCreateProject}
+                      className="inline-flex items-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
                     >
-                      <FiEye size={14} />
-                      <span>View Details</span>
+                      <FiPlus size={18} />
+                      <span>Create Project</span>
                     </button>
-                  </div>
-                </motion.div>
-                );
-              })}
-            </div>
-          )}
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredProjects.map((project) => {
+                    const isActive = activeProjectId === project.id;
+                    const isOwned = project.owned === true;
+                    return (
+                      <motion.div
+                        key={project.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`relative text-left p-4 rounded-xl border-2 transition-all duration-200 min-h-[100px] flex flex-col cursor-pointer ${isActive
+                          ? 'border-indigo-400 bg-indigo-50/70 dark:bg-indigo-900/15'
+                          : 'border-gray-200 dark:border-gray-600 hover:border-indigo-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm'
+                          }`}
+                        onClick={() => navigate(`/project-details/${project.id}`)}
+                      >
+                        {/* Row 1: Project name + role badge (same as modal) */}
+                        <div className="flex items-start gap-2 w-full min-w-0">
+                          <h3 className={`flex-1 min-w-0 font-semibold text-base truncate ${isActive ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-900 dark:text-white'}`} title={project.name}>
+                            {project.name}
+                          </h3>
+                          <span className="flex-shrink-0 mt-0.5">
+                            {isOwned ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/40 rounded">
+                                <FiShield className="w-3 h-3" />
+                                Admin
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-600/50 rounded">
+                                <FiUserCheck className="w-3 h-3" />
+                                Agent
+                              </span>
+                            )}
+                          </span>
+                        </div>
 
+                        {/* Row 2: Owner */}
+                        {project.owner_name && (
+                          <p className="mt-2 flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 min-w-0">
+                            <FiUser className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+                            <span className="truncate">{project.owner_name}</span>
+                          </p>
+                        )}
 
-          </>
+                        {/* Row 3: Active + View Details (View Details only for owned) */}
+                        <div className="mt-auto pt-2 flex items-center gap-2 flex-wrap">
+                          {isActive && (
+                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/40 rounded-full">
+                              Current
+                            </span>
+                          )}
+                          {isOwned && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); navigate(`/project-details/${project.id}`); }}
+                              className="inline-flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                            >
+                              <FiEye className="w-3.5 h-3.5" />
+                              View Details
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

@@ -9,6 +9,31 @@ import {
     FiCheckCircle, FiAlertCircle, FiTrash2, FiPlus, FiCamera, FiExternalLink, FiRefreshCw
 } from 'react-icons/fi';
 
+// Business type (vertical) options for WABA profile { name: display text, value: API value }
+const BUSINESS_VERTICALS = [
+    { name: 'UNDEFINED', value: 'UNDEFINED' },
+    { name: 'OTHER', value: 'OTHER' },
+    { name: 'AUTO', value: 'AUTO' },
+    { name: 'BEAUTY', value: 'BEAUTY' },
+    { name: 'APPAREL', value: 'APPAREL' },
+    { name: 'EDUCATION', value: 'EDU' },
+    { name: 'ENTERTAINMENT', value: 'ENTERTAIN' },
+    { name: 'EVENT PLAN', value: 'EVENT_PLAN' },
+    { name: 'FINANCE', value: 'FINANCE' },
+    { name: 'GROCERY', value: 'GROCERY' },
+    { name: 'GOVT', value: 'GOVT' },
+    { name: 'HOTEL', value: 'HOTEL' },
+    { name: 'HEALTH', value: 'HEALTH' },
+    { name: 'NON PROFIT ORGANIZATION', value: 'NONPROFIT' },
+    { name: 'PROFESSIONAL SERVICES', value: 'PROF_SERVICES' },
+    { name: 'RETAIL', value: 'RETAIL' },
+    { name: 'TRAVEL', value: 'TRAVEL' },
+    { name: 'RESTAURANT', value: 'RESTAURANT' },
+    { name: 'NOT A BUSINESS', value: 'NOT_A_BIZ' }
+];
+
+const formatVerticalLabel = (value) => (value || '').replace(/_/g, ' ');
+
 const ProjectDetails = () => {
     // --- Routing & UI State ---
     const { projectId } = useParams();
@@ -248,7 +273,8 @@ const ProjectDetails = () => {
                     });
 
                     if (pictureResponse?.error) {
-                        throw new Error(pictureResponse.msg || 'Failed to update profile picture');
+                        const msg = typeof pictureResponse.error === 'string' ? pictureResponse.error : (pictureResponse.msg || 'Failed to update profile picture');
+                        throw new Error(msg);
                     }
                 } catch (err) {
                     console.error('Error updating profile picture:', err);
@@ -291,7 +317,8 @@ const ProjectDetails = () => {
             const detailsResponse = await updateWabaProfileDetails(payload);
 
             if (detailsResponse?.error) {
-                throw new Error(detailsResponse.msg || 'Failed to update profile details');
+                const msg = typeof detailsResponse.error === 'string' ? detailsResponse.error : (detailsResponse.msg || 'Failed to update profile details');
+                throw new Error(msg);
             }
 
             // Update local state
@@ -320,8 +347,9 @@ const ProjectDetails = () => {
 
         } catch (err) {
             console.error('Error saving profile:', err);
-            setError(err.message || 'Failed to save profile');
-            toast.error(err.message || 'Failed to save WABA profile');
+            const message = err.message || 'Failed to save profile';
+            toast.error(message);
+            // Don't setError so the form stays visible (no blank screen)
         } finally {
             setIsSaving(false);
         }
@@ -1041,7 +1069,7 @@ const ProjectDetails = () => {
                                                 </div>
                                                 <div className="ml-4 mb-1">
                                                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">{data.project?.wa_display_name || data.project?.name || 'Business Profile'}</h2>
-                                                    <p className="text-sm text-gray-500">{data.profile?.vertical || '-'}</p>
+                                                    <p className="text-sm text-gray-500">{formatVerticalLabel(data.profile?.vertical) || '-'}</p>
                                                 </div>
                                             </div>
 
@@ -1052,14 +1080,18 @@ const ProjectDetails = () => {
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Industry / Vertical</label>
                                                         {isEditing ? (
-                                                            <input
-                                                                type="text"
+                                                            <select
                                                                 value={editForm.vertical}
                                                                 onChange={(e) => setEditForm({ ...editForm, vertical: e.target.value })}
                                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                                            />
+                                                            >
+                                                                <option value="">Select business type</option>
+                                                                {BUSINESS_VERTICALS.map((item) => (
+                                                                    <option key={item.value} value={item.value}>{item.name}</option>
+                                                                ))}
+                                                            </select>
                                                         ) : (
-                                                            <div className="p-2.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-gray-800 dark:text-gray-200">{data.profile?.vertical || '-'}</div>
+                                                            <div className="p-2.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-gray-800 dark:text-gray-200">{formatVerticalLabel(data.profile?.vertical) || '-'}</div>
                                                         )}
                                                     </div>
                                                     <div>

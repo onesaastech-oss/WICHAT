@@ -512,7 +512,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
     // Initialize socket connection only once
     if (!isSocketInitialized && token && username) {
       isSocketInitialized = true;
-      
+
       // Connect socket (singleton - will reuse if already exists)
       socketManager.connect(token, username);
 

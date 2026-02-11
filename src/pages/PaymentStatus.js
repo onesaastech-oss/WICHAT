@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   FiCheckCircle,
@@ -10,11 +10,11 @@ import {
   FiUser,
   FiMail,
   FiPhone,
-  FiDollarSign,
   FiCalendar,
   FiCreditCard,
   FiFileText,
-  FiRefreshCw
+  FiRefreshCw,
+  FiDownload
 } from 'react-icons/fi';
 import { Header, Sidebar } from '../component/Menu';
 import toast from 'react-hot-toast';
@@ -22,6 +22,8 @@ import { checkPaymentStatus } from '../api/auth';
 import { fetchProjectInfo } from '../store/projectSlice';
 import { useDispatch } from 'react-redux';
 import moment from 'moment';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const PaymentStatus = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -32,10 +34,12 @@ const PaymentStatus = () => {
   const [paymentData, setPaymentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const { order_id: orderIdFromPath } = useParams();
   const dispatch = useDispatch();
 
   // Get project_id from localStorage
@@ -67,38 +71,48 @@ const PaymentStatus = () => {
     };
   }, [mobileMenuOpen]);
 
-  // Fetch payment status
   useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Get order_id from path first, then fallbacks
+  const orderId =
+    orderIdFromPath ||
+    location.state?.orderId ||
+    searchParams.get('order_id') ||
+    (() => {
+      try {
+        const pending = sessionStorage.getItem('pending_payment');
+        return pending ? JSON.parse(pending).order_id : null;
+      } catch {
+        return null;
+      }
+    })();
+
+  // Poll payment status every 5 seconds when pending; stop when not pending
+  useEffect(() => {
+    if (!orderId) {
+      setError('Order ID not found');
+      setLoading(false);
+      return;
+    }
+
+    const project_id = getProjectId();
+    if (!project_id) {
+      setError('Project ID not found');
+      setLoading(false);
+      return;
+    }
+
+    const POLL_INTERVAL_MS = 5000;
+    let intervalId = null;
+
     const fetchPaymentStatus = async () => {
       try {
         setLoading(true);
         setError(null);
-
-        // Get order_id from location state, URL params, or sessionStorage
-        const orderId = 
-          location.state?.orderId || 
-          searchParams.get('order_id') ||
-          (() => {
-            try {
-              const pending = sessionStorage.getItem('pending_payment');
-              return pending ? JSON.parse(pending).order_id : null;
-            } catch {
-              return null;
-            }
-          })();
-
-        if (!orderId) {
-          setError('Order ID not found');
-          setLoading(false);
-          return;
-        }
-
-        const project_id = getProjectId();
-        if (!project_id) {
-          setError('Project ID not found');
-          setLoading(false);
-          return;
-        }
 
         const response = await checkPaymentStatus({
           project_id,
@@ -108,26 +122,47 @@ const PaymentStatus = () => {
         if (response.error) {
           setError(response.msg || 'Failed to fetch payment status');
           setLoading(false);
-          return;
+          return false;
         }
 
         setPaymentData(response);
-        
+
         // Refresh wallet balance if payment is successful
         if (response.status?.toUpperCase() === 'SUCCESS') {
           dispatch(fetchProjectInfo());
         }
-        
+
         setLoading(false);
+
+        const isPending = (response.status || '').toUpperCase() === 'PENDING';
+        return isPending;
       } catch (err) {
         console.error('Error fetching payment status:', err);
         setError(err.message || 'Failed to fetch payment status');
         setLoading(false);
+        return false;
       }
     };
 
-    fetchPaymentStatus();
-  }, [location.state, searchParams, dispatch]);
+    const runPoll = async () => {
+      const shouldContinue = await fetchPaymentStatus();
+      if (!shouldContinue && intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+      return shouldContinue;
+    };
+
+    runPoll().then((isPending) => {
+      if (isPending) {
+        intervalId = setInterval(runPoll, POLL_INTERVAL_MS);
+      }
+    });
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [orderId, dispatch]);
 
   const handleCopy = async (text, label) => {
     if (!text) return;
@@ -194,6 +229,52 @@ const PaymentStatus = () => {
     }
   };
 
+  const handleDownloadInvoice = () => {
+    if (!paymentData) return;
+    const doc = new jsPDF();
+
+    doc.setFontSize(20);
+    doc.setFont(undefined, 'bold');
+    doc.text('Payment Invoice', 20, 20);
+
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Order ID: ${paymentData?.order_id || 'N/A'}`, 20, 32);
+    doc.text(`Status: ${paymentData?.status || 'N/A'}`, 20, 38);
+    doc.text(`Date: ${formatDate(paymentData?.create_date)}`, 20, 44);
+    doc.text(`Amount: ₹${paymentData?.amount?.toFixed(2) || '0.00'}`, 20, 50);
+    doc.text(`Payment Type: ${paymentData?.type || 'N/A'}`, 20, 56);
+    if (paymentData?.utr) doc.text(`UTR: ${paymentData.utr}`, 20, 62);
+
+    const tableData = [
+      ['Field', 'Value'],
+      ['Order ID', paymentData?.order_id || 'N/A'],
+      ['Status', paymentData?.status || 'N/A'],
+      ['Amount (₹)', paymentData?.amount?.toFixed(2) || '0.00'],
+      ['Date', formatDate(paymentData?.create_date)],
+      ['Payment Type', paymentData?.type || 'N/A']
+    ];
+    if (paymentData?.utr) tableData.push(['UTR', paymentData.utr]);
+
+    autoTable(doc, {
+      startY: 72,
+      head: [tableData[0]],
+      body: tableData.slice(1),
+      theme: 'striped',
+      headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
+      styles: { fontSize: 10, cellPadding: 4 }
+    });
+
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    const pageHeight = doc.internal.pageSize.height;
+    doc.text('Thank you for your payment.', 20, pageHeight - 15);
+    doc.text('This is a computer-generated invoice.', 20, pageHeight - 10);
+
+    doc.save(`Payment-Invoice-${paymentData?.order_id || 'invoice'}.pdf`);
+    toast.success('Invoice downloaded');
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -209,8 +290,11 @@ const PaymentStatus = () => {
           isMinimized={isMinimized}
           setIsMinimized={setIsMinimized}
         />
-        <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-8">
+        <div
+          className={`transition-all duration-300 mt-16 w-full ${isMinimized ? 'md:ml-[72px]' : 'md:ml-[280px]'}`}
+          style={{ width: windowWidth >= 768 ? (isMinimized ? 'calc(100% - 72px)' : 'calc(100% - 280px)') : '100%' }}
+        >
+          <div className="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-6xl mx-auto">
             <div className="bg-white rounded-xl shadow-lg p-8 flex flex-col items-center justify-center min-h-[400px]">
               <motion.div
                 animate={{ rotate: 360 }}
@@ -241,8 +325,11 @@ const PaymentStatus = () => {
           isMinimized={isMinimized}
           setIsMinimized={setIsMinimized}
         />
-        <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-8">
+        <div
+          className={`transition-all duration-300 mt-16 w-full ${isMinimized ? 'md:ml-[72px]' : 'md:ml-[280px]'}`}
+          style={{ width: windowWidth >= 768 ? (isMinimized ? 'calc(100% - 72px)' : 'calc(100% - 280px)') : '100%' }}
+        >
+          <div className="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-6xl mx-auto">
             <div className="bg-white rounded-xl shadow-lg p-8">
               <div className="text-center">
                 <FiXCircle className="mx-auto text-red-600" size={64} />
@@ -279,8 +366,11 @@ const PaymentStatus = () => {
         setIsMinimized={setIsMinimized}
       />
 
-      <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-8">
+      <div
+        className={`transition-all duration-300 mt-16 w-full ${isMinimized ? 'md:ml-[72px]' : 'md:ml-[280px]'}`}
+        style={{ width: windowWidth >= 768 ? (isMinimized ? 'calc(100% - 72px)' : 'calc(100% - 280px)') : '100%' }}
+      >
+        <div className="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-6xl mx-auto">
           {/* Back Button */}
           <button
             onClick={() => navigate('/wallet-recharge')}
@@ -326,7 +416,7 @@ const PaymentStatus = () => {
               {/* Amount */}
               <div className="flex items-center justify-between p-4 bg-indigo-50 rounded-lg">
                 <div className="flex items-center">
-                  <FiDollarSign className="text-indigo-600 mr-3" size={20} />
+                  <span className="text-indigo-600 mr-3 text-xl font-bold">₹</span>
                   <span className="font-semibold text-gray-700">Amount</span>
                 </div>
                 <span className="text-2xl font-bold text-indigo-600">
@@ -365,27 +455,6 @@ const PaymentStatus = () => {
                   )}
                 </div>
               </div>
-
-              {/* Payment ID */}
-              {paymentData?.payment_id && (
-                <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                  <div className="flex items-center">
-                    <FiCreditCard className="text-gray-600 mr-3" size={20} />
-                    <span className="font-medium text-gray-700">Payment ID</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-900 font-mono text-sm">
-                      {paymentData.payment_id}
-                    </span>
-                    <button
-                      onClick={() => handleCopy(paymentData.payment_id, 'Payment ID')}
-                      className="text-indigo-600 hover:text-indigo-700"
-                    >
-                      <FiCopy size={16} />
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* UTR */}
               {paymentData?.utr && (
@@ -486,57 +555,15 @@ const PaymentStatus = () => {
             </motion.div>
           )}
 
-          {/* Created By Information */}
-          {paymentData?.create_by && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-white rounded-xl shadow-lg p-6 sm:p-8"
-            >
-              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
-                <FiUser className="mr-2 text-indigo-600" size={24} />
-                Created By
-              </h2>
-
-              <div className="space-y-4">
-                {paymentData.create_by.name && (
-                  <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                    <div className="flex items-center">
-                      <FiUser className="text-gray-600 mr-3" size={20} />
-                      <span className="font-medium text-gray-700">Name</span>
-                    </div>
-                    <span className="text-gray-900 font-semibold">
-                      {paymentData.create_by.name}
-                    </span>
-                  </div>
-                )}
-
-                {paymentData.create_by.email && (
-                  <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                    <div className="flex items-center">
-                      <FiMail className="text-gray-600 mr-3" size={20} />
-                      <span className="font-medium text-gray-700">Email</span>
-                    </div>
-                    <span className="text-gray-900">{paymentData.create_by.email}</span>
-                  </div>
-                )}
-
-                {paymentData.create_by.mobile && (
-                  <div className="flex items-center justify-between p-4">
-                    <div className="flex items-center">
-                      <FiPhone className="text-gray-600 mr-3" size={20} />
-                      <span className="font-medium text-gray-700">Mobile</span>
-                    </div>
-                    <span className="text-gray-900">{paymentData.create_by.mobile}</span>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-
           {/* Action Buttons */}
           <div className="mt-6 flex flex-col sm:flex-row gap-4">
+            <button
+              onClick={handleDownloadInvoice}
+              className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-semibold flex items-center justify-center gap-2"
+            >
+              <FiDownload size={20} />
+              Download Invoice
+            </button>
             <button
               onClick={() => navigate('/transactions')}
               className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-semibold"

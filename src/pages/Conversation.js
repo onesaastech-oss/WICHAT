@@ -238,7 +238,7 @@ const DateSeparator = ({ displayDate, dateId }) => {
 const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview, formatTime, messageKey, highlightedMessageId, onReply, allMessages, onScrollToMessage }) => {
     const [showInfoModal, setShowInfoModal] = useState(false);
     const [audioTime, setAudioTime] = useState({ currentTime: 0, duration: 0 });
-    
+
     // Find the original message if reply_to_message is not provided but reply_wamid exists
     const getReplyToMessage = () => {
         if (msg.reply_to_message) {
@@ -249,9 +249,9 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
         }
         return null;
     };
-    
+
     const replyToMessage = getReplyToMessage();
-    
+
     // Handle click on reply preview to scroll to original message
     const handleReplyClick = () => {
         if (replyToMessage && onScrollToMessage) {
@@ -297,10 +297,10 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                         >
                             {/* Reply to message preview */}
                             {msg.is_reply && (
-                                <div 
+                                <div
                                     onClick={replyToMessage ? handleReplyClick : undefined}
-                                    className={`mb-2 p-2 rounded-lg border-l-4 ${msg.type === 'out' 
-                                        ? 'border-green-600 bg-green-50 hover:bg-green-100' 
+                                    className={`mb-2 p-2 rounded-lg border-l-4 ${msg.type === 'out'
+                                        ? 'border-green-600 bg-green-50 hover:bg-green-100'
                                         : 'border-blue-500 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'} ${replyToMessage ? 'cursor-pointer transition-colors' : ''}`}
                                 >
                                     {replyToMessage ? (
@@ -310,14 +310,14 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                                 const replyMsg = replyToMessage;
                                                 const msgType = (replyMsg.message_type || '').toLowerCase();
                                                 const mediaUrl = replyMsg.media_url;
-                                                
+
                                                 // Image thumbnail
                                                 if ((msgType === 'image' || msgType === 'photo') && mediaUrl) {
                                                     return (
                                                         <div className="flex-shrink-0 w-10 h-10 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
-                                                            <img 
-                                                                src={mediaUrl} 
-                                                                alt="Reply" 
+                                                            <img
+                                                                src={mediaUrl}
+                                                                alt="Reply"
                                                                 className="w-full h-full object-cover"
                                                                 onError={(e) => {
                                                                     e.target.style.display = 'none';
@@ -327,7 +327,7 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                                         </div>
                                                     );
                                                 }
-                                                
+
                                                 // Video thumbnail
                                                 if (msgType === 'video' && mediaUrl) {
                                                     return (
@@ -341,7 +341,7 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                                         </div>
                                                     );
                                                 }
-                                                
+
                                                 // Audio icon
                                                 if (msgType === 'audio') {
                                                     return (
@@ -350,7 +350,7 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                                         </div>
                                                     );
                                                 }
-                                                
+
                                                 // Document icon
                                                 if (msgType === 'document') {
                                                     return (
@@ -359,7 +359,7 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                                         </div>
                                                     );
                                                 }
-                                                
+
                                                 // Location icon
                                                 if (msgType === 'location') {
                                                     return (
@@ -368,7 +368,7 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                                         </div>
                                                     );
                                                 }
-                                                
+
                                                 // Contact icon
                                                 if (msgType === 'contact' || msgType === 'contacts') {
                                                     return (
@@ -377,7 +377,7 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                                         </div>
                                                     );
                                                 }
-                                                
+
                                                 // Sticker
                                                 if (msgType === 'sticker') {
                                                     return (
@@ -386,10 +386,10 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                                         </div>
                                                     );
                                                 }
-                                                
+
                                                 return null;
                                             })()}
-                                            
+
                                             {/* Text content */}
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-xs font-semibold mb-0.5 text-gray-700 dark:text-gray-200">
@@ -399,7 +399,7 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                                     {(() => {
                                                         const replyMsg = replyToMessage;
                                                         const msgType = (replyMsg.message_type || '').toLowerCase();
-                                                        
+
                                                         // Show icon + label for media types
                                                         if (msgType === 'image' || msgType === 'photo') {
                                                             return (
@@ -452,7 +452,7 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                                         if (msgType === 'sticker') {
                                                             return <span>Sticker</span>;
                                                         }
-                                                        
+
                                                         // Template message
                                                         if (replyMsg.is_template && replyMsg.template) {
                                                             const bodyComponent = replyMsg.template.components?.find(c => c.type === 'BODY');
@@ -478,12 +478,12 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                                             }
                                                             return <span>Template message</span>;
                                                         }
-                                                        
+
                                                         // Text message
                                                         if (replyMsg.message) {
                                                             return <span>{replyMsg.message}</span>;
                                                         }
-                                                        
+
                                                         return <span>Message</span>;
                                                     })()}
                                                 </div>
@@ -506,7 +506,7 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                     )}
                                 </div>
                             )}
-                            
+
                             {msg.is_template ? (
                                 <TemplateMessageRenderer
                                     msg={msg}
@@ -1043,7 +1043,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     // Scroll to a message and highlight it (used for reply click)
     const handleScrollToMessage = useCallback((messageKey) => {
         if (!messageKey) return;
-        
+
         const node = document.getElementById(`message-${messageKey}`);
         if (node?.scrollIntoView) {
             setHighlightedMessageId(messageKey);
@@ -1320,8 +1320,26 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         restoreMessageInputFocus();
     }, [restoreMessageInputFocus]);
 
+    // Mark as read only when tab/window is focused (like WhatsApp Web)
     useEffect(() => {
-        markAsRead(activeChat.number);
+        if (!activeChat?.number) return;
+
+        const runMarkAsReadIfVisible = () => {
+            if (document.visibilityState === 'visible') {
+                markAsRead(activeChat.number);
+            }
+        };
+
+        runMarkAsReadIfVisible();
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                markAsRead(activeChat.number);
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, [activeChat, messages]);
 
     useEffect(() => {
@@ -1974,7 +1992,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
     const sendTextMessage = async (text) => {
         const tempMessageId = `temp_${Date.now()}`;
-        
+
         // Capture reply info before clearing
         const replyInfo = replyingToMessage ? {
             is_reply: true,
@@ -1985,7 +2003,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             reply_wamid: '',
             reply_to_message: null
         };
-        
+
         const newMessage = {
             id: Date.now().toString(),
             message_id: tempMessageId,
@@ -3197,13 +3215,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                 const replyMsg = replyingToMessage;
                                 const msgType = (replyMsg.message_type || '').toLowerCase();
                                 const mediaUrl = replyMsg.media_url;
-                                
+
                                 if ((msgType === 'image' || msgType === 'photo') && mediaUrl) {
                                     return (
                                         <div className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-600">
-                                            <img 
-                                                src={mediaUrl} 
-                                                alt="Reply" 
+                                            <img
+                                                src={mediaUrl}
+                                                alt="Reply"
                                                 className="w-full h-full object-cover"
                                                 onError={(e) => {
                                                     e.target.style.display = 'none';
@@ -3261,7 +3279,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                 }
                                 return null;
                             })()}
-                            
+
                             {/* Text content */}
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center space-x-2 mb-0.5">
@@ -3274,7 +3292,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                     {(() => {
                                         const replyMsg = replyingToMessage;
                                         const msgType = (replyMsg.message_type || '').toLowerCase();
-                                        
+
                                         if (msgType === 'image' || msgType === 'photo') {
                                             return (
                                                 <>
@@ -3326,7 +3344,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                         if (msgType === 'sticker') {
                                             return <span>Sticker</span>;
                                         }
-                                        
+
                                         // Template message
                                         if (replyMsg.is_template && replyMsg.template) {
                                             const bodyComponent = replyMsg.template.components?.find(c => c.type === 'BODY');
@@ -3352,17 +3370,17 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                             }
                                             return <span>Template message</span>;
                                         }
-                                        
+
                                         // Text message
                                         if (replyMsg.message) {
                                             return <span>{replyMsg.message}</span>;
                                         }
-                                        
+
                                         return <span>Message</span>;
                                     })()}
                                 </div>
                             </div>
-                            
+
                             {/* Close button */}
                             <button
                                 onClick={() => setReplyingToMessage(null)}
@@ -3590,7 +3608,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                 </h3>
                                 <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center space-x-2">
                                     <span>
-                                        {contactDetails?.has_contact 
+                                        {contactDetails?.has_contact
                                             ? `${contactDetails.contact.name} • ${contactDetails.contact.number}`
                                             : `${activeChat?.number || 'Unknown'}`
                                         }

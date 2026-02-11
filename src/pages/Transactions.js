@@ -83,18 +83,8 @@ const Transactions = () => {
       const effectiveEntryType = overrides.entryType ?? entryType;
       const effectiveSelectedProjects = overrides.selectedProjects ?? selectedProjects;
 
-      const allProjectIds = (tokens.projects || []).map(p => p?.project_id).filter(Boolean);
-
-      // Determine project IDs based on selection
-      // Empty array means all projects
-      const projectIds = effectiveSelectedProjects.length === 0
-        ? allProjectIds
-        : effectiveSelectedProjects;
-
-      if (!projectIds.length) {
-        setError('No projects available');
-        return;
-      }
+      // When "All" is selected, pass empty array (no project_id); backend treats [] as all projects
+      const projectIds = effectiveSelectedProjects;
 
       const payload = {
         page_no: page,
@@ -105,6 +95,9 @@ const Transactions = () => {
         ...(effectiveTransactionType !== 'all' ? { transaction_type: effectiveTransactionType } : {}),
         ...(effectiveEntryType !== 'all' ? { type: effectiveEntryType } : {})
       };
+
+
+
 
       console.log('📤 Fetching transactions:', payload);
 

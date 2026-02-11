@@ -174,8 +174,8 @@ root.render(
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/my-profile" element={<MyProfile />} />
           <Route path="/change-password" element={<ChangePassword />} />
-          <Route path="/wallet-recharge" element={<WalletRecharge />} />
-          <Route path="/payment-status" element={<PaymentStatus />} />
+          <Route path="/wallet-recharge/:amount?" element={<WalletRecharge />} />
+          <Route path="/payment-status/:order_id" element={<PaymentStatus />} />
           <Route path="/support" element={<Support />} />
           {/* Add more routes as needed */}
           <Route path="*" element={<Error_404 />} />
