@@ -10,11 +10,13 @@ import {
   FiEye,
   FiUser,
   FiShield,
-  FiUserCheck
+  FiUserCheck,
+  FiDollarSign,
+  FiCreditCard
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { fetchUserProfile, createProject } from '../api/auth';
+import { fetchUserProfile, createProject, getSubscriptionPacks } from '../api/auth';
 
 const Projects = () => {
   const navigate = useNavigate();
@@ -38,6 +40,11 @@ const Projects = () => {
     name: ''
   });
   const [activeProjectId, setActiveProjectId] = useState(null);
+  const [subscriptionPackage, setSubscriptionPackage] = useState(null); // { monthly: { amount, package_id }, yearly: { amount, package_id } }
+  const [billingCycle, setBillingCycle] = useState('monthly'); // 'monthly' | 'yearly'
+  const [packageLoading, setPackageLoading] = useState(false);
+  const [showWalletRechargeModal, setShowWalletRechargeModal] = useState(false);
+  const [walletRechargeAmount, setWalletRechargeAmount] = useState(0);
 
   // Get active project ID from localStorage
   useEffect(() => {
@@ -95,6 +102,24 @@ const Projects = () => {
     localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
   }, [isMinimized]);
 
+  // Fetch package pricing (same as MyPlan) for create project modal
+  useEffect(() => {
+    const fetchPackage = async () => {
+      setPackageLoading(true);
+      try {
+        const response = await getSubscriptionPacks();
+        if (!response.error && response.data?.package) {
+          setSubscriptionPackage(response.data.package);
+        }
+      } catch (err) {
+        console.error('Failed to fetch package pricing:', err);
+      } finally {
+        setPackageLoading(false);
+      }
+    };
+    fetchPackage();
+  }, []);
+
   useEffect(() => {
     if (mobileMenuOpen) {
       document.body.style.overflow = 'hidden';
@@ -146,9 +171,12 @@ const Projects = () => {
       // Create new project via API
       try {
         setLoading(true);
+        const packageId = subscriptionPackage?.[billingCycle]?.package_id ||
+          (billingCycle === 'yearly' ? 'PROJECT_1Y' : 'PROJECT_1M');
         const response = await createProject({
           company_name: formData.company_name,
-          project_name: formData.name
+          project_name: formData.name,
+          package_id: packageId
         });
 
         if (response && !response.error) {
@@ -179,17 +207,30 @@ const Projects = () => {
         }
       } catch (error) {
         console.error('Error creating project:', error);
-        toast.error(error?.message || 'Failed to create project');
+        if (error.response?.status === 402) {
+          const amount = subscriptionPackage?.[billingCycle]?.amount != null
+            ? Number(subscriptionPackage[billingCycle].amount)
+            : 0;
+          setWalletRechargeAmount(amount);
+          setShowWalletRechargeModal(true);
+        } else {
+          toast.error(error?.message || error.response?.data?.error || 'Failed to create project');
+        }
       } finally {
         setLoading(false);
       }
     }
   };
 
+  const handleWalletRechargeNavigate = () => {
+    setShowWalletRechargeModal(false);
+    navigate(`/wallet-recharge/${walletRechargeAmount}`);
+  };
+
 
   // Prevent background scrolling when modal is open
   useEffect(() => {
-    if (showCreateModal) {
+    if (showCreateModal || showWalletRechargeModal) {
       const scrollY = window.scrollY;
       document.body.style.position = 'fixed';
       document.body.style.top = `-${scrollY}px`;
@@ -204,7 +245,7 @@ const Projects = () => {
         window.scrollTo(0, scrollY);
       };
     }
-  }, [showCreateModal]);
+  }, [showCreateModal, showWalletRechargeModal]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -346,11 +387,16 @@ const Projects = () => {
                         key={project.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`relative text-left p-4 rounded-xl border-2 transition-all duration-200 min-h-[100px] flex flex-col cursor-pointer ${isActive
+                        className={`relative text-left p-4 rounded-xl border-2 transition-all duration-200 min-h-[100px] flex flex-col ${isOwned
+                          ? 'cursor-pointer'
+                          : 'cursor-not-allowed'
+                          } ${isActive
                           ? 'border-indigo-400 bg-indigo-50/70 dark:bg-indigo-900/15'
-                          : 'border-gray-200 dark:border-gray-600 hover:border-indigo-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm'
+                          : isOwned
+                            ? 'border-gray-200 dark:border-gray-600 hover:border-indigo-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm'
+                            : 'border-gray-200 dark:border-gray-600 opacity-90'
                           }`}
-                        onClick={() => navigate(`/project-details/${project.id}`)}
+                        onClick={() => { if (isOwned) navigate(`/project-details/${project.id}`); }}
                       >
                         {/* Row 1: Project name + role badge (same as modal) */}
                         <div className="flex items-start gap-2 w-full min-w-0">
@@ -473,6 +519,50 @@ const Projects = () => {
                       placeholder="Enter project name"
                     />
                   </div>
+
+                  {/* Package selection (create only) */}
+                  {!editingProject && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Package
+                      </label>
+                      {packageLoading ? (
+                        <div className="text-sm text-gray-500 py-2">Loading pricing...</div>
+                      ) : subscriptionPackage ? (
+                        <div className="space-y-3">
+                          <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-100">
+                            <button
+                              type="button"
+                              onClick={() => setBillingCycle('monthly')}
+                              className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                                billingCycle === 'monthly'
+                                  ? 'bg-white text-indigo-600 shadow-sm border border-gray-200'
+                                  : 'text-gray-600 hover:text-gray-900'
+                              }`}
+                            >
+                              Monthly — ₹{subscriptionPackage.monthly?.amount != null ? Number(subscriptionPackage.monthly.amount).toLocaleString() : '0'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBillingCycle('yearly')}
+                              className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                                billingCycle === 'yearly'
+                                  ? 'bg-white text-indigo-600 shadow-sm border border-gray-200'
+                                  : 'text-gray-600 hover:text-gray-900'
+                              }`}
+                            >
+                              Yearly — ₹{subscriptionPackage.yearly?.amount != null ? Number(subscriptionPackage.yearly.amount).toLocaleString() : '0'}
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {billingCycle === 'monthly' ? 'Billed per month per project.' : 'Billed per year per project.'}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">Pricing not available.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Modal Footer */}
@@ -493,6 +583,55 @@ const Projects = () => {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Wallet / Fund load modal (402 - insufficient balance) */}
+      <AnimatePresence>
+        {showWalletRechargeModal && (
+          <motion.div
+            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowWalletRechargeModal(false)}
+          >
+            <motion.div
+              className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 text-center">
+                <div className="mx-auto w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4">
+                  <FiDollarSign className="w-7 h-7 text-amber-600 dark:text-amber-400" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Insufficient wallet balance</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Your wallet balance is not enough to complete this action. Please recharge your wallet to continue.
+                </p>
+                <p className="text-lg font-semibold text-indigo-600 dark:text-indigo-400 mb-6">
+                  Amount due: ₹{Number(walletRechargeAmount).toLocaleString()}
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <button
+                    onClick={() => setShowWalletRechargeModal(false)}
+                    className="px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleWalletRechargeNavigate}
+                    className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    <FiCreditCard className="mr-2 w-4 h-4" />
+                    Recharge wallet
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </motion.div>
         )}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Header, Sidebar } from '../component/Menu';
-import { getProjectMetaDetails, updateWabaProfilePicture, updateWabaProfileDetails, submitWabaId } from '../api/auth';
+import { getProjectMetaDetails, updateWabaProfileDetails, submitWabaId } from '../api/auth';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import {
@@ -263,32 +263,20 @@ const ProjectDetails = () => {
             // Get the latest profile data to ensure we have all current values
             const currentProfile = data?.profile || {};
 
-            // Step 1: Update profile picture first if it has changed
-            const profilePictureChanged = editForm.profile_picture_url !== originalProfilePictureUrl;
-            if (profilePictureChanged && editForm.profile_picture_url) {
-                try {
-                    const pictureResponse = await updateWabaProfilePicture({
-                        project_id: activeId,
-                        profile_picture: editForm.profile_picture_url
-                    });
-
-                    if (pictureResponse?.error) {
-                        const msg = typeof pictureResponse.error === 'string' ? pictureResponse.error : (pictureResponse.msg || 'Failed to update profile picture');
-                        throw new Error(msg);
-                    }
-                } catch (err) {
-                    console.error('Error updating profile picture:', err);
-                    throw new Error(err.message || 'Failed to update profile picture');
-                }
+            // Validate profile picture: user must upload one before saving profile details
+            const profilePictureUrl = (editForm.profile_picture_url || '').trim();
+            if (!profilePictureUrl) {
+                toast.error('Please upload a profile picture first.');
+                setIsSaving(false);
+                return;
             }
 
-            // Step 2: Update profile details
+            // Update profile details (include profile_picture URL; no separate picture endpoint)
             // Always use current profile data as base, then override with editForm values if they're non-empty
-            // This ensures all mandatory fields are provided even when updating just one field
             const payload = {
                 project_id: activeId,
+                profile_picture: profilePictureUrl,
                 // Use editForm value if it's a non-empty string, otherwise use current profile value
-                // This allows updating one field while keeping others with their current values
                 about: (editForm.about && editForm.about.trim() !== '')
                     ? editForm.about
                     : (currentProfile.about || ''),

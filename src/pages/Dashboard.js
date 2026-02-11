@@ -79,7 +79,7 @@ function Dashboard() {
                     const parsed = JSON.parse(stored);
                     const hasProjects = parsed.project_count > 0 || (parsed.projects?.list && parsed.projects.list.length > 0) || (Array.isArray(parsed.projects) && parsed.projects.length > 0);
                     const selectedProjectId = parsed.selected_project_id;
-                    
+
                     // Open the project selection modal if user has projects but no project is selected
                     if (hasProjects && !selectedProjectId) {
                         setSwitchProjectModalOpen(true);
@@ -458,7 +458,7 @@ function Dashboard() {
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                             {/* Left column - Analytics and Activity */}
                             <div className="lg:col-span-2 space-y-6">
-                                
+
                                 {/* Template Status Overview */}
                                 {!loading && !error && dashboardData?.template && (
                                     <div className="bg-white rounded-xl shadow p-6">
@@ -514,7 +514,7 @@ function Dashboard() {
                                                                 : 0}%
                                                         </span>
                                                     </div>
-                                                     <div className="w-full bg-green-200 rounded-full h-1.5 mt-1">
+                                                    <div className="w-full bg-green-200 rounded-full h-1.5 mt-1">
                                                         <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${dashboardData.template?.total > 0 ? (dashboardData.template.approved / dashboardData.template.total) * 100 : 0}%` }}></div>
                                                     </div>
                                                 </div>
@@ -566,7 +566,7 @@ function ProjectProfileCard({ project, profile, loading, error, projectId, navig
         return (
             <div className="bg-white rounded-xl shadow p-6 h-full flex flex-col items-center justify-center text-center">
                 <div className="bg-indigo-50 p-4 rounded-full mb-4">
-                     <FiUser className="text-indigo-500 w-8 h-8" />
+                    <FiUser className="text-indigo-500 w-8 h-8" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
                     {error ? 'Error Loading Profile' : 'Project Information'}
@@ -599,57 +599,55 @@ function ProjectProfileCard({ project, profile, loading, error, projectId, navig
                         </div>
                     )}
                 </div>
-                
-                <div 
-    className="flex-1 min-w-0 group cursor-pointer p-4 rounded-lg border border-gray-200 
+
+                <div
+                    className="flex-1 min-w-0 group cursor-pointer p-4 rounded-lg border border-gray-200 
                hover:border-indigo-400 hover:shadow-md hover:bg-indigo-50/30 
                transition-all duration-200 active:scale-[0.99]"
-    onClick={() => projectId && navigate(`/project-details/${projectId}`)}
-    role="button"
-    tabIndex={0}
-    onKeyDown={(e) => e.key === 'Enter' && projectId && navigate(`/project-details/${projectId}`)}
->
-    <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-                <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold">Project</p>
-                {project?.is_whatsapp_verified && (
-                    <FiShield className="text-emerald-500 w-3 h-3" title="Verified" />
-                )}
-            </div>
-            <h3 
-                className="text-lg sm:text-xl font-bold text-gray-900 truncate 
-                           group-hover:text-indigo-600 transition-colors" 
-                title={project?.name}
-            >
-                {project?.name || '—'}
-            </h3>
-            <p className="text-sm text-gray-500 truncate mt-1">{project?.wa_display_name}</p>
-        </div>
-        
-        {/* Clickable indicator */}
-        <FiChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0 mt-1
+                    onClick={() => projectId && navigate(`/project-details/${projectId}`)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === 'Enter' && projectId && navigate(`/project-details/${projectId}`)}
+                >
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                                <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold">Project</p>
+                                {project?.is_whatsapp_verified && (
+                                    <FiShield className="text-emerald-500 w-3 h-3" title="Verified" />
+                                )}
+                            </div>
+                            <h3
+                                className="text-lg sm:text-xl font-bold text-gray-900 truncate 
+                           group-hover:text-indigo-600 transition-colors"
+                                title={project?.name}
+                            >
+                                {project?.name || '—'}
+                            </h3>
+                            <p className="text-sm text-gray-500 truncate mt-1">{project?.wa_display_name}</p>
+                        </div>
+
+                        {/* Clickable indicator */}
+                        <FiChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0 mt-1
                                    group-hover:text-indigo-600 group-hover:translate-x-1 
                                    transition-all duration-200" />
-    </div>
-</div>
+                    </div>
+                </div>
             </div>
 
             {/* Tags Section */}
             <div className="flex flex-wrap gap-2 mb-6">
                 {project?.status && (
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        project.status === 'connected' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                    }`}>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${project.status === 'connected' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
                         {project.status.toUpperCase()}
                     </span>
                 )}
                 {project?.wa_quality_rating && (
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        project.wa_quality_rating === 'GREEN'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                            : 'bg-yellow-50 text-yellow-700 border border-yellow-100'
-                    }`}>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${project.wa_quality_rating === 'GREEN'
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                        : 'bg-yellow-50 text-yellow-700 border border-yellow-100'
+                        }`}>
                         Quality: {project.wa_quality_rating}
                     </span>
                 )}
@@ -664,14 +662,14 @@ function ProjectProfileCard({ project, profile, loading, error, projectId, navig
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 mt-auto">
                 <ProfileDetailRow
                     icon={<FiPhone className="w-4 h-4" />}
-                    label="WhatsApp Number"
+                    label="Number"
                     value={wa_number || project?.wa_number}
                 />
-                 <ProfileDetailRow
+                <ProfileDetailRow
                     icon={<FiFileText className="w-4 h-4" />}
                     label="Daily Limit"
-                    value={typeof project?.daily_template_limit === 'number' 
-                        ? `${(project.daily_template_limit / 1000).toFixed(0)}k Msg` 
+                    value={typeof project?.daily_template_limit === 'number'
+                        ? `${project.daily_template_limit} Templates`
                         : project?.daily_template_limit}
                 />
                 {/* <ProfileDetailRow
@@ -680,7 +678,7 @@ function ProjectProfileCard({ project, profile, loading, error, projectId, navig
                     value={website}
                     isLink={true}
                 /> */}
-               
+
                 <ProfileDetailRow
                     icon={<FiActivity className="w-4 h-4" />}
                     label="Product"

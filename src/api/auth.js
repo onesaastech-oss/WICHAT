@@ -390,9 +390,10 @@ export const updateWabaProfilePicture = async ({ project_id, profile_picture }) 
   return response.data;
 };
 
-// Update WABA profile details
+// Update WABA profile details (includes profile_picture URL)
 export const updateWabaProfileDetails = async ({
   project_id,
+  profile_picture,
   about,
   address,
   vertical,
@@ -413,6 +414,7 @@ export const updateWabaProfileDetails = async ({
 
   const payload = {
     project_id,
+    ...(profile_picture != null && profile_picture !== '' ? { profile_picture } : {}),
     about,
     address,
     vertical,
@@ -546,7 +548,7 @@ export const submitWabaId = async ({ project_id, waba_id }) => {
 };
 
 // Create project
-export const createProject = async ({ company_name, project_name }) => {
+export const createProject = async ({ company_name, project_name, package_id }) => {
   // Load auth tokens from localStorage to match existing API requirements
   const getUserData = () => {
     try {
@@ -568,7 +570,8 @@ export const createProject = async ({ company_name, project_name }) => {
 
   const payload = {
     company_name,
-    project_name
+    project_name,
+    ...(package_id != null && package_id !== '' ? { package_id } : {})
   };
 
   // Encrypt the payload
