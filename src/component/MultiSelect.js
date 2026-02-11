@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, X, Check } from 'lucide-react';
+import { ChevronDown, X, Check, Search } from 'lucide-react';
 
 export default function MultiSelect({
     options = [],
     selectedValues = [],
     onChange,
+    onSearch, // New prop for search action
     placeholder = "Select options",
     label = "Select",
-    allOptionLabel = "All Projects"
+    allOptionLabel = "All Projects",
+    showSearchButton = true // Control whether to show search button
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
@@ -46,6 +48,14 @@ export default function MultiSelect({
     const handleClearAll = (e) => {
         e.stopPropagation();
         onChange([]);
+    };
+
+    const handleSearch = (e) => {
+        e.stopPropagation();
+        if (onSearch) {
+            onSearch(selectedValues);
+        }
+        setIsOpen(false); // Close dropdown after search
     };
 
     const getDisplayText = () => {
@@ -92,40 +102,71 @@ export default function MultiSelect({
 
             {/* Dropdown */}
             {isOpen && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
-                    {/* Select All Option */}
-                    <div
-                        onClick={handleSelectAll}
-                        className="px-3 py-2 hover:bg-indigo-50 cursor-pointer flex items-center justify-between border-b border-gray-100 sticky top-0 bg-white"
-                    >
-                        <span className="text-sm font-medium text-indigo-600">{allOptionLabel}</span>
-                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${isAllSelected
-                                ? 'bg-indigo-600 border-indigo-600'
-                                : 'border-gray-300'
-                            }`}>
-                            {isAllSelected && <Check className="h-3 w-3 text-white" />}
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                    {/* Fixed Header with Select All and Search */}
+                    <div className="sticky top-0 bg-white border-b border-gray-100">
+                        {/* Select All Option */}
+                        <div
+                            onClick={handleSelectAll}
+                            className="px-3 py-2 hover:bg-indigo-50 cursor-pointer flex items-center justify-between"
+                        >
+                            <span className="text-sm font-medium text-indigo-600">{allOptionLabel}</span>
+                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${isAllSelected
+                                    ? 'bg-indigo-600 border-indigo-600'
+                                    : 'border-gray-300'
+                                }`}>
+                                {isAllSelected && <Check className="h-3 w-3 text-white" />}
+                            </div>
                         </div>
+
+                        {/* Search Button */}
+                        {showSearchButton && (
+                            <div className="px-3 py-2 bg-gray-50">
+                                <button
+                                    onClick={handleSearch}
+                                    disabled={selectedValues.length === 0}
+                                    className={`w-full py-2 px-4 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all ${
+                                        selectedValues.length > 0
+                                            ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow'
+                                            : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                    }`}
+                                >
+                                    <Search className="h-4 w-4" />
+                                    Search with {selectedValues.length > 0 
+                                        ? `${selectedValues.length} project${selectedValues.length > 1 ? 's' : ''}` 
+                                        : 'selected projects'}
+                                </button>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Individual Options */}
-                    {options.map((option) => {
-                        const isSelected = selectedValues.includes(option.value);
-                        return (
-                            <div
-                                key={option.value}
-                                onClick={() => handleToggle(option.value)}
-                                className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
-                            >
-                                <span className="text-sm text-gray-700">{option.label}</span>
-                                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${isSelected
-                                        ? 'bg-indigo-600 border-indigo-600'
-                                        : 'border-gray-300'
-                                    }`}>
-                                    {isSelected && <Check className="h-3 w-3 text-white" />}
+                    {/* Options List */}
+                    <div className="max-h-48 overflow-auto">
+                        {options.map((option) => {
+                            const isSelected = selectedValues.includes(option.value);
+                            return (
+                                <div
+                                    key={option.value}
+                                    onClick={() => handleToggle(option.value)}
+                                    className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between border-b border-gray-50 last:border-0"
+                                >
+                                    <span className="text-sm text-gray-700">{option.label}</span>
+                                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${isSelected
+                                            ? 'bg-indigo-600 border-indigo-600'
+                                            : 'border-gray-300'
+                                        }`}>
+                                        {isSelected && <Check className="h-3 w-3 text-white" />}
+                                    </div>
                                 </div>
+                            );
+                        })}
+                        
+                        {options.length === 0 && (
+                            <div className="px-3 py-4 text-center text-sm text-gray-500">
+                                No options available
                             </div>
-                        );
-                    })}
+                        )}
+                    </div>
                 </div>
             )}
         </div>
