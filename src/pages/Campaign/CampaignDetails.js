@@ -97,12 +97,11 @@ const CampaignDetails = () => {
 
   const [loadingDetails, setLoadingDetails] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [detailsError, setDetailsError] = useState(null);
   const [messagesError, setMessagesError] = useState(null);
 
-  const [lastId, setLastId] = useState(0);
-  const lastIdRef = useRef(0);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
@@ -165,56 +164,50 @@ const CampaignDetails = () => {
   }, [campaignId, postEncrypted, tokens?.projects, tokens?.token, tokens?.username]);
 
   const fetchCampaignMessages = useCallback(
-    async (reset = false, currentLastId = null) => {
+    async (page = 1) => {
       if (!tokens?.token || !tokens?.username || !campaignId) {
         setLoadingMessages(false);
         return;
       }
 
-      try {
-        if (reset) {
-          setLoadingMessages(true);
-          setMessagesError(null);
-          setRecipients([]);
-          setLastId(0);
-          lastIdRef.current = 0;
-          setHasMore(false);
-        } else {
-          setLoadingMore(true);
-          setMessagesError(null);
-        }
+      setLoadingMessages(true);
+      setMessagesError(null);
 
-        const lastIdToUse = reset ? 0 : (currentLastId ?? lastIdRef.current);
+      try {
+        const project_id = tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
+        const limit = Math.min(Math.max(1, itemsPerPage), 100);
         const payload = {
-          project_id: tokens.projects?.[0]?.project_id || '',
-          last_id: lastIdToUse,
-          status: statusFilter,
-          campaign_id: campaignId
+          project_id,
+          campaign_id: campaignId,
+          status: statusFilter === 'all' ? 'all' : statusFilter,
+          page_no: page,
+          limit
         };
 
         const response = await postEncrypted('/campaign/campaign-messages', payload);
 
         if (response?.data?.error) {
-          setMessagesError(response?.data?.message || 'Failed to fetch campaign messages');
+          setMessagesError(response?.data?.msg || response?.data?.message || 'Failed to fetch campaign messages');
+          setRecipients([]);
           return;
         }
 
         const apiMessages = response?.data?.data || [];
         const mapped = apiMessages.map(mapMessageToRecipientRow);
-        setRecipients((prev) => (reset ? mapped : [...prev, ...mapped]));
+        setRecipients(mapped);
 
-        const newLastId = response?.data?.last_id || 0;
-        setLastId(newLastId);
-        lastIdRef.current = newLastId;
-        setHasMore(response?.data?.has_more || false);
+        const meta = response?.data?.meta || {};
+        setTotalRecords(Number(meta.total_records) || 0);
+        setTotalPages(Math.max(1, Number(meta.total_pages) || 1));
+        setHasMore(Boolean(meta.has_more));
       } catch (err) {
-        setMessagesError(err?.response?.data?.message || err?.message || 'Failed to fetch campaign messages');
+        setMessagesError(err?.response?.data?.msg || err?.response?.data?.message || err?.message || 'Failed to fetch campaign messages');
+        setRecipients([]);
       } finally {
         setLoadingMessages(false);
-        setLoadingMore(false);
       }
     },
-    [campaignId, postEncrypted, statusFilter, tokens?.projects, tokens?.token, tokens?.username]
+    [campaignId, itemsPerPage, postEncrypted, statusFilter, tokens?.projects, tokens?.selected_project_id, tokens?.token, tokens?.username]
   );
 
   useEffect(() => {
@@ -222,14 +215,12 @@ const CampaignDetails = () => {
   }, [campaignId, fetchCampaignDetails, tokens?.token, tokens?.username]);
 
   useEffect(() => {
-    if (tokens?.token && tokens?.username && campaignId) fetchCampaignMessages(true, 0);
-  }, [campaignId, fetchCampaignMessages, statusFilter, tokens?.token, tokens?.username]);
+    if (tokens?.token && tokens?.username && campaignId) fetchCampaignMessages(currentPage);
+  }, [campaignId, currentPage, fetchCampaignMessages, statusFilter, itemsPerPage, tokens?.token, tokens?.username]);
 
-  const loadMoreMessages = useCallback(() => {
-    if (hasMore && !loadingMore && !loadingMessages) {
-      fetchCampaignMessages(false, lastId);
-    }
-  }, [fetchCampaignMessages, hasMore, lastId, loadingMessages, loadingMore]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, itemsPerPage]);
 
   const getRecipientStatusBadge = (status) => {
     const statusConfig = {
@@ -276,21 +267,19 @@ const CampaignDetails = () => {
 
   const filteredRecipients = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    return recipients.filter((recipient) => {
-      const matchesSearch = !q || recipient.name.toLowerCase().includes(q) || recipient.phone.includes(q);
-      const matchesStatus = statusFilter === 'all' || recipient.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [recipients, searchTerm, statusFilter]);
+    if (!q) return recipients;
+    return recipients.filter((recipient) =>
+      recipient.name.toLowerCase().includes(q) || recipient.phone.includes(q)
+    );
+  }, [recipients, searchTerm]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter]);
+  }, [statusFilter, itemsPerPage]);
 
-  const totalPages = Math.ceil(filteredRecipients.length / itemsPerPage) || 1;
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedRecipients = filteredRecipients.slice(startIndex, endIndex);
+  const startRecord = totalRecords === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const endRecord = Math.min(currentPage * itemsPerPage, totalRecords);
+  const paginatedRecipients = filteredRecipients;
 
   const campaignStats = useMemo(() => {
     const r = campaignDetails?.recipients || {};
@@ -516,9 +505,9 @@ const CampaignDetails = () => {
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Status</p>
                   <div className="mt-1">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
-                      ${campaignDetails?.status === 'complete' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 
-                        campaignDetails?.status === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 
-                        'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}`}>
+                      ${campaignDetails?.status === 'complete' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                        campaignDetails?.status === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                          'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}`}>
                       {campaignDetails?.status || 'N/A'}
                     </span>
                   </div>
@@ -540,10 +529,10 @@ const CampaignDetails = () => {
                 <FiUsers className="mr-2 text-indigo-500" />
                 Recipients List
                 <span className="ml-2 px-2.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-xs font-medium text-gray-600 dark:text-gray-300">
-                  {filteredRecipients.length}
+                  {totalRecords}
                 </span>
               </h3>
-              
+
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -579,7 +568,7 @@ const CampaignDetails = () => {
             )}
 
             <div className="flex-1 overflow-hidden relative">
-               <div className="absolute inset-0 overflow-y-auto">
+              <div className="absolute inset-0 overflow-y-auto">
                 {loadingMessages ? (
                   <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
                     <FiLoader className="animate-spin mb-2" size={32} />
@@ -659,72 +648,52 @@ const CampaignDetails = () => {
                           </tr>
                         ))
                       )}
-                      
-                      {/* Load More Trigger / Loading State inside list */}
-                      {hasMore && !loadingMessages && (
-                         <tr className="bg-gray-50 dark:bg-gray-800/50 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={loadMoreMessages}>
-                           <td colSpan={showFailedReasonColumn ? 5 : 4} className="px-6 py-3 text-center">
-                             {loadingMore ? (
-                                <div className="flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                                  <FiLoader className="animate-spin mr-2" />
-                                  <span className="text-sm font-medium">Loading more recipients...</span>
-                                </div>
-                             ) : (
-                                <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">Load {itemsPerPage} more...</span>
-                             )}
-                           </td>
-                         </tr>
-                      )}
                     </tbody>
                   </table>
                 )}
-               </div>
+              </div>
             </div>
 
             {/* Footer Pagination */}
             <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 rounded-b-lg flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="text-sm text-gray-500 dark:text-gray-400">
-                 Showing <span className="font-medium">{filteredRecipients.length > 0 ? startIndex + 1 : 0}</span> to <span className="font-medium">{Math.min(endIndex, filteredRecipients.length)}</span> of <span className="font-medium">{filteredRecipients.length}</span> results
+                Showing <span className="font-medium">{startRecord}</span> to <span className="font-medium">{endRecord}</span> of <span className="font-medium">{totalRecords}</span> results
               </div>
-              
-              <div className="flex items-center gap-2">
-                 <select
-                    value={itemsPerPage}
-                    onChange={(e) => {
-                      setItemsPerPage(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                    className="block w-20 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:ring-indigo-500 focus:border-indigo-500"
-                  >
-                    <option value="5">5 / pg</option>
-                    <option value="10">10 / pg</option>
-                    <option value="25">25 / pg</option>
-                    <option value="50">50 / pg</option>
-                    <option value="100">100 / pg</option>
-                  </select>
 
-                  <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <span className="sr-only">Previous</span>
-                      <FiChevronLeft className="h-5 w-5" aria-hidden="true" />
-                    </button>
-                    {/* Simplified Pagination for tighter UI */}
-                     <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 dark:text-white ring-1 ring-inset ring-gray-300 dark:ring-gray-600 focus:outline-offset-0">
-                       Page {currentPage} of {totalPages}
-                     </span>
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage >= totalPages}
-                      className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <span className="sr-only">Next</span>
-                      <FiChevronRight className="h-5 w-5" aria-hidden="true" />
-                    </button>
-                  </nav>
+              <div className="flex items-center gap-2">
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  className="block w-20 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  <option value="10">10 / pg</option>
+                  <option value="20">20 / pg</option>
+                  <option value="25">25 / pg</option>
+                  <option value="50">50 / pg</option>
+                  <option value="100">100 / pg</option>
+                </select>
+
+                <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1 || loadingMessages}
+                    className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="sr-only">Previous</span>
+                    <FiChevronLeft className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                  <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 dark:text-white ring-1 ring-inset ring-gray-300 dark:ring-gray-600 focus:outline-offset-0">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage >= totalPages || loadingMessages}
+                    className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="sr-only">Next</span>
+                    <FiChevronRight className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                </nav>
               </div>
             </div>
           </div>
