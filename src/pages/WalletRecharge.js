@@ -325,18 +325,11 @@ const WalletRecharge = () => {
       return;
     }
 
-    const project_id = getProjectId();
-    if (!project_id) {
-      toast.error('Please select a project first');
-      return;
-    }
-
     setProcessing(true);
     const origin = window.location.origin;
 
     try {
       const response = await createPaymentOrder({
-        project_id,
         amount: getPayableAmount(),
         redirect_url: `${origin}/payment-status`
       });
