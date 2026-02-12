@@ -63,6 +63,7 @@ export const fetchUserProfile = async () => {
       username: apiData.username,
       token: token, // Keep existing token
       profile: apiData.profile,
+      balance: apiData.balance,
       project_count: apiData.projects?.project_count || 0,
       projects: apiData.projects?.list || [],
       selected_project_id: userData?.selected_project_id || apiData.projects?.list?.[0]?.project_id || ''

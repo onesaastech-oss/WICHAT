@@ -208,11 +208,11 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [selectedProjectName, setSelectedProjectName] = useState(null);
   const [userProfile, setUserProfile] = useState({ name: '', email: '' });
+  const [walletBalance, setWalletBalance] = useState(0);
   const profileDropdownRef = React.useRef(null);
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const walletBalance = useSelector((state) => state.project?.walletBalance || 0);
   const projectInfoStatus = useSelector((state) => state.project?.status || 'idle');
 
   useEffect(() => {
@@ -278,6 +278,9 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
               email: parsed.profile.email || ''
             });
           }
+          if (parsed.balance != null) {
+            setWalletBalance(Number(parsed.balance) || 0);
+          }
         }
       } catch (error) {
         console.error('Error parsing userData from localStorage:', error);
@@ -286,7 +289,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
 
     loadFromLocalStorage();
 
-    // Fetch from API in the background
+    // Fetch from API in the background (profile endpoint returns balance)
     const fetchProfile = async () => {
       try {
         const response = await fetchUserProfile();
@@ -295,14 +298,18 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
             name: response.profile.name || '',
             email: response.profile.email || ''
           });
-          // Update localStorage with fresh data
+          if (response.balance != null) {
+            setWalletBalance(Number(response.balance) || 0);
+          }
+          // Update localStorage with fresh data (auth already saves balance via fetchUserProfile)
           try {
             const userData = localStorage.getItem('userData');
             if (userData) {
               const parsed = JSON.parse(userData);
               localStorage.setItem('userData', JSON.stringify({
                 ...parsed,
-                profile: response.profile
+                profile: response.profile,
+                balance: response.balance
               }));
             }
           } catch (error) {
@@ -316,6 +323,21 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
     };
 
     fetchProfile();
+  }, []);
+
+  // Refetch profile (and balance) when user returns e.g. from payment gateway
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchUserProfile().then((response) => {
+          if (response && response.balance != null) {
+            setWalletBalance(Number(response.balance) || 0);
+          }
+        }).catch(() => { });
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, []);
 
   // Handle click outside profile dropdown
@@ -351,6 +373,8 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
     { title: 'My Profile', icon: <FiUser size={16} />, path: '/my-profile' },
     { title: 'Change Password', icon: <FiLock size={16} />, path: '/change-password' },
     { title: 'Help & Support', icon: <FiHelpCircle size={16} />, path: '/support' },
+    { title: 'My Plan', icon: <FiCreditCard size={16} />, path: '/my-plan' },
+    { title: 'Transactions', icon: <FiPieChart size={16} />, path: '/transactions' },
   ];
 
   return (
@@ -573,20 +597,12 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
         { title: 'Agents', path: '/agent-management' },
         { title: 'Permissions', path: '/permission-list' }
       ]
-    },
-    {
-      key: 'billing', title: 'Billing', icon: <FiCreditCard size={18} />,
-      submenus: [
-        { title: 'My Plan', path: '/my-plan' },
-        { title: 'Transactions', path: '/transactions' }
-      ]
     }
   ];
 
-  // Filter menu items based on user role (hide Management and Billing for agents)
+  // Filter menu items based on user role (hide Management for agents)
   const menuItems = allMenuItems.filter(item => {
-    // If user is not the owner (i.e., is an agent), hide Management and Billing
-    if (!isOwner && (item.key === 'management' || item.key === 'billing')) {
+    if (!isOwner && item.key === 'management') {
       return false;
     }
     return true;
