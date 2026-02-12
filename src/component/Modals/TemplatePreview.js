@@ -45,10 +45,33 @@ const TemplatePreview = ({
     const generateVariableOptions = () => {
         const options = [];
 
-        // Basic chat information (always available)
-        if (activeChat?.name) {
-            options.push({ label: 'Contact Name', value: activeChat.name });
+        // Helper function to check if a string looks like a phone number
+        const looksLikePhoneNumber = (str) => {
+            if (!str) return false;
+            // Remove common phone number characters
+            const cleaned = str.replace(/[\s\-\(\)\+]/g, '');
+            // If it's mostly digits and longer than 7 characters, it's likely a phone number
+            return /^\d{7,}$/.test(cleaned);
+        };
+
+        // Determine the best contact name to use
+        let contactName = null;
+
+        // Priority 1: Use contact details name if available (most reliable)
+        if (contactDetails?.has_contact && contactDetails?.contact?.name) {
+            contactName = contactDetails.contact.name;
         }
+        // Priority 2: Use activeChat name only if it's NOT a phone number
+        else if (activeChat?.name && !looksLikePhoneNumber(activeChat.name)) {
+            contactName = activeChat.name;
+        }
+
+        // Add contact name if we found a valid one
+        if (contactName) {
+            options.push({ label: 'Contact Name', value: contactName });
+        }
+
+        // Always add phone number if available
         if (activeChat?.number) {
             options.push({ label: 'Phone Number', value: activeChat.number });
         }
@@ -57,9 +80,6 @@ const TemplatePreview = ({
         if (contactDetails?.has_contact && contactDetails?.contact) {
             const contact = contactDetails.contact;
 
-            if (contact.name && contact.name !== activeChat?.name) {
-                options.push({ label: 'Full Name', value: contact.name });
-            }
             if (contact.email) {
                 options.push({ label: 'Email', value: contact.email });
             }
@@ -148,13 +168,74 @@ const TemplatePreview = ({
         setVariableValues(prev => ({ ...prev, [variableNumber]: value }));
     };
 
+    // Parse WhatsApp formatting (*bold*, _italic_, ~strikethrough~, ```monospace```)
+    const parseWhatsAppFormatting = (text) => {
+        if (!text) return text;
+
+        const parts = [];
+        let currentIndex = 0;
+        let keyCounter = 0;
+
+        // Regex patterns for WhatsApp formatting
+        // Order matters: do monospace first (```), then others
+        const patterns = [
+            { regex: /```([^`]+)```/g, component: (match) => <code key={`mono-${keyCounter++}`} className="font-mono bg-black/10 dark:bg-white/10 px-1 rounded text-sm">{match}</code> },
+            { regex: /\*([^*]+)\*/g, component: (match) => <strong key={`bold-${keyCounter++}`} className="font-bold">{match}</strong> },
+            { regex: /_([^_]+)_/g, component: (match) => <em key={`italic-${keyCounter++}`} className="italic">{match}</em> },
+            { regex: /~([^~]+)~/g, component: (match) => <span key={`strike-${keyCounter++}`} className="line-through">{match}</span> },
+        ];
+
+        // Create a combined regex to find all formatting markers
+        const combinedRegex = /(\*[^*]+\*|_[^_]+_|~[^~]+~|```[^`]+```)/g;
+
+        let lastIndex = 0;
+        let match;
+
+        while ((match = combinedRegex.exec(text)) !== null) {
+            // Add text before the match
+            if (match.index > lastIndex) {
+                parts.push(text.slice(lastIndex, match.index));
+            }
+
+            const matchedText = match[0];
+            let formatted = false;
+
+            // Check which pattern matched and apply the corresponding component
+            for (const pattern of patterns) {
+                const innerMatch = matchedText.match(pattern.regex);
+                if (innerMatch) {
+                    const content = matchedText.slice(
+                        matchedText.startsWith('```') ? 3 : 1,
+                        matchedText.endsWith('```') ? -3 : -1
+                    );
+                    parts.push(pattern.component(content));
+                    formatted = true;
+                    break;
+                }
+            }
+
+            if (!formatted) {
+                parts.push(matchedText);
+            }
+
+            lastIndex = match.index + matchedText.length;
+        }
+
+        // Add remaining text
+        if (lastIndex < text.length) {
+            parts.push(text.slice(lastIndex));
+        }
+
+        return parts.length > 0 ? parts : text;
+    };
+
     const renderPreviewContent = () => {
         let previewContent = content;
         variables.forEach(variable => {
             const value = variableValues[variable.number] || `{{${variable.number}}}`;
             previewContent = previewContent.replace(variable.placeholder, value);
         });
-        return previewContent;
+        return parseWhatsAppFormatting(previewContent);
     };
 
     const uploadHeaderMedia = async (file) => {
@@ -200,7 +281,7 @@ const TemplatePreview = ({
             }
 
             const payload = {
-                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
+                project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
                 number: activeChat.number,
                 template_id: selectedTemplate.id,
                 component: formattedComponents
@@ -313,8 +394,8 @@ const TemplatePreview = ({
                                                             onChange={(e) => handleVariableChange(variable.number, e.target.value)}
                                                             placeholder={`Value for {{${variable.number}}}`}
                                                             className={`w-full px-3 py-2.5 rounded-md border text-sm focus:border-[#00a884] outline-none ${darkMode
-                                                                    ? 'bg-[#2a3942] border-gray-600 text-white placeholder-gray-500'
-                                                                    : 'bg-white border-gray-300 text-gray-900'
+                                                                ? 'bg-[#2a3942] border-gray-600 text-white placeholder-gray-500'
+                                                                : 'bg-white border-gray-300 text-gray-900'
                                                                 }`}
                                                         />
                                                         <button
@@ -339,8 +420,8 @@ const TemplatePreview = ({
                                                                                 setOpenDropdowns(prev => ({ ...prev, [variable.number]: false }));
                                                                             }}
                                                                             className={`w-full text-left px-3 py-2 text-sm transition-colors ${darkMode
-                                                                                    ? 'text-gray-300 hover:bg-gray-600'
-                                                                                    : 'text-gray-700 hover:bg-gray-50'
+                                                                                ? 'text-gray-300 hover:bg-gray-600'
+                                                                                : 'text-gray-700 hover:bg-gray-50'
                                                                                 }`}
                                                                         >
                                                                             <div className="flex flex-col">
