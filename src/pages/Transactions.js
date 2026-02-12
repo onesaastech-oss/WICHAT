@@ -902,13 +902,14 @@ const Transactions = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Unified Date Range Picker */}
-                <DateRangePicker
-                  startDate={fromDate}
-                  endDate={toDate}
-                  onStartDateChange={setFromDate}
-                  onEndDateChange={setToDate}
-                  maxDate={moment().format('YYYY-MM-DD')}
-                />
+                {/* Unified Date Range Picker */}
+<DateRangePicker
+  startDate={fromDate}
+  endDate={toDate}
+  onStartDateChange={setFromDate}
+  onEndDateChange={setToDate}
+  maxDate={moment().format('YYYY-MM-DD')}
+/>
 
                 {/* Transaction Type Dropdown - with Project Create */}
                 <div>
