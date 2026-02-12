@@ -381,7 +381,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
               <FiChevronDown size={14} className="text-slate-400" />
             </button>
 
-            <div className="hidden sm:flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1 pr-3 shadow-sm hover:border-indigo-200 transition-colors cursor-default">
+            <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1 pr-3 shadow-sm hover:border-indigo-200 transition-colors cursor-default">
               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
                 <FiCreditCard size={14} />
               </div>
@@ -394,7 +394,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
               </button>
             </div>
 
-            <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
+            <div className="h-6 w-px bg-slate-200"></div>
 
 
             <div className="relative" ref={profileDropdownRef}>
