@@ -2025,37 +2025,9 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         if (messageInputRef.current) {
             messageInputRef.current.style.height = 'auto';
         }
-        // Scroll immediately for new messages
-        // setTimeout(() => scrollToBottomImmediate(), 50);
 
-        // Persist temp message and update chat list immediately
-        try {
-            if (dbAvailable) {
-                await dbHelper.addMessage(activeChat.number, newMessage);
-                await dbHelper.saveChats([
-                    {
-                        number: activeChat.number,
-                        name: activeChat.name,
-                        is_favorite: activeChat.is_favorite || false,
-                        wamid: '',
-                        create_date: new Date().toISOString(),
-                        type: 'out',
-                        message_type: 'text',
-                        message: text,
-                        status: 'pending',
-                        unique_id: tempMessageId,
-                        last_id: Date.now(),
-                        send_by_username: tokens?.username || '',
-                        send_by_mobile: ''
-                    }
-                ]);
-            }
-            // Trigger parent to refresh chat list with pending state
-            if (onMessageStatusUpdate) {
-                onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
-            }
-        } catch (e) {
-            console.error('Failed to persist temp message/chat row:', e);
+        if (onMessageStatusUpdate) {
+            onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
         }
 
         try {
@@ -2085,7 +2057,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             );
 
             if (!response.data.error) {
-                // Update message status to sent
                 setMessages(prev =>
                     prev.map(msg =>
                         msg.message_id === tempMessageId
@@ -2095,15 +2066,33 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 );
 
                 if (dbAvailable) {
-                    await dbHelper.updateMessageStatus(tempMessageId, 'sent');
+                    const sentMessage = { ...newMessage, status: 'sent' };
+                    await dbHelper.addMessage(activeChat.number, sentMessage);
+                    await dbHelper.saveChats([
+                        {
+                            number: activeChat.number,
+                            name: activeChat.name,
+                            is_favorite: activeChat.is_favorite || false,
+                            wamid: '',
+                            create_date: new Date().toISOString(),
+                            type: 'out',
+                            message_type: 'text',
+                            message: text,
+                            status: 'sent',
+                            unique_id: tempMessageId,
+                            last_id: Date.now(),
+                            send_by_username: tokens?.username || '',
+                            send_by_mobile: ''
+                        }
+                    ]);
                 }
 
-                // Notify parent component about status update
                 if (onMessageStatusUpdate) {
                     onMessageStatusUpdate(activeChat.number, tempMessageId, 'sent');
                 }
             } else {
-                // Update message status to failed
+                const errMsg = response.data.error || response.data.msg || 'Failed to send message';
+                toast.error(typeof errMsg === 'string' ? errMsg : 'Failed to send message');
                 setMessages(prev =>
                     prev.map(msg =>
                         msg.message_id === tempMessageId
@@ -2111,19 +2100,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                             : msg
                     )
                 );
-
-                if (dbAvailable) {
-                    await dbHelper.updateMessageStatus(tempMessageId, 'failed');
-                }
-
-                // Notify parent component about status update
                 if (onMessageStatusUpdate) {
                     onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
                 }
             }
         } catch (error) {
             console.error('Failed to send message:', error);
-            // Update message status to failed
+            const errMsg = error.response?.data?.error || error.response?.data?.msg || error.message || 'Failed to send message';
+            toast.error(typeof errMsg === 'string' ? errMsg : 'Failed to send message');
             setMessages(prev =>
                 prev.map(msg =>
                     msg.message_id === tempMessageId
@@ -2131,12 +2115,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         : msg
                 )
             );
-
-            if (dbAvailable) {
-                await dbHelper.updateMessageStatus(tempMessageId, 'failed');
-            }
-
-            // Notify parent component about status update
             if (onMessageStatusUpdate) {
                 onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
             }
@@ -2422,26 +2400,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     is_voice: isVoiceRecording
                 };
 
-                if (dbAvailable) {
-                    await dbHelper.addMessage(activeChat.number, tempMessage);
-                    await dbHelper.saveChats([
-                        {
-                            number: activeChat.number,
-                            name: activeChat.name,
-                            is_favorite: activeChat.is_favorite || false,
-                            wamid: '',
-                            create_date: tempMessage.create_date,
-                            type: 'out',
-                            message_type: fileType,
-                            message: tempMessage.message,
-                            status: 'pending',
-                            unique_id: tempMessageId,
-                            last_id: Date.now(),
-                            send_by_username: tokens?.username || '',
-                            send_by_mobile: ''
-                        }
-                    ]);
-                }
                 setMessages(prev => [...prev, tempMessage]);
                 shouldAutoScrollRef.current = true; // Enable auto-scroll when sending file
                 setSelectedFile(null);
@@ -2499,59 +2457,53 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     const serverMessageId = messageResponse?.data?.message_id || '';
                     const serverId = messageResponse?.data?.id || '';
 
+                    const sentMediaMessage = {
+                        ...tempMessage,
+                        status: 'sent',
+                        message_id: serverMessageId || tempMessageId,
+                        wamid: serverWamid,
+                        id: serverId || tempMessage.id
+                    };
+
                     if (dbAvailable) {
-                        // Update message with server's message_id, wamid, and id (like text messages)
-                        if (serverMessageId) {
-                            // Update the message_id from temp to server's real message_id
-                            await dbHelper.updateMessageIdentifiersByMessageId(tempMessageId, {
-                                message_id: serverMessageId,
+                        await dbHelper.addMessage(activeChat.number, sentMediaMessage);
+                        await dbHelper.saveChats([
+                            {
+                                number: activeChat.number,
+                                name: activeChat.name,
+                                is_favorite: activeChat.is_favorite || false,
                                 wamid: serverWamid,
-                                id: serverId,
-                                status: 'sent'
-                            });
-                        } else {
-                            // Fallback: just update wamid and status if no message_id
-                            await dbHelper.updateMessageStatus(tempMessageId, 'sent');
-                            await dbHelper.updateMessageIdentifiersByMessageId(tempMessageId, {
-                                wamid: serverWamid,
-                                id: serverId
-                            });
-                        }
+                                create_date: tempMessage.create_date,
+                                type: 'out',
+                                message_type: fileType,
+                                message: tempMessage.message,
+                                status: 'sent',
+                                unique_id: serverMessageId || tempMessageId,
+                                last_id: serverId || Date.now(),
+                                send_by_username: tokens?.username || '',
+                                send_by_mobile: ''
+                            }
+                        ]);
                     }
                     setMessages(prev =>
                         prev.map(msg =>
                             msg.message_id === tempMessageId
-                                ? {
-                                    ...msg,
-                                    status: 'sent',
-                                    message_id: serverMessageId || tempMessageId, // Use server's message_id if available
-                                    wamid: serverWamid,
-                                    id: serverId || msg.id
-                                }
+                                ? { ...msg, ...sentMediaMessage }
                                 : msg
                         )
                     );
 
-                    // Notify parent component about status update
                     if (onMessageStatusUpdate) {
-                        // Use server's message_id if available, otherwise fall back to temp
                         onMessageStatusUpdate(activeChat.number, serverMessageId || tempMessageId, 'sent');
                     }
                 } else {
-                    if (dbAvailable) {
-                        await dbHelper.updateMessageStatus(tempMessageId, 'failed');
-                    }
+                    const errMsg = messageResponse.data.error || messageResponse.data.msg || 'Failed to send message';
+                    toast.error(typeof errMsg === 'string' ? errMsg : 'Failed to send message');
                     setMessages(prev =>
                         prev.map(msg =>
-                            msg.message_id === tempMessageId
-                                ? {
-                                    ...msg,
-                                    status: 'failed'
-                                } : msg
+                            msg.message_id === tempMessageId ? { ...msg, status: 'failed' } : msg
                         )
                     );
-
-                    // Notify parent component about status update
                     if (onMessageStatusUpdate) {
                         onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
                     }
@@ -2562,17 +2514,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             }
         } catch (error) {
             console.error('Upload failed:', error);
+            const errMsg = error.response?.data?.error || error.response?.data?.msg || error.message || 'Failed to send message';
+            toast.error(typeof errMsg === 'string' ? errMsg : 'Failed to send message');
             setMessages(prev =>
                 prev.map(msg =>
-                    msg.message_id === tempMessageId
-                        ? {
-                            ...msg,
-                            status: 'failed'
-                        } : msg
+                    msg.message_id === tempMessageId ? { ...msg, status: 'failed' } : msg
                 )
             );
-
-            // Notify parent component about status update
             if (onMessageStatusUpdate) {
                 onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
             }
@@ -2595,6 +2543,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
     // Send Template (append to conversation immediately with pending status and update on API response)
     const sendTemplateMessage = async (template, providedComponents = null, previewText = '') => {
+        let tempMessageId = null;
         try {
             if (!tokens?.token || !tokens?.username || !activeChat?.number || !template?.id) {
                 console.error('Missing data to send template');
@@ -2640,7 +2589,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 }, content);
             }
 
-            const tempMessageId = `temp_${Date.now()}`;
+            tempMessageId = `temp_${Date.now()}`;
             // Detect header media from providedComponents for local preview
             let headerMediaLink = '';
             let headerMediaType = '';
@@ -2672,38 +2621,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 component: formattedComponents
             };
 
-            // Update UI immediately
             setMessages((prev) => [...prev, tempMessage]);
-            shouldAutoScrollRef.current = true; // Enable auto-scroll when sending template
-            // setTimeout(() => scrollToBottomImmediate(), 50);
+            shouldAutoScrollRef.current = true;
 
-            // Persist to DB and chat list
-            try {
-                if (dbAvailable) {
-                    await dbHelper.addMessage(activeChat.number, tempMessage);
-                    await dbHelper.saveChats([
-                        {
-                            number: activeChat.number,
-                            name: activeChat.name,
-                            is_favorite: activeChat.is_favorite || false,
-                            wamid: '',
-                            create_date: tempMessage.create_date,
-                            type: 'out',
-                            message_type: 'text',
-                            message: messageBody,
-                            status: 'pending',
-                            unique_id: tempMessageId,
-                            last_id: Date.now(),
-                            send_by_username: tokens?.username || '',
-                            send_by_mobile: ''
-                        }
-                    ]);
-                }
-                if (onMessageStatusUpdate) {
-                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
-                }
-            } catch (e) {
-                console.error('Failed to persist temp template message/chat row:', e);
+            if (onMessageStatusUpdate) {
+                onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
             }
 
             // Send template via API
@@ -2734,25 +2656,16 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 const serverMessageId = response?.data?.message_id || '';
                 const serverId = response?.data?.id || '';
 
+                const sentTemplateMessage = {
+                    ...tempMessage,
+                    message_id: serverMessageId || tempMessageId,
+                    wamid: serverWamid,
+                    id: serverId || tempMessage.id,
+                    status: 'sent'
+                };
+
                 if (dbAvailable) {
-                    // Update message with server's message_id, wamid, and id (like text messages)
-                    if (serverMessageId) {
-                        // Update the message_id from temp to server's real message_id
-                        await dbHelper.updateMessageIdentifiersByMessageId(tempMessageId, {
-                            message_id: serverMessageId,
-                            wamid: serverWamid,
-                            id: serverId,
-                            status: 'sent'
-                        });
-                    } else {
-                        // Fallback: just update wamid and status if no message_id
-                        await dbHelper.updateMessageStatus(tempMessageId, 'sent');
-                        await dbHelper.updateMessageIdentifiersByMessageId(tempMessageId, {
-                            wamid: serverWamid,
-                            id: serverId
-                        });
-                    }
-                    // Update chats row with latest identifiers
+                    await dbHelper.addMessage(activeChat.number, sentTemplateMessage);
                     await dbHelper.saveChats([
                         {
                             number: activeChat.number,
@@ -2772,28 +2685,18 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     ]);
                 }
 
-                // Update UI: mark sent and update with server's message_id, wamid, and id (like text messages)
                 setMessages((prev) => prev.map((m) => (
                     m.message_id === tempMessageId
-                        ? {
-                            ...m,
-                            status: 'sent',
-                            message_id: serverMessageId || tempMessageId, // Use server's message_id if available
-                            wamid: serverWamid,
-                            id: serverId || m.id
-                        }
+                        ? { ...m, ...sentTemplateMessage }
                         : m
                 )));
 
                 if (onMessageStatusUpdate) {
-                    // Use server's message_id if available, otherwise fall back to temp
                     onMessageStatusUpdate(activeChat.number, serverMessageId || tempMessageId, 'sent');
                 }
             } else {
-                // Failed
-                if (dbAvailable) {
-                    await dbHelper.updateMessageStatus(tempMessageId, 'failed');
-                }
+                const errMsg = response?.data?.error || response?.data?.msg || 'Failed to send template';
+                toast.error(typeof errMsg === 'string' ? errMsg : 'Failed to send template');
                 setMessages((prev) => prev.map((m) => (m.message_id === tempMessageId ? { ...m, status: 'failed' } : m)));
                 if (onMessageStatusUpdate) {
                     onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
@@ -2801,6 +2704,14 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             }
         } catch (error) {
             console.error('Failed to send template:', error);
+            const errMsg = error.response?.data?.error || error.response?.data?.msg || error.message || 'Failed to send template';
+            toast.error(typeof errMsg === 'string' ? errMsg : 'Failed to send template');
+            if (tempMessageId) {
+                setMessages((prev) => prev.map((m) => (m.message_id === tempMessageId ? { ...m, status: 'failed' } : m)));
+                if (onMessageStatusUpdate) {
+                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
+                }
+            }
         }
     };
 

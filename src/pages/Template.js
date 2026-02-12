@@ -72,7 +72,7 @@ function Template() {
       const payload = {
         project_id: selectedProjectId,
         status: statusFilter,
-        page: currentPage,
+        page_no: currentPage,
         limit: pageSize
       };
 
@@ -241,11 +241,19 @@ function Template() {
   };
 
   const filterOptions = [
-    { value: '', label: 'All Status', count: templates.length, color: 'text-gray-600' },
+    {
+      value: '',
+      label: 'All Status',
+      color: 'text-gray-600',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      )
+    },
     {
       value: 'APPROVED',
       label: 'Approved',
-      count: templates.filter(t => t.status === 'APPROVED').length,
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-50',
       icon: (
@@ -257,7 +265,6 @@ function Template() {
     {
       value: 'PENDING',
       label: 'Pending',
-      count: templates.filter(t => t.status === 'PENDING').length,
       color: 'text-amber-600',
       bgColor: 'bg-amber-50',
       icon: (
@@ -269,7 +276,6 @@ function Template() {
     {
       value: 'REJECTED',
       label: 'Rejected',
-      count: templates.filter(t => t.status === 'REJECTED').length,
       color: 'text-rose-600',
       bgColor: 'bg-rose-50',
       icon: (
@@ -310,58 +316,58 @@ function Template() {
                 {/* Custom Filter Dropdown */}
                 <div className="relative flex-1 sm:flex-initial" ref={filterRef}>
                   <button
+                    type="button"
                     onClick={() => setIsFilterOpen(!isFilterOpen)}
-                    className="w-full sm:w-auto inline-flex items-center justify-between gap-3 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-all shadow-sm"
+                    aria-expanded={isFilterOpen}
+                    aria-haspopup="listbox"
+                    aria-label="Filter by status"
+                    className="w-full sm:w-auto min-w-[140px] inline-flex items-center justify-between gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 focus:border-indigo-500 transition-all shadow-sm"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       {selectedFilter.icon && (
-                        <span className={selectedFilter.color}>{selectedFilter.icon}</span>
+                        <span className={`flex-shrink-0 ${selectedFilter.color}`}>{selectedFilter.icon}</span>
                       )}
-                      <span>{selectedFilter.label}</span>
-                      {selectedFilter.count > 0 && (
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${selectedFilter.bgColor || 'bg-gray-100'} ${selectedFilter.color}`}>
-                          {selectedFilter.count}
-                        </span>
-                      )}
+                      <span className="truncate">{selectedFilter.label}</span>
                     </div>
-                    <FiChevronDown className={`w-4 h-4 transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
+                    <FiChevronDown className={`flex-shrink-0 w-4 h-4 text-gray-400 transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
                   </button>
 
                   {isFilterOpen && (
-                    <div className="absolute z-20 mt-2 w-full sm:w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-2 animate-fadeIn">
-                      <div className="px-3 py-2 border-b border-gray-100">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Filter by Status</p>
+                    <div
+                      className="absolute z-20 mt-2 w-full sm:min-w-[200px] bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-fadeIn"
+                      role="listbox"
+                    >
+                      <div className="px-3 py-2.5 bg-gray-50 border-b border-gray-100">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</p>
                       </div>
-                      {filterOptions.map((option) => (
-                        <button
-                          key={option.value}
-                          onClick={() => {
-                            setStatusFilter(option.value);
-                            setIsFilterOpen(false);
-                          }}
-                          className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${statusFilter === option.value
-                            ? 'bg-indigo-50 text-indigo-700'
-                            : 'text-gray-700 hover:bg-gray-50'
-                            }`}
-                        >
-                          <div className="flex items-center gap-3">
+                      <div className="py-1.5">
+                        {filterOptions.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            role="option"
+                            aria-selected={statusFilter === option.value}
+                            onClick={() => {
+                              setStatusFilter(option.value);
+                              setIsFilterOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${statusFilter === option.value
+                              ? 'bg-indigo-50 text-indigo-700'
+                              : 'text-gray-700 hover:bg-gray-50'
+                              }`}
+                          >
                             {option.icon && (
-                              <span className={option.color}>{option.icon}</span>
-                            )}
-                            <span className="font-medium">{option.label}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {option.count > 0 && (
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${option.bgColor || 'bg-gray-100'} ${option.color}`}>
-                                {option.count}
+                              <span className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg ${statusFilter === option.value ? 'bg-indigo-100' : option.bgColor || 'bg-gray-100'} ${option.color}`}>
+                                {option.icon}
                               </span>
                             )}
+                            <span className="font-medium flex-1">{option.label}</span>
                             {statusFilter === option.value && (
-                              <FiCheck className="w-4 h-4 text-indigo-600" />
+                              <FiCheck className="flex-shrink-0 w-4 h-4 text-indigo-600" />
                             )}
-                          </div>
-                        </button>
-                      ))}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -414,7 +420,7 @@ function Template() {
                       templates.map((template, index) => (
                         <tr key={template.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4 text-sm text-gray-500 font-medium">
-                            {index + 1}
+                            {(currentPage - 1) * pageSize + index + 1}
                           </td>
                           <td className="px-6 py-4">
                             <span className="text-sm font-semibold text-gray-900">{template.name}</span>
