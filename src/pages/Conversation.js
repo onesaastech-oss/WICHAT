@@ -554,7 +554,7 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                         darkMode={darkMode}
                                         failedReason={msg.failed_reason}
                                     />
-                                    {onReply && msg.wamid && (
+                                    {onReply && msg.wamid && msg.status !== 'failed' && (
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -620,6 +620,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [loadingHistory, setLoadingHistory] = useState(false);
+    const [loadingChatNumber, setLoadingChatNumber] = useState(null);
     const [loadingPrevious, setLoadingPrevious] = useState(false);
     const [messages, setMessages] = useState([]);
     const [lastId, setLastId] = useState("0");
@@ -651,6 +652,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     });
 
     useEffect(() => {
+        const number = activeChat?.number ?? null;
+        activeChatNumberRef.current = number;
         setIsAllowedToSendMessage(null);
         setAssignmentInfo(null);
         setHasAcknowledgedUnassigned(false);
@@ -659,7 +662,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
 
     const isChatUnassigned = assignmentInfo?.assigned === false;
-    const needsUnassignedPrompt = isChatUnassigned && !hasAcknowledgedUnassigned;
+    const needsUnassignedPrompt = false;
     const isComposerBlocked = isAllowedToSendMessage === false;
 
 
@@ -688,6 +691,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const assignMenuButtonRef = useRef(null);
     const assignMenuRef = useRef(null);
     const contactDbInitRef = useRef(false);
+    const activeChatNumberRef = useRef(activeChat?.number ?? null);
 
     const dispatch = useDispatch();
     useEffect(() => {
@@ -700,7 +704,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
     useEffect(() => {
         const inputEl = messageInputRef.current;
-        if (!inputEl || isUploading || loadingHistory) {
+        if (!inputEl || isUploading || loadingHistory || loadingChatNumber) {
             return;
         }
 
@@ -718,7 +722,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
         const raf = requestAnimationFrame(handleFocus);
         return () => cancelAnimationFrame(raf);
-    }, [activeChat, isUploading, loadingHistory]);
+    }, [activeChat, isUploading, loadingHistory, loadingChatNumber]);
 
     const projectId = tokens?.selected_project_id;
 
@@ -1357,35 +1361,39 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         setContactError('');
     }, [activeChat?.name, activeChat?.number]);
 
-    // Load message history when active chat changes
+    // Load message history when active chat changes: show loading immediately until API completes
     useEffect(() => {
         if (!tokens || !activeChat) return;
 
+        const chatNumber = activeChat.number;
+        setMessages([]);
+        setLoadingChatNumber(chatNumber);
+
         (async () => {
-            // Reset initial scroll state for new chat so first scroll is instant
             initialScrollDoneRef.current = false;
-            shouldAutoScrollRef.current = true; // Enable auto-scroll for new chat
-            // Reset pagination state for new chat
+            shouldAutoScrollRef.current = true;
             setLastId("0");
             setHasMoreMessages(true);
             setLoadingPrevious(false);
 
-            if (dbAvailable) {
-                const localMessage = await dbHelper.getMessages(activeChat.number);
-                if (localMessage.length > 0) {
-                    setMessages(localMessage);
+            try {
+                await syncWithAPI();
+
+                if (activeChat?.number !== chatNumber) return;
+
+                if (dbAvailable) {
+                    await dbHelper.deleteMessagesWithNullId(activeChat.number);
+                    const updatedMessage = await dbHelper.getMessages(activeChat.number);
+                    const validMessages = (updatedMessage || []).filter((m) => m.id != null && m.id !== '');
+                    setMessages(validMessages);
+                }
+
+                setTimeout(() => scrollToBottomImmediate(), 220);
+            } finally {
+                if (activeChat?.number === chatNumber) {
+                    setLoadingChatNumber(null);
                 }
             }
-
-            await syncWithAPI();
-
-            if (dbAvailable) {
-                const updatedMessage = await dbHelper.getMessages(activeChat.number);
-                setMessages(updatedMessage);
-            }
-
-            // Ensure scroll to bottom after loading messages
-            setTimeout(() => scrollToBottomImmediate(), 220);
         })();
     }, [tokens, activeChat?.number]);
 
@@ -1474,10 +1482,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }, 50);
     };
 
-    const updateSendPermission = useCallback((assigningInfo) => {
+    const updateSendPermission = useCallback((assigningInfo, forChatNumber = null) => {
+        if (forChatNumber != null && forChatNumber !== activeChatNumberRef.current) {
+            return;
+        }
         setAssignmentInfo(assigningInfo || null);
-        console.log(assigningInfo);
-
 
         if (!assigningInfo) {
             setIsAllowedToSendMessage(true);
@@ -1494,26 +1503,24 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
 
         const canSend = assigningInfo.assigned === false || assigningInfo.assigned_to_me === true;
-
         setIsAllowedToSendMessage(canSend);
     }, []);
 
-    // 🔹 When chat assignment updates arrive via socket
+    // 🔹 When chat assignment updates arrive via socket (only apply when we know the chat and it's the current chat)
     useEffect(() => {
         if (!socketAssigning || !socketAssigning.assigning) return;
 
         const eventNumber = socketAssigning.number || socketAssigning.contact?.number;
-        if (activeChat?.number && eventNumber && eventNumber !== activeChat.number) {
+        if (!eventNumber || eventNumber !== activeChatNumberRef.current) {
             return;
         }
 
-        console.log('🔔 chat_assigned socket payload:', socketAssigning);
-        updateSendPermission(socketAssigning.assigning);
+        updateSendPermission(socketAssigning.assigning, eventNumber);
 
         if (socketAssigning.assigning.assigned === false) {
             setHasAcknowledgedUnassigned(false);
         }
-    }, [socketAssigning, activeChat?.number, updateSendPermission]);
+    }, [socketAssigning, updateSendPermission]);
 
     const handleAssignmentChange = useCallback(async (type, targetUsername = '') => {
         if (type === 'assign' && !targetUsername) {
@@ -1564,8 +1571,9 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             }
 
             const newAssigning = response.data?.assigning;
+            const chatNumber = activeChat.number;
             if (newAssigning) {
-                updateSendPermission(newAssigning);
+                updateSendPermission(newAssigning, chatNumber);
             } else {
                 const selectedUser = assignmentInfo?.users?.find((user) => user.username === targetUsername);
                 const fallbackInfo = type === 'assign'
@@ -1582,7 +1590,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         users: assignmentInfo?.users || []
                     };
 
-                updateSendPermission(fallbackInfo);
+                updateSendPermission(fallbackInfo, chatNumber);
             }
 
             if (type === 'unassign') {
@@ -1603,6 +1611,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const syncWithAPI = async (isLoadingPrevious = false) => {
         if (!activeChat || (isLoadingPrevious ? loadingPrevious : loadingHistory)) return;
 
+        const loadingForNumber = activeChat.number;
+
         if (isLoadingPrevious) {
             setLoadingPrevious(true);
         } else {
@@ -1612,7 +1622,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         try {
             const messagePayload = {
                 project_id: tokens.selected_project_id || '',
-                number: activeChat.number,
+                number: loadingForNumber,
                 last_id: isLoadingPrevious ? lastId : "0"
             };
 
@@ -1631,26 +1641,21 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 }
             );
 
+            // Only apply response for the chat we loaded (avoid assignment/messages glitch on desktop when switching chats)
+            if (activeChat?.number !== loadingForNumber) return;
+
             if (!response.data.error && response.data.data) {
-                updateSendPermission(response.data.assigning);
-                // Extract last_id from response
+                updateSendPermission(response.data.assigning, loadingForNumber);
                 const apiLastId = response.data.last_id;
-                // console.log('API Response:', {
-                //     messageCount: response.data.data.length,
-                //     lastId: apiLastId,
-                //     isLoadingPrevious,
-                //     currentLastId: lastId
-                // });
                 await processApiResponse(response.data.data, isLoadingPrevious, apiLastId);
             } else if (isLoadingPrevious && (!response.data.data || response.data.data.length === 0)) {
-                // No more messages to load
                 setHasMoreMessages(false);
             }
         } catch (error) {
             console.error('Failed to fetch message history:', error);
         } finally {
             if (isLoadingPrevious) {
-                setLoadingPrevious(false);
+                if (activeChat?.number === loadingForNumber) setLoadingPrevious(false);
             } else {
                 setLoadingHistory(false);
             }
@@ -2772,10 +2777,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         </AnimatePresence>
     );
 
+    const assignmentLoading = loadingChatNumber === activeChat?.number;
     const assignmentUsers = assignmentInfo?.users || [];
     const assignedUsername = assignmentInfo?.assigned_user?.username;
     const assignedUserName = assignmentInfo?.assigned_user?.name || assignmentInfo?.assigned_user?.username || assignmentInfo?.assigned_user?.mobile || 'Unassigned';
-    const isAssigned = assignmentInfo?.assigned === true;
+    const isAssigned = !assignmentLoading && assignmentInfo?.assigned === true;
     const isAssignedToMeOrChatAssignAccess = assignmentInfo?.assigned_to_me === true || projectInfo?.permissions?.chat_assign_access === true;
 
     return (
@@ -2859,25 +2865,20 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                                     <p className="font-semibold text-sm text-gray-900 dark:text-white">Assign chat</p>
                                                     <p className="text-xs text-gray-500 dark:text-gray-400">Select an agent or unassign this chat.</p>
                                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                        Current: {isAssigned ? assignedUserName : 'Unassigned'}
+                                                        Current: {assignmentLoading ? 'Loading...' : (isAssigned ? assignedUserName : 'Unassigned')}
                                                     </p>
                                                 </div>
 
-                                                {isAssigned && (
+                                                {isAssigned && assignmentInfo?.assigned_to_me && (
                                                     <button
                                                         onClick={() => handleAssignmentChange('unassign')}
                                                         disabled={assignActionLoading}
                                                         className={`flex w-full items-center space-x-3 px-4 py-2.5 text-left text-sm text-red-600 transition hover:bg-red-50 dark:hover:bg-red-900/30 border-b border-gray-200 dark:border-gray-700 ${assignActionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                     >
-                                                        {
-                                                            assignmentInfo?.assigned_to_me && (
-                                                                <div className="flex-1">
-                                                                    <p className="font-semibold">Unassign chat</p>
-                                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Make this chat available</p>
-                                                                </div>
-                                                            )
-                                                        }
-
+                                                        <div className="flex-1">
+                                                            <p className="font-semibold">Unassign chat</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Make this chat available</p>
+                                                        </div>
                                                     </button>
                                                 )}
 
@@ -2972,9 +2973,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
                 {/* Messages */}
                 <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-4 dark:bg-gray-900 w-full">
-                    {loadingHistory ? (
-                        <div className="flex items-center justify-center py-6 sm:py-8">
-                            <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-blue-500"></div>
+                    {(loadingHistory || loadingChatNumber) ? (
+                        <div className="flex flex-col items-center justify-center min-h-[200px] py-12 sm:py-16">
+                            <div className="animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-2 border-blue-500 border-t-transparent"></div>
+                            <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">Loading conversation...</p>
                         </div>
                     ) : (
                         <>
@@ -2986,7 +2988,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                 </div>
                             )}
 
-                            {groupMessagesByDate(messages).map((dateGroup, groupIndex) => (
+                            {groupMessagesByDate(messages.filter((m) => m.id != null && m.id !== '')).map((dateGroup, groupIndex) => (
                                 <div key={dateGroup.date}>
                                     {/* Date Separator */}
                                     <DateSeparator displayDate={dateGroup.displayDate} dateId={`date-separator-${dateGroup.date}`} />
@@ -3357,7 +3359,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                             handleSendMessage();
                                         }
                                     }}
-                                    disabled={isUploading || loadingHistory}
+                                    disabled={isUploading || loadingHistory || !!loadingChatNumber}
                                 />
 
                                 {/* Inside-Right Actions (Mic & Templates) - Hide when typing */}
@@ -3391,7 +3393,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                             {(messageInput.trim() || selectedFile) && (
                                 <button
                                     onClick={handleSendMessage}
-                                    disabled={isUploading || loadingHistory}
+                                    disabled={isUploading || loadingHistory || !!loadingChatNumber}
                                     className="flex-shrink-0 flex items-center justify-center w-11 h-11 rounded-full transition-all duration-300 bg-blue-600 text-white shadow-md hover:shadow-lg hover:scale-105 active:scale-95 animate-in fade-in zoom-in"
                                 >
                                     <LuSendHorizontal className="w-5 h-5 translate-x-0.5" />
@@ -3417,7 +3419,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                 <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 shadow-xl rounded-2xl p-4 flex flex-col items-center animate-in fade-in zoom-in duration-200">
                                     <div className="flex items-center text-amber-600 dark:text-amber-500 mb-1">
                                         <FiAlertCircle className="w-5 h-5 mr-2" />
-                                        <span className="font-semibold text-sm">Chat Assigned to {assignmentInfo.assigned_user.name}</span>
+                                        <span className="font-semibold text-sm">Chat Assigned to {assignmentInfo?.assigned_user?.name ?? 'Another agent'}</span>
                                     </div>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">Request reassignment to send messages.</p>
                                 </div>

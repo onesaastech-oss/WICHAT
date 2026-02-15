@@ -3,7 +3,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import ChatList from './ChatList';
 import Conversation from './Conversation';
-import { dbHelper } from './db';
+import { dbHelper, contactDbHelper } from './db';
 import { socketManager } from './socket';
 import { FiArrowLeft, FiSun, FiMoon, FiLock } from 'react-icons/fi';
 import logo from '../logo.svg';
@@ -20,6 +20,7 @@ function LiveChat() {
     const [chats, setChats] = useState([]);
     const [messages, setMessages] = useState([]);
     const [assignmentUpdate, setAssignmentUpdate] = useState(null);
+    const [repairVersion, setRepairVersion] = useState(0);
     const previousLocationRef = useRef(null);
     const isBackNavigationRef = useRef(false);
 
@@ -94,7 +95,18 @@ function LiveChat() {
         } catch (error) {
             console.error('Error loading initial data:', error);
         }
-    }
+    };
+
+    const handleRepairChats = async () => {
+        const projectId = tokens?.selected_project_id || 'default_project';
+        setDbAvailable(false);
+        await dbHelper.deleteDatabase();
+        await contactDbHelper.deleteDatabase();
+        const ok = await dbHelper.init(projectId);
+        await contactDbHelper.init(projectId);
+        setDbAvailable(ok);
+        if (activeChat) setRepairVersion((v) => v + 1);
+    };
 
     // Sync activeChat with URL phone parameter
     useEffect(() => {
@@ -416,6 +428,7 @@ function LiveChat() {
                                 darkMode={darkMode}
                                 dbAvailable={dbAvailable}
                                 socket_chats={chats}
+                                onRepairChats={handleRepairChats}
                             />
                         </motion.div>
                     </AnimatePresence>
@@ -431,6 +444,7 @@ function LiveChat() {
                                 className={`w-full md:w-2/3 flex flex-col ${activeChat ? 'flex' : 'hidden md:flex'}`}
                             >
                                 <Conversation
+                                    key={`${activeChat?.number ?? 'none'}-${repairVersion}`}
                                     activeChat={activeChat}
                                     tokens={tokens}
                                     onBack={handleBackToChatList}

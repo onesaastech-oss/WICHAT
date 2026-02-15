@@ -165,6 +165,18 @@ export const dbHelper = {
         }
     },
 
+    async deleteDatabase() {
+        try {
+            if (dbInstance) {
+                dbInstance.close();
+                await dbInstance.delete();
+                dbInstance = null;
+            }
+        } catch (error) {
+            console.error('❌ Error deleting database:', error);
+        }
+    },
+
     get db() {
         if (!dbInstance) throw new Error("Database not initialized. Call dbHelper.init(projectId) first.");
         return dbInstance;
@@ -330,6 +342,24 @@ export const dbHelper = {
         } catch (error) {
             console.error("❌ Error getting messages:", error);
             return [];
+        }
+    },
+
+    /** Remove messages with null/empty server id (e.g. sent offline, never confirmed by backend) */
+    async deleteMessagesWithNullId(chatNumber) {
+        try {
+            const db = this.db;
+            const toDelete = await db.messages
+                .where('chat_number')
+                .equals(chatNumber)
+                .filter((m) => m.id == null || m.id === '')
+                .primaryKeys();
+            if (toDelete.length > 0) {
+                await db.messages.bulkDelete(toDelete);
+                console.log(`🗑️ Removed ${toDelete.length} local message(s) with null id for chat ${chatNumber}`);
+            }
+        } catch (error) {
+            console.error("❌ Error deleting messages with null id:", error);
         }
     },
 
@@ -645,6 +675,18 @@ export const contactDbHelper = {
                 console.error('❌ Failed to recreate contact database:', recreateError);
                 return false;
             }
+        }
+    },
+
+    async deleteDatabase() {
+        try {
+            if (contactDbInstance) {
+                contactDbInstance.close();
+                await contactDbInstance.delete();
+                contactDbInstance = null;
+            }
+        } catch (error) {
+            console.error('❌ Error deleting contact database:', error);
         }
     },
 
