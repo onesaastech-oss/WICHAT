@@ -1,11 +1,44 @@
-import React from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiImage, FiVideo, FiMusic, FiDownload, FiX } from 'react-icons/fi';
+import { FiImage, FiVideo, FiMusic, FiDownload, FiX, FiPlus, FiMinus } from 'react-icons/fi';
 import { FaFilePdf, FaFileWord, FaFileExcel, FaFile, FaFileImage, FaFileVideo, FaFileAudio } from 'react-icons/fa';
 import { FiExternalLink } from 'react-icons/fi';
 import ReactPlayer from 'react-player';
 
 const MediaModal = ({ isOpen, onClose, mediaItem, type }) => {
+    const [imageZoom, setImageZoom] = useState(1);
+
+    const handleDownload = useCallback(async (e) => {
+        e.preventDefault();
+        if (!mediaItem?.serverUrl) return;
+        try {
+            const res = await fetch(mediaItem.serverUrl, { mode: 'cors' });
+            if (!res.ok) throw new Error('Download failed');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = mediaItem.name || 'image';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch {
+            const a = document.createElement('a');
+            a.href = mediaItem.serverUrl;
+            a.download = mediaItem.name || 'image';
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    }, [mediaItem?.serverUrl, mediaItem?.name]);
+
+    useEffect(() => {
+        if (isOpen && type === 'image') setImageZoom(1);
+    }, [isOpen, type]);
+
     if (!isOpen || !mediaItem) return null;
 
     const getFileIcon = (fileName) => {
@@ -37,12 +70,19 @@ const MediaModal = ({ isOpen, onClose, mediaItem, type }) => {
         switch (type) {
             case 'image':
                 return (
-                    <div className="flex items-center justify-center h-full p-2 sm:p-4">
-                        <img
-                            src={mediaItem.serverUrl}
-                            alt={mediaItem.name || 'Image'}
-                            className="max-w-full max-h-full object-contain rounded-lg"
-                        />
+                    <div className="flex items-center justify-center w-full h-full min-h-0 overflow-auto p-2 sm:p-4">
+                        <div
+                            className="flex items-center justify-center origin-center transition-transform duration-200"
+                            style={{ transform: `scale(${imageZoom})` }}
+                        >
+                            <img
+                                src={mediaItem.serverUrl}
+                                alt={mediaItem.name || 'Image'}
+                                className="max-w-full max-h-[70vh] w-auto h-auto object-contain rounded-lg select-none"
+                                style={{ maxHeight: '70vh' }}
+                                draggable={false}
+                            />
+                        </div>
                     </div>
                 );
             case 'video':
@@ -147,15 +187,44 @@ const MediaModal = ({ isOpen, onClose, mediaItem, type }) => {
                                 </div>
                             </div>
                             <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
-                                <a
-                                    href={mediaItem.serverUrl}
-                                    download={mediaItem.name}
+                                {type === 'image' && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => setImageZoom((z) => Math.min(z + 0.25, 3))}
+                                            className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-700 dark:text-gray-300"
+                                            title="Zoom in"
+                                        >
+                                            <FiPlus className="w-4 h-4 sm:w-5 sm:h-5" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setImageZoom((z) => Math.max(z - 0.25, 0.5))}
+                                            className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-700 dark:text-gray-300"
+                                            title="Zoom out"
+                                        >
+                                            <FiMinus className="w-4 h-4 sm:w-5 sm:h-5" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setImageZoom(1)}
+                                            className="px-1.5 py-1.5 sm:px-2 sm:py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-700 dark:text-gray-300 text-xs font-medium"
+                                            title="Reset zoom (1:1)"
+                                        >
+                                            1:1
+                                        </button>
+                                    </>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={handleDownload}
                                     className="inline-flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-1 sm:py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors text-xs sm:text-sm"
                                 >
                                     <FiDownload className="w-3 h-3 sm:w-4 sm:h-4" />
                                     <span className="hidden sm:inline">Download</span>
-                                </a>
+                                </button>
                                 <button
+                                    type="button"
                                     onClick={onClose}
                                     className="p-1 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                 >
@@ -165,8 +234,8 @@ const MediaModal = ({ isOpen, onClose, mediaItem, type }) => {
                         </div>
 
                         {/* Media Content */}
-                        <div className="flex-1 p-2 sm:p-4 overflow-auto">
-                            <div className="h-full w-full">
+                        <div className="flex-1 min-h-0 max-h-[75vh] p-2 sm:p-4 overflow-auto flex flex-col">
+                            <div className="flex-1 min-h-0 w-full flex items-center justify-center">
                                 {renderMediaContent()}
                             </div>
                         </div>

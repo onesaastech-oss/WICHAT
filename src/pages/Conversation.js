@@ -39,7 +39,9 @@ import {
     FiUserCheck,
     FiCornerUpLeft,
     FiPhone,
-    FiCheckCircle
+    FiCheckCircle,
+    FiPlus,
+    FiTrash2
 } from 'react-icons/fi';
 import { LuSendHorizontal } from "react-icons/lu";
 import axios from 'axios';
@@ -613,10 +615,16 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const [hasAcknowledgedUnassigned, setHasAcknowledgedUnassigned] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showMediaModal, setShowMediaModal] = useState(false);
+    const [showFileSelectModal, setShowFileSelectModal] = useState(false);
+    const [fileSelectModalType, setFileSelectModalType] = useState('photo');
+    const [filesInModal, setFilesInModal] = useState([]);
+    const [previewFileItem, setPreviewFileItem] = useState(null);
+    const [isDraggingOverFileModal, setIsDraggingOverFileModal] = useState(false);
     const [showTemplateModal, setShowTemplateModal] = useState(false);
     const [showTemplatePreview, setShowTemplatePreview] = useState(false);
     const [selectedTemplate, setSelectedTemplate] = useState(null);
-    const [selectedFile, setSelectedFile] = useState(null);
+    const [selectedFiles, setSelectedFiles] = useState([]);
+    const selectedFile = selectedFiles[0] ?? null;
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [loadingHistory, setLoadingHistory] = useState(false);
@@ -694,13 +702,17 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
     const activeChatNumberRef = useRef(activeChat?.number ?? null);
 
     const dispatch = useDispatch();
+    const selectedFilesRef = useRef(selectedFiles);
+    selectedFilesRef.current = selectedFiles;
     useEffect(() => {
         return () => {
-            if (selectedFile?.previewUrl && typeof URL !== 'undefined') {
-                URL.revokeObjectURL(selectedFile.previewUrl);
-            }
+            (selectedFilesRef.current || []).forEach((item) => {
+                if (item?.previewUrl && typeof URL !== 'undefined') {
+                    URL.revokeObjectURL(item.previewUrl);
+                }
+            });
         };
-    }, [selectedFile]);
+    }, []);
 
     useEffect(() => {
         const inputEl = messageInputRef.current;
@@ -1986,10 +1998,30 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
 
     const handleSendMessage = async () => {
-        if (!messageInput.trim() && !selectedFile) return;
+        if (!messageInput.trim() && selectedFiles.length === 0) return;
 
-        if (selectedFile) {
-            await handleFileUpload();
+        if (selectedFiles.length > 0) {
+            const attachmentMessage = messageInput.trim() || '';
+            const allPreUploaded = selectedFiles.every((f) => f.uploadedUrl);
+            if (allPreUploaded) {
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    await sendMessageWithUploadedUrl(selectedFiles[i], i === 0 ? attachmentMessage : '');
+                }
+            } else {
+                setIsUploading(true);
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    setUploadProgress(0);
+                    await uploadAndSendOneFile(selectedFiles[i], i === 0 ? attachmentMessage : '');
+                }
+                setIsUploading(false);
+                setUploadProgress(0);
+            }
+            revokeSelectedFilesUrls();
+            setSelectedFiles([]);
+            setMessageInput('');
+            if (messageInputRef.current) {
+                messageInputRef.current.style.height = 'auto';
+            }
         } else {
             await sendTextMessage(messageInput);
         }
@@ -2142,8 +2174,9 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             }
 
             // Clear any previously selected attachment (including older voice drafts)
-            if (selectedFile) {
-                setSelectedFile(null);
+            if (selectedFiles.length > 0) {
+                revokeSelectedFilesUrls();
+                setSelectedFiles([]);
             }
 
             recordingCancelledRef.current = false;
@@ -2211,13 +2244,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
                     const previewUrl = URL.createObjectURL(audioBlob);
 
-                    setSelectedFile({
+                    setSelectedFiles([{
                         file: audioFile,
                         type: 'audio',
                         isVoiceRecording: true,
                         previewUrl,
                         displayName: fileName
-                    });
+                    }]);
 
                     toast.success('Voice recording ready. Tap send to share.');
                     setRecordingTime(0);
@@ -2295,25 +2328,94 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         };
     }, []);
 
-    const handleFileSelect = (fileType) => {
+    const openFileSelectModal = (fileType) => {
+        setFileSelectModalType(fileType);
+        setFilesInModal([]);
+        setShowMediaModal(false);
+        setShowFileSelectModal(true);
+    };
+
+    const fileMatchesModalType = (file, modalType) => {
+        if (modalType === 'photo') return (file.type || '').startsWith('image/');
+        if (modalType === 'video') return (file.type || '').startsWith('video/');
+        if (modalType === 'audio') return (file.type || '').startsWith('audio/');
+        if (modalType === 'document') {
+            const ext = (file.name || '').toLowerCase().replace(/^.*\./, '');
+            return ['pdf', 'doc', 'docx', 'txt', 'xlsx', 'xls', 'pptx', 'ppt', 'zip', 'rar'].includes(ext);
+        }
+        return true;
+    };
+
+    const addFilesToModal = (files) => {
+        const list = Array.from(files || []).filter((f) => f && fileMatchesModalType(f, fileSelectModalType));
+        if (list.length === 0) return;
+        const items = list.map((file) => {
+            const item = {
+                id: `file_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                file,
+                type: fileSelectModalType,
+                displayName: file.name,
+                uploadStatus: 'pending',
+                uploadedUrl: undefined,
+                uploadError: undefined
+            };
+            if (fileSelectModalType === 'photo' || fileSelectModalType === 'video') {
+                item.previewUrl = URL.createObjectURL(file);
+            }
+            return item;
+        });
+        setFilesInModal((prev) => [...prev, ...items]);
+    };
+
+    const openFilePickerForModal = () => {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = getFileAccept(fileType);
-        input.multiple = false;
-
-        input.onchange = (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                setSelectedFile({
-                    file,
-                    type: fileType,
-                    displayName: file.name
-                });
-                setShowMediaModal(false);
-            }
-        };
-
+        input.accept = getFileAccept(fileSelectModalType);
+        input.multiple = true;
+        input.onchange = (e) => addFilesToModal(e.target.files);
         input.click();
+    };
+
+    const handleFileModalDragOver = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingOverFileModal(true);
+    };
+
+    const handleFileModalDragLeave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!e.currentTarget.contains(e.relatedTarget)) setIsDraggingOverFileModal(false);
+    };
+
+    const handleFileModalDrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingOverFileModal(false);
+        const files = e.dataTransfer?.files;
+        if (files && files.length > 0) addFilesToModal(files);
+    };
+
+    const removeFileFromModal = (index) => {
+        setFilesInModal((prev) => {
+            const next = prev.filter((_, i) => i !== index);
+            const item = prev[index];
+            if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+            return next;
+        });
+    };
+
+    const confirmFileSelectModal = () => {
+        const successItems = filesInModal.filter((f) => f.uploadStatus === 'success');
+        if (successItems.length === 0) return;
+        setSelectedFiles(successItems.map((item) => ({
+            type: item.type,
+            displayName: item.displayName,
+            previewUrl: item.previewUrl || (item.type === 'audio' && item.file ? URL.createObjectURL(item.file) : undefined),
+            uploadedUrl: item.uploadedUrl
+        })));
+        setShowFileSelectModal(false);
+        setFilesInModal([]);
     };
 
     const getFileAccept = (fileType) => {
@@ -2346,21 +2448,63 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
     };
 
-    const handleFileUpload = async () => {
-        if (!selectedFile || !activeChat) return;
+    const uploadFileInModal = async (item) => {
+        if (!item?.file || !tokens?.token || !tokens?.username) return;
+        const fallbackFileName = item.file?.name || item.displayName || `attachment_${Date.now()}`;
+        try {
+            const formData = new FormData();
+            formData.append('file', item.file, fallbackFileName);
+            formData.append('project_id', tokens.selected_project_id || '');
 
-        setIsUploading(true);
-        setUploadProgress(0);
+            const uploadResponse = await axios.post(
+                `https://api.w1chat.com/upload/upload-media`,
+                formData,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'multipart/form-data'
+                    }
+                }
+            );
+
+            const fileUrl = uploadResponse?.data?.link
+                || uploadResponse?.data?.data?.file_url
+                || uploadResponse?.data?.data?.fileUrl;
+
+            if (uploadResponse?.data && !uploadResponse.data.error && fileUrl) {
+                setFilesInModal((prev) => prev.map((it) => it.id === item.id ? { ...it, uploadStatus: 'success', uploadedUrl: fileUrl, uploadError: undefined } : it));
+            } else {
+                const errMsg = uploadResponse?.data?.message || uploadResponse?.data?.error || 'Upload failed';
+                setFilesInModal((prev) => prev.map((it) => it.id === item.id ? { ...it, uploadStatus: 'error', uploadError: typeof errMsg === 'string' ? errMsg : 'Upload failed' } : it));
+            }
+        } catch (error) {
+            const errMsg = error.response?.data?.message || error.response?.data?.error || error.message || 'Upload failed';
+            setFilesInModal((prev) => prev.map((it) => it.id === item.id ? { ...it, uploadStatus: 'error', uploadError: typeof errMsg === 'string' ? errMsg : 'Upload failed' } : it));
+        }
+    };
+
+    useEffect(() => {
+        if (!showFileSelectModal) return;
+        const pending = filesInModal.filter((f) => f.uploadStatus === 'pending');
+        if (pending.length === 0) return;
+        setFilesInModal((prev) => prev.map((it) => it.uploadStatus === 'pending' ? { ...it, uploadStatus: 'uploading' } : it));
+        pending.forEach((item) => uploadFileInModal(item));
+    }, [showFileSelectModal, filesInModal.length]);
+
+    const uploadAndSendOneFile = async (fileItem, optionalCaption = '') => {
+        if (!fileItem || !activeChat) return;
+
         const tempMessageId = `temp_${Date.now()}`;
-        const isVoiceRecording = Boolean(selectedFile?.isVoiceRecording);
-        const fileLabel = getFileTypeLabel(selectedFile.type).toLowerCase();
-        const attachmentMessage = isVoiceRecording ? '' : (messageInput || `Sent a ${fileLabel}`);
+        const isVoiceRecording = Boolean(fileItem?.isVoiceRecording);
+        const fileLabel = getFileTypeLabel(fileItem.type).toLowerCase();
+        const attachmentMessage = isVoiceRecording ? '' : (optionalCaption || '');
         const isVoiceParam = isVoiceRecording ? 'true' : 'false';
+        const fallbackFileName = fileItem.file?.name || fileItem.displayName || `attachment_${Date.now()}`;
 
         try {
             const formData = new FormData();
-            const fallbackFileName = selectedFile.file?.name || selectedFile.displayName || `attachment_${Date.now()}`;
-            formData.append('file', selectedFile.file, fallbackFileName);
+            formData.append('file', fileItem.file, fallbackFileName);
             formData.append('project_id', tokens.selected_project_id || '');
 
             const uploadResponse = await axios.post(
@@ -2386,8 +2530,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 || uploadResponse?.data?.data?.fileUrl;
 
             if (uploadResponse.data && !uploadResponse.data.error && fileUrl) {
-                const fileType = selectedFile.type;
-                const fileName = selectedFile.file?.name || selectedFile.displayName || fallbackFileName;
+                const fileType = fileItem.type;
+                const fileName = fileItem.file?.name || fileItem.displayName || fallbackFileName;
 
                 const tempMessage = {
                     id: Date.now().toString(),
@@ -2406,28 +2550,16 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 };
 
                 setMessages(prev => [...prev, tempMessage]);
-                shouldAutoScrollRef.current = true; // Enable auto-scroll when sending file
-                setSelectedFile(null);
-                setMessageInput('');
-                // Reset textarea height after sending
-                if (messageInputRef.current) {
-                    messageInputRef.current.style.height = 'auto';
-                }
-                // Scroll immediately for file uploads
-                // setTimeout(() => scrollToBottomImmediate(), 50);
-
-                // Trigger parent to refresh chat list with pending state immediately
+                shouldAutoScrollRef.current = true;
                 if (onMessageStatusUpdate) {
                     onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
                 }
 
                 const messagePayload = {
                     project_id: tokens.selected_project_id || '',
-                    message: isVoiceRecording ? '' : (messageInput || ''),
+                    message: isVoiceRecording ? '' : attachmentMessage,
                     number: activeChat.number
                 };
-
-
                 if (fileType === 'photo') messagePayload.image_link = fileUrl;
                 else if (fileType === 'video') messagePayload.video_link = fileUrl;
                 else if (fileType === 'audio') {
@@ -2513,8 +2645,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
                     }
                 }
-            }
-            else {
+            } else {
                 throw new Error(uploadResponse?.data?.message || 'Failed to upload file');
             }
         } catch (error) {
@@ -2529,14 +2660,155 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             if (onMessageStatusUpdate) {
                 onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
             }
-        } finally {
-            setIsUploading(false);
-            setUploadProgress(0);
         }
     };
 
+    const sendMessageWithUploadedUrl = async (fileItem, optionalCaption = '') => {
+        if (!fileItem?.uploadedUrl || !activeChat) return;
+
+        const tempMessageId = `temp_${Date.now()}`;
+        const isVoiceRecording = Boolean(fileItem?.isVoiceRecording);
+        const fileUrl = fileItem.uploadedUrl;
+        const fileType = fileItem.type;
+        const attachmentMessage = isVoiceRecording ? '' : (optionalCaption || '');
+        const isVoiceParam = isVoiceRecording ? 'true' : 'false';
+        const fileName = fileItem.displayName || 'Attachment';
+
+        const tempMessage = {
+            id: Date.now().toString(),
+            message_id: tempMessageId,
+            type: 'out',
+            message_type: fileType,
+            message: attachmentMessage,
+            media_url: fileUrl,
+            media_name: fileName,
+            status: 'pending',
+            timestamp: Date.now(),
+            send_by: 'You',
+            chat_number: activeChat.number,
+            create_date: new Date().toISOString(),
+            is_voice: isVoiceRecording
+        };
+
+        setMessages(prev => [...prev, tempMessage]);
+        shouldAutoScrollRef.current = true;
+        if (onMessageStatusUpdate) {
+            onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
+        }
+
+        const messagePayload = {
+            project_id: tokens.selected_project_id || '',
+            message: isVoiceRecording ? '' : attachmentMessage,
+            number: activeChat.number
+        };
+        if (fileType === 'photo') messagePayload.image_link = fileUrl;
+        else if (fileType === 'video') messagePayload.video_link = fileUrl;
+        else if (fileType === 'audio') {
+            messagePayload.audio_link = fileUrl;
+            messagePayload.is_voice = isVoiceParam;
+        }
+        else if (fileType === 'document') messagePayload.document_link = fileUrl;
+
+        let api_url = 'send-text-message';
+        if (fileType === 'photo') api_url = 'send-image-message';
+        else if (fileType === 'video') api_url = 'send-video-message';
+        else if (fileType === 'audio') api_url = 'send-audio-message';
+        else if (fileType === 'document') api_url = 'send-document-message';
+
+        try {
+            const { data, key } = Encrypt(messagePayload);
+            const data_pass = JSON.stringify({ "data": data, "key": key });
+
+            const messageResponse = await axios.post(
+                `https://api.w1chat.com/message/${api_url}`,
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (!messageResponse.data.error) {
+                const serverWamid = messageResponse?.data?.wamid || '';
+                const serverMessageId = messageResponse?.data?.message_id || '';
+                const serverId = messageResponse?.data?.id || '';
+
+                const sentMediaMessage = {
+                    ...tempMessage,
+                    status: 'sent',
+                    message_id: serverMessageId || tempMessageId,
+                    wamid: serverWamid,
+                    id: serverId || tempMessage.id
+                };
+
+                if (dbAvailable) {
+                    await dbHelper.addMessage(activeChat.number, sentMediaMessage);
+                    await dbHelper.saveChats([
+                        {
+                            number: activeChat.number,
+                            name: activeChat.name,
+                            is_favorite: activeChat.is_favorite || false,
+                            wamid: serverWamid,
+                            create_date: tempMessage.create_date,
+                            type: 'out',
+                            message_type: fileType,
+                            message: tempMessage.message,
+                            status: 'sent',
+                            unique_id: serverMessageId || tempMessageId,
+                            last_id: serverId || Date.now(),
+                            send_by_username: tokens?.username || '',
+                            send_by_mobile: ''
+                        }
+                    ]);
+                }
+                setMessages(prev =>
+                    prev.map(msg =>
+                        msg.message_id === tempMessageId
+                            ? { ...msg, ...sentMediaMessage }
+                            : msg
+                    )
+                );
+
+                if (onMessageStatusUpdate) {
+                    onMessageStatusUpdate(activeChat.number, serverMessageId || tempMessageId, 'sent');
+                }
+            } else {
+                const errMsg = messageResponse.data.error || messageResponse.data.msg || 'Failed to send message';
+                toast.error(typeof errMsg === 'string' ? errMsg : 'Failed to send message');
+                setMessages(prev =>
+                    prev.map(msg =>
+                        msg.message_id === tempMessageId ? { ...msg, status: 'failed' } : msg
+                    )
+                );
+                if (onMessageStatusUpdate) {
+                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
+                }
+            }
+        } catch (error) {
+            console.error('Send message failed:', error);
+            const errMsg = error.response?.data?.error || error.response?.data?.msg || error.message || 'Failed to send message';
+            toast.error(typeof errMsg === 'string' ? errMsg : 'Failed to send message');
+            setMessages(prev =>
+                prev.map(msg =>
+                    msg.message_id === tempMessageId ? { ...msg, status: 'failed' } : msg
+                )
+            );
+            if (onMessageStatusUpdate) {
+                onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
+            }
+        }
+    };
+
+    const revokeSelectedFilesUrls = () => {
+        selectedFiles.forEach((item) => { if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl); });
+    };
+
     const removeSelectedFile = () => {
-        setSelectedFile(null);
+        revokeSelectedFilesUrls();
+        setSelectedFiles([]);
     };
 
     // Handle template use from preview
@@ -2720,62 +2992,18 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         }
     };
 
-    const MediaSelectionModal = () => (
-        <AnimatePresence>
-            {showMediaModal && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-                >
-                    <motion.div
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.9, opacity: 0 }}
-                        className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-6 w-full max-w-xs sm:max-w-md"
-                    >
-                        <div className="flex justify-between items-center mb-4 sm:mb-6">
-                            <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
-                                Send Media
-                            </h3>
-                            <button
-                                onClick={() => setShowMediaModal(false)}
-                                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                            >
-                                <FiX className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </button>
-                        </div>
+    const closeFileSelectModal = () => {
+        filesInModal.forEach((item) => { if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl); });
+        setFilesInModal([]);
+        setShowFileSelectModal(false);
+        setPreviewFileItem(null);
+        setIsDraggingOverFileModal(false);
+    };
 
-                        <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                            {[
-                                { type: 'photo', icon: FiImage, label: 'Photo', color: 'bg-green-500' },
-                                { type: 'video', icon: FiVideo, label: 'Video', color: 'bg-purple-500' },
-                                { type: 'audio', icon: FiMusic, label: 'Audio', color: 'bg-blue-500' },
-                                { type: 'document', icon: FiFile, label: 'Document', color: 'bg-orange-500' }
-                            ].map((item) => {
-                                const IconComponent = item.icon;
-                                return (
-                                    <button
-                                        key={item.type}
-                                        onClick={() => handleFileSelect(item.type)}
-                                        className="flex flex-col items-center p-3 sm:p-4 rounded-xl bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-all duration-200 hover:scale-105"
-                                    >
-                                        <div className={`w-8 h-8 sm:w-10 sm:h-10 ${item.color} rounded-lg flex items-center justify-center mb-2 sm:mb-3`}>
-                                            <IconComponent className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                                        </div>
-                                        <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200">
-                                            {item.label}
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </motion.div>
-                </motion.div>
-            )}
-        </AnimatePresence>
-    );
+    const closePreviewOverlay = () => {
+        if (previewFileItem?.type === 'audio' && previewFileItem?.previewUrl) URL.revokeObjectURL(previewFileItem.previewUrl);
+        setPreviewFileItem(null);
+    };
 
     const assignmentLoading = loadingChatNumber === activeChat?.number;
     const assignmentUsers = assignmentInfo?.users || [];
@@ -3068,6 +3296,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                         <p className="text-xs text-gray-600 dark:text-gray-300">
                                             {getFileTypeLabel(selectedFile.type)}
                                             {selectedFile.file?.size ? ` • ${(selectedFile.file.size / 1024 / 1024).toFixed(2)} MB` : ''}
+                                            {selectedFiles.length > 1 ? ` • ${selectedFiles.length} files` : ''}
                                         </p>
                                     </div>
                                 </div>
@@ -3390,7 +3619,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                             </div>
 
                             {/* 3. Send Button - Only show when there's content to send */}
-                            {(messageInput.trim() || selectedFile) && (
+                            {(messageInput.trim() || selectedFiles.length > 0) && (
                                 <button
                                     onClick={handleSendMessage}
                                     disabled={isUploading || loadingHistory || !!loadingChatNumber}
@@ -3465,8 +3694,210 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     onDateClick={handleDateClick}
                 />
 
-                {/* Media Selection Modal */}
-                <MediaSelectionModal />
+                {/* Media Selection Modal - inline to avoid re-mount flicker */}
+                <AnimatePresence>
+                    {showMediaModal && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                        >
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-6 w-full max-w-xs sm:max-w-md"
+                            >
+                                <div className="flex justify-between items-center mb-4 sm:mb-6">
+                                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
+                                        Send Media
+                                    </h3>
+                                    <button
+                                        onClick={() => setShowMediaModal(false)}
+                                        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    >
+                                        <FiX className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                                    {[
+                                        { type: 'photo', icon: FiImage, label: 'Photo', color: 'bg-green-500' },
+                                        { type: 'video', icon: FiVideo, label: 'Video', color: 'bg-purple-500' },
+                                        { type: 'audio', icon: FiMusic, label: 'Audio', color: 'bg-blue-500' },
+                                        { type: 'document', icon: FiFile, label: 'Document', color: 'bg-orange-500' }
+                                    ].map((item) => {
+                                        const IconComponent = item.icon;
+                                        return (
+                                            <button
+                                                key={item.type}
+                                                onClick={() => openFileSelectModal(item.type)}
+                                                className="flex flex-col items-center p-3 sm:p-4 rounded-xl bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-all duration-200 hover:scale-105"
+                                            >
+                                                <div className={`w-8 h-8 sm:w-10 sm:h-10 ${item.color} rounded-lg flex items-center justify-center mb-2 sm:mb-3`}>
+                                                    <IconComponent className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                                                </div>
+                                                <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200">
+                                                    {item.label}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* File Select Modal - inline to avoid re-mount flicker */}
+                <AnimatePresence>
+                    {showFileSelectModal && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4"
+                        >
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                className={`relative bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-6 w-full max-w-lg max-h-[85vh] flex flex-col transition-colors ${isDraggingOverFileModal ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-900 bg-blue-50/50 dark:bg-blue-900/20' : ''}`}
+                                onDragOver={handleFileModalDragOver}
+                                onDragLeave={handleFileModalDragLeave}
+                                onDrop={handleFileModalDrop}
+                            >
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
+                                        Select {getFileTypeLabel(fileSelectModalType)}
+                                    </h3>
+                                    <button
+                                        onClick={closeFileSelectModal}
+                                        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    >
+                                        <FiX className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </button>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={openFilePickerForModal}
+                                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium mb-2"
+                                >
+                                    <FiPlus className="w-4 h-4" />
+                                    Add files
+                                </button>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-4">or drag and drop files here</p>
+                                {isDraggingOverFileModal && (
+                                    <div className="absolute inset-0 rounded-2xl border-2 border-dashed border-blue-500 bg-blue-50/80 dark:bg-blue-900/30 flex items-center justify-center z-10 pointer-events-none">
+                                        <span className="text-blue-600 dark:text-blue-300 font-medium">Drop files here</span>
+                                    </div>
+                                )}
+                                <div className="flex-1 overflow-y-auto min-h-0">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                        {filesInModal.map((item, index) => (
+                                            <div
+                                                key={item.id}
+                                                className={`relative rounded-xl border overflow-hidden group ${item.uploadStatus === 'error' ? 'border-red-400 dark:border-red-500 bg-red-50/50 dark:bg-red-900/20' : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50'}`}
+                                            >
+                                                <div className="aspect-square flex items-center justify-center bg-gray-100 dark:bg-gray-700 relative">
+                                                    {item.previewUrl && (fileSelectModalType === 'photo' || fileSelectModalType === 'video') ? (
+                                                        fileSelectModalType === 'photo' ? (
+                                                            <img src={item.previewUrl} alt="" className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <video src={item.previewUrl} className="w-full h-full object-cover" muted preload="metadata" />
+                                                        )
+                                                    ) : (
+                                                        <div className="text-gray-400 dark:text-gray-500">
+                                                            {fileSelectModalType === 'audio' && <FiMusic className="w-10 h-10" />}
+                                                            {fileSelectModalType === 'document' && <FiFile className="w-10 h-10" />}
+                                                        </div>
+                                                    )}
+                                                    {item.uploadStatus === 'uploading' && (
+                                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                                            <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                        </div>
+                                                    )}
+                                                    {item.uploadStatus === 'success' && (
+                                                        <div className="absolute top-1 left-1 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                                                            <FiCheck className="w-3 h-3 text-white" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <p className="p-2 text-xs text-gray-700 dark:text-gray-300 truncate" title={item.displayName}>{item.displayName}</p>
+                                                {item.uploadStatus === 'error' && item.uploadError && (
+                                                    <p className="px-2 pb-2 text-xs text-red-600 dark:text-red-400" title={item.uploadError}>{item.uploadError}</p>
+                                                )}
+                                                <div className="absolute top-1 right-1 flex gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const forPreview = { ...item, index };
+                                                            if (item.type === 'audio' && item.file) forPreview.previewUrl = URL.createObjectURL(item.file);
+                                                            setPreviewFileItem(forPreview);
+                                                        }}
+                                                        disabled={item.uploadStatus === 'uploading'}
+                                                        className="p-1.5 rounded-lg bg-black/50 text-white hover:bg-black/70 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        title="Preview"
+                                                    >
+                                                        <FiEye className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeFileFromModal(index)}
+                                                        className="p-1.5 rounded-lg bg-red-500/80 text-white hover:bg-red-600"
+                                                        title="Remove"
+                                                    >
+                                                        <FiTrash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="mt-4 flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={confirmFileSelectModal}
+                                        disabled={filesInModal.length === 0 || filesInModal.some((f) => f.uploadStatus !== 'success')}
+                                        className="px-4 py-2 rounded-xl bg-blue-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-600"
+                                    >
+                                        Done
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Preview Overlay - inline to avoid re-mount flicker */}
+                {previewFileItem && (
+                    <div
+                        className="fixed inset-0 bg-black/80 flex items-center justify-center z-[70] p-4"
+                        onClick={closePreviewOverlay}
+                    >
+                        <div className="max-w-full max-h-full overflow-auto" onClick={(e) => e.stopPropagation()}>
+                            {previewFileItem.type === 'photo' && previewFileItem.previewUrl && <img src={previewFileItem.previewUrl} alt="" className="max-h-[90vh] rounded-lg" />}
+                            {previewFileItem.type === 'video' && previewFileItem.previewUrl && <video src={previewFileItem.previewUrl} controls className="max-h-[90vh] rounded-lg" />}
+                            {previewFileItem.type === 'audio' && previewFileItem.previewUrl && (
+                                <audio src={previewFileItem.previewUrl} controls className="rounded-lg" />
+                            )}
+                            {previewFileItem.type === 'document' && (
+                                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 text-gray-700 dark:text-gray-300">
+                                    <FiFile className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                                    <p className="font-medium">{previewFileItem.displayName}</p>
+                                    <p className="text-sm text-gray-500">Document preview not available</p>
+                                </div>
+                            )}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={closePreviewOverlay}
+                            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"
+                        >
+                            <FiX className="w-5 h-5" />
+                        </button>
+                    </div>
+                )}
 
                 {/* Template Selection Modal */}
                 <ChatTemplateModal
