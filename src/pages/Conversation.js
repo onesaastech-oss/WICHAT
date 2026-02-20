@@ -2362,6 +2362,9 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             if (fileSelectModalType === 'photo' || fileSelectModalType === 'video') {
                 item.previewUrl = URL.createObjectURL(file);
             }
+            if (fileSelectModalType === 'document') {
+                item.documentName = '';
+            }
             return item;
         });
         setFilesInModal((prev) => [...prev, ...items]);
@@ -2405,6 +2408,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         });
     };
 
+    const setDocumentNameInModal = (index, value) => {
+        setFilesInModal((prev) => prev.map((it, i) => i === index ? { ...it, documentName: value } : it));
+    };
+
     const confirmFileSelectModal = () => {
         const successItems = filesInModal.filter((f) => f.uploadStatus === 'success');
         if (successItems.length === 0) return;
@@ -2412,7 +2419,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             type: item.type,
             displayName: item.displayName,
             previewUrl: item.previewUrl || (item.type === 'audio' && item.file ? URL.createObjectURL(item.file) : undefined),
-            uploadedUrl: item.uploadedUrl
+            uploadedUrl: item.uploadedUrl,
+            ...(item.type === 'document' && { documentName: item.documentName ?? '' })
         })));
         setShowFileSelectModal(false);
         setFilesInModal([]);
@@ -2532,6 +2540,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             if (uploadResponse.data && !uploadResponse.data.error && fileUrl) {
                 const fileType = fileItem.type;
                 const fileName = fileItem.file?.name || fileItem.displayName || fallbackFileName;
+                const displayName = fileType === 'document' ? (fileItem.documentName ?? fileName) : fileName;
 
                 const tempMessage = {
                     id: Date.now().toString(),
@@ -2540,7 +2549,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     message_type: fileType,
                     message: attachmentMessage,
                     media_url: fileUrl,
-                    media_name: fileName,
+                    media_name: displayName,
                     status: 'pending',
                     timestamp: Date.now(),
                     send_by: 'You',
@@ -2566,7 +2575,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     messagePayload.audio_link = fileUrl;
                     messagePayload.is_voice = isVoiceParam;
                 }
-                else if (fileType === 'document') messagePayload.document_link = fileUrl;
+                else if (fileType === 'document') {
+                    messagePayload.document_link = fileUrl;
+                    messagePayload.document_name = fileItem.documentName ?? '';
+                }
 
                 let api_url = 'send-text-message';
                 if (fileType === 'photo') api_url = 'send-image-message';
@@ -2673,6 +2685,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         const attachmentMessage = isVoiceRecording ? '' : (optionalCaption || '');
         const isVoiceParam = isVoiceRecording ? 'true' : 'false';
         const fileName = fileItem.displayName || 'Attachment';
+        const displayName = fileType === 'document' ? (fileItem.documentName ?? fileName) : fileName;
 
         const tempMessage = {
             id: Date.now().toString(),
@@ -2681,7 +2694,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             message_type: fileType,
             message: attachmentMessage,
             media_url: fileUrl,
-            media_name: fileName,
+            media_name: displayName,
             status: 'pending',
             timestamp: Date.now(),
             send_by: 'You',
@@ -2707,7 +2720,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             messagePayload.audio_link = fileUrl;
             messagePayload.is_voice = isVoiceParam;
         }
-        else if (fileType === 'document') messagePayload.document_link = fileUrl;
+        else if (fileType === 'document') {
+            messagePayload.document_link = fileUrl;
+            messagePayload.document_name = fileItem.documentName ?? '';
+        }
 
         let api_url = 'send-text-message';
         if (fileType === 'photo') api_url = 'send-image-message';
@@ -2716,6 +2732,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         else if (fileType === 'document') api_url = 'send-document-message';
 
         try {
+            console.log(messagePayload);
             const { data, key } = Encrypt(messagePayload);
             const data_pass = JSON.stringify({ "data": data, "key": key });
 
@@ -3824,6 +3841,17 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                                     )}
                                                 </div>
                                                 <p className="p-2 text-xs text-gray-700 dark:text-gray-300 truncate" title={item.displayName}>{item.displayName}</p>
+                                                {fileSelectModalType === 'document' && (
+                                                    <div className="px-2 pb-2">
+                                                        <input
+                                                            type="text"
+                                                            value={item.documentName ?? ''}
+                                                            onChange={(e) => setDocumentNameInModal(index, e.target.value)}
+                                                            placeholder="Document name (optional)"
+                                                            className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400"
+                                                        />
+                                                    </div>
+                                                )}
                                                 {item.uploadStatus === 'error' && item.uploadError && (
                                                     <p className="px-2 pb-2 text-xs text-red-600 dark:text-red-400" title={item.uploadError}>{item.uploadError}</p>
                                                 )}
