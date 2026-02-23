@@ -39,7 +39,7 @@ const getUserData = () => {
 };
 
 const requiresProject = (item) => {
-  const protectedPaths = ['/live-chat', '/template', '/campaigns', '/contact', '/contact-group', '/auto-reply', '/flow', '/agent-management', '/permission-list'];
+  const protectedPaths = ['/live-chat', '/template', '/campaigns', '/contact', '/contact-group', '/auto-reply', '/flow', '/agent-management', '/permission-list', '/project-config'];
   const protectedKeys = ['contact', 'automation', 'management'];
   return protectedPaths.includes(item.path) ||
     protectedKeys.includes(item.key) ||
@@ -595,7 +595,8 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
       key: 'management', title: 'Management', icon: <FiSettings size={18} />,
       submenus: [
         { title: 'Agents', path: '/agent-management' },
-        { title: 'Permissions', path: '/permission-list' }
+        { title: 'Permissions', path: '/permission-list' },
+        { title: 'Configuration', path: '/project-config' }
       ]
     }
   ];
