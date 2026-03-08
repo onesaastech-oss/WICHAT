@@ -124,6 +124,7 @@ class SocketManager {
         this.chatUpdateCallbacks = [];
         this.assignmentCallbacks = [];
         this.unreadCountCallbacks = [];
+        this.caseStatusCallbacks = [];
     }
 
     connect(token, username) {
@@ -194,6 +195,25 @@ class SocketManager {
                         callback(data);
                     } catch (err) {
                         console.error("Error in unread count callback:", err);
+                    }
+                });
+            });
+
+            // case_status: { number, case_open_count } - updates open case count for chat
+            this.socket.on("case_status", async (data) => {
+                const { number, case_open_count } = data || {};
+                if (!number) return;
+                const count = typeof case_open_count === 'number' ? Math.max(0, case_open_count) : 0;
+                try {
+                    await dbHelper.updateChat(number, { case_open_count: count });
+                } catch (err) {
+                    console.error("Error updating case_open_count in DB:", err);
+                }
+                this.caseStatusCallbacks.forEach(callback => {
+                    try {
+                        callback({ number, case_open_count: count });
+                    } catch (err) {
+                        console.error("Error in case status callback:", err);
                     }
                 });
             });
@@ -446,6 +466,13 @@ class SocketManager {
         this.unreadCountCallbacks.push(callback);
         return () => {
             this.unreadCountCallbacks = this.unreadCountCallbacks.filter(cb => cb !== callback);
+        };
+    }
+
+    onCaseStatus(callback) {
+        this.caseStatusCallbacks.push(callback);
+        return () => {
+            this.caseStatusCallbacks = this.caseStatusCallbacks.filter(cb => cb !== callback);
         };
     }
 

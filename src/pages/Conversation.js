@@ -936,7 +936,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
             const response = await axios.post(
-                'https://api.w1chat.com/message/case-status',
+                'https://api.w1chat.com/message/open-case-count',
                 data_pass,
                 {
                     headers: {
@@ -946,8 +946,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     }
                 }
             );
-            if (!response?.data?.error && typeof response?.data?.status === 'boolean') {
-                setCaseStatus(response.data.status);
+            if (!response?.data?.error && typeof response?.data?.case_open_count === 'number') {
+                setCaseStatus(Math.max(0, response.data.case_open_count));
             } else {
                 setCaseStatus(null);
             }
@@ -1082,12 +1082,15 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             if (showContactDetails && activeChat?.number) {
                 fetchCaseList(1, caseListLimit, { number: activeChat.number, search: '', status: 'open' });
             }
+            if (activeChat?.number) {
+                fetchCaseStatus(activeChat.number);
+            }
         } catch (error) {
             setCaseEditError(error?.response?.data?.error ?? 'Failed to update case. Please try again.');
         } finally {
             setCaseEditLoading(false);
         }
-    }, [tokens?.token, tokens?.username, tokens?.selected_project_id, caseEditRow, caseEditName, caseEditRemark, caseEditStatus, closeCaseEditModal, caseListPageNo, caseListLimit, fetchCaseList, showContactDetails, activeChat?.number]);
+    }, [tokens?.token, tokens?.username, tokens?.selected_project_id, caseEditRow, caseEditName, caseEditRemark, caseEditStatus, closeCaseEditModal, caseListPageNo, caseListLimit, fetchCaseList, fetchCaseStatus, showContactDetails, activeChat?.number]);
 
     const openCaseCreateModal = useCallback(() => {
         setCaseCreateName('');
@@ -1140,12 +1143,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             if (showContactDetails && activeChat?.number) {
                 fetchCaseList(1, caseListLimit, { number: activeChat.number, search: '', status: '' });
             }
+            fetchCaseStatus(activeChat.number);
         } catch (error) {
             setCaseCreateError(error?.response?.data?.error ?? 'Failed to create case. Please try again.');
         } finally {
             setCaseCreateLoading(false);
         }
-    }, [tokens?.token, tokens?.username, tokens?.selected_project_id, activeChat?.number, caseCreateName, caseCreateRemark, caseCreateStatus, closeCaseCreateModal, caseListPageNo, caseListLimit, fetchCaseList, showContactDetails]);
+    }, [tokens?.token, tokens?.username, tokens?.selected_project_id, activeChat?.number, caseCreateName, caseCreateRemark, caseCreateStatus, closeCaseCreateModal, caseListPageNo, caseListLimit, fetchCaseList, fetchCaseStatus, showContactDetails]);
 
     const handleContactSave = useCallback(async (formData, fullNumber, country) => {
         if (contactSubmitting) return;
@@ -3409,22 +3413,22 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                 type="button"
                                 onClick={openCaseListModal}
                                 className="flex items-center space-x-2 sm:space-x-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500"
-                                title={caseStatusLoading ? 'Loading case status...' : caseStatus === true ? 'Open case (click to view list)' : caseStatus === false ? 'No open case (click to view list)' : 'Case status (click to view list)'}
+                                title={caseStatusLoading ? 'Loading case status...' : (caseStatus ?? 0) > 0 ? `Open case (${caseStatus}) (click to view list)` : caseStatus === 0 ? 'No open case (click to view list)' : 'Case status (click to view list)'}
                             >
-                                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${caseStatusLoading ? 'bg-gray-50 dark:bg-gray-700/60' : caseStatus === true ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/40 dark:text-amber-200' : caseStatus === false ? 'bg-green-50 text-green-600 dark:bg-green-900/40 dark:text-green-200' : 'bg-gray-50 text-gray-500 dark:bg-gray-700/60 dark:text-gray-400'
+                                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${caseStatusLoading ? 'bg-gray-50 dark:bg-gray-700/60' : (caseStatus ?? 0) > 0 ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/40 dark:text-amber-200' : caseStatus === 0 ? 'bg-green-50 text-green-600 dark:bg-green-900/40 dark:text-green-200' : 'bg-gray-50 text-gray-500 dark:bg-gray-700/60 dark:text-gray-400'
                                     }`}>
                                     {caseStatusLoading ? (
                                         <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                    ) : caseStatus === true ? (
+                                    ) : (caseStatus ?? 0) > 0 ? (
                                         <FiAlertCircle className="h-4 w-4" />
-                                    ) : caseStatus === false ? (
+                                    ) : caseStatus === 0 ? (
                                         <FiCheckCircle className="h-4 w-4" />
                                     ) : (
                                         <FiInfo className="h-4 w-4" />
                                     )}
                                 </div>
                                 <span className="hidden sm:inline text-sm font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap pr-1 sm:pr-2">
-                                    {caseStatusLoading ? 'Case' : caseStatus === true ? 'Case Open' : caseStatus === false ? 'Case Closed' : 'Case'}
+                                    {caseStatusLoading ? 'Case' : (caseStatus ?? 0) > 0 ? `Case Open (${caseStatus})` : caseStatus === 0 ? 'Case Closed' : 'Case'}
                                 </span>
                             </button>
                         )}
@@ -4835,13 +4839,13 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                         <section className="rounded-2xl border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
                                             <div className="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between gap-2">
                                                 <div className="flex items-center gap-2">
-                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${caseStatus === true ? 'bg-amber-100 dark:bg-amber-900/40' : 'bg-green-100 dark:bg-green-900/40'}`}>
-                                                        {caseStatus === true ? <FiAlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" /> : <FiCheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />}
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${(caseStatus ?? 0) > 0 ? 'bg-amber-100 dark:bg-amber-900/40' : 'bg-green-100 dark:bg-green-900/40'}`}>
+                                                        {(caseStatus ?? 0) > 0 ? <FiAlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" /> : <FiCheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />}
                                                     </div>
                                                     <h4 className="text-sm font-semibold text-gray-800 dark:text-white">Case</h4>
                                                 </div>
-                                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${caseStatus === true ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200' : caseStatus === false ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300'}`}>
-                                                    {caseStatusLoading ? '...' : caseStatus === true ? 'Open' : caseStatus === false ? 'Closed' : '—'}
+                                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${(caseStatus ?? 0) > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200' : caseStatus === 0 ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300'}`}>
+                                                    {caseStatusLoading ? '...' : (caseStatus ?? 0) > 0 ? `Open (${caseStatus})` : caseStatus === 0 ? 'Closed' : '—'}
                                                 </span>
                                             </div>
                                             <div className="p-5">

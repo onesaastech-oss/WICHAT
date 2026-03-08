@@ -210,9 +210,17 @@ function LiveChat() {
             setAssignmentUpdate(assignData);
         });
 
+        const unsubscribeCaseStatus = socketManager.onCaseStatus(async () => {
+            if (dbAvailable) {
+                const updatedChats = await dbHelper.getChats();
+                setChats([...updatedChats]);
+            }
+        });
+
         return () => {
             unsubscribeMessage();
             unsubscribeAssignment();
+            unsubscribeCaseStatus();
         };
     }, [isInitialized, activeChat, dbAvailable]);
 

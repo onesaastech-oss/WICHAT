@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiSearch, FiStar, FiImage, FiVideo, FiFile, FiMusic, FiUser, FiCheck, FiClock, FiAlertCircle, FiMoreVertical, FiMessageCircle, FiRefreshCw, FiDelete, FiTrash2, FiChevronLeft, FiChevronRight, FiX } from 'react-icons/fi';
+import { FiSearch, FiStar, FiImage, FiVideo, FiFile, FiMusic, FiUser, FiCheck, FiClock, FiAlertCircle, FiMoreVertical, FiMessageCircle, FiRefreshCw, FiDelete, FiTrash2, FiChevronLeft, FiChevronRight, FiX, FiBriefcase } from 'react-icons/fi';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import { dbHelper } from './db';
+import { socketManager } from './socket';
 
 const COUNTRY_CODES = [
     { code: '91', country: 'India', dial: '+91' },
@@ -156,8 +157,8 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                     // For status updates: use the status from socket/DB (socketChat.status)
                     // This ensures status changes (sent→delivered→read) are reflected
                     // Only preserve unread_count from existing if socket doesn't have it
-                    const unreadCount = typeof socketChat.unread_count === 'number' 
-                        ? socketChat.unread_count 
+                    const unreadCount = typeof socketChat.unread_count === 'number'
+                        ? socketChat.unread_count
                         : (existingChat?.unread_count || 0);
 
                     return {
@@ -176,7 +177,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                             return existing && existing.unread_count !== chat.unread_count;
                         })
                         .map(chat => ({ number: chat.number, unread_count: chat.unread_count }));
-                    
+
                     if (unreadUpdates.length > 0) {
                         unreadUpdates.forEach(update => {
                             dbHelper.updateChat(update.number, { unread_count: update.unread_count });
@@ -189,14 +190,24 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         }
     }, [socket_chats, dbAvailable]);
 
-
+    // 🔹 Subscribe to case_status socket: updates case_open_count for chat by number
+    useEffect(() => {
+        const unsubscribe = socketManager.onCaseStatus(({ number, case_open_count }) => {
+            setChats(prevChats =>
+                prevChats.map(chat =>
+                    chat.number === number ? { ...chat, case_open_count } : chat
+                )
+            );
+        });
+        return unsubscribe;
+    }, []);
 
     const syncWithAPI = async () => {
         if (!tokens) return;
 
         try {
             // Use the currently selected project ID (fallback to first project if needed)
-            const projectId = tokens.selected_project_id  || '';
+            const projectId = tokens.selected_project_id || '';
 
             const messagePayload = {
                 project_id: projectId,
@@ -236,10 +247,15 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                     ? apiChat.unread_count
                     : Number(apiChat.unread_count) || 0;
 
+                const caseOpenCount = typeof apiChat.case_open_count === 'number'
+                    ? Math.max(0, apiChat.case_open_count)
+                    : 0;
+
                 return {
                     number: apiChat.contact.number,
                     name: apiChat.contact.name || apiChat.contact.number,
                     is_favorite: apiChat.contact.is_favorite || false,
+                    case_open_count: caseOpenCount,
                     wamid: apiChat.last_message.wamid,
                     create_date: apiChat.last_message.create_date,
                     timestamp: apiChat.last_message.create_date ? new Date(apiChat.last_message.create_date).getTime() : Date.now(),
@@ -397,12 +413,12 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
             const searchLower = searchQuery.toLowerCase().trim();
             const chatNumber = chat.number || '';
             const chatName = chat.name || '';
-            
+
             // Normalize phone numbers for search (remove spaces, dashes, plus signs)
             const normalizePhone = (phone) => phone.replace(/[\s\-+]/g, '');
             const normalizedSearch = normalizePhone(searchQuery);
             const normalizedChatNumber = normalizePhone(chatNumber);
-            
+
             const matchesSearch =
                 chatName.toLowerCase().includes(searchLower) ||
                 chatNumber.toLowerCase().includes(searchLower) ||
@@ -515,7 +531,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                 {['All', 'Unread', 'Favourites', 'Assigned'].map((tab) => {
                     // Show total unread count badge on "All" tab
                     const showUnreadBadge = tab === 'All' && totalUnreadCount > 0;
-                    
+
                     return (
                         <button
                             key={tab}
@@ -592,10 +608,18 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                                                     </div>
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex justify-between items-center mb-1">
-                                                            <h3 className="font-medium truncate text-gray-900 dark:text-white">
-                                                                {(chat.name || chat.number || '').startsWith("91") ? `+${chat.name || chat.number}` : (chat.name || chat.number)}
-                                                            </h3>
-                                                            <div className="flex items-center space-x-2">
+                                                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                                                <h3 className="font-medium truncate text-gray-900 dark:text-white">
+                                                                    {(chat.name || chat.number || '').startsWith("91") ? `+${chat.name || chat.number}` : (chat.name || chat.number)}
+                                                                </h3>
+                                                                {(chat.case_open_count || 0) > 0 && (
+                                                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0" title="Open cases">
+                                                                        <FiBriefcase className="w-3 h-3" />
+                                                                        Case {(chat.case_open_count || 0) > 99 ? '99+' : chat.case_open_count}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center space-x-2 flex-shrink-0">
                                                                 <div className="text-xs text-gray-500 dark:text-gray-400">
                                                                     {formatTime(chat.timestamp || chat.create_date)}
                                                                 </div>
@@ -726,7 +750,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                                                     directChatInputRef.current.setSelectionRange(pos, pos);
                                                 }
                                             }, 0);
-                                        } catch (_) {}
+                                        } catch (_) { }
                                     }}
                                     className="py-3 rounded-xl bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium text-sm"
                                 >

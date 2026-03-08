@@ -216,6 +216,7 @@ export const dbHelper = {
                         number: chat.number,
                         name: safeName,
                         is_favorite: typeof chat.is_favorite === 'boolean' ? chat.is_favorite : (existing?.is_favorite || false),
+                        case_open_count: typeof chat.case_open_count === 'number' ? Math.max(0, chat.case_open_count) : (existing?.case_open_count ?? 0),
                         wamid: chat.wamid,
                         create_date: chat.create_date,
                         type: chat.type,
