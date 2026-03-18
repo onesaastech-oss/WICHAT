@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Check, Hash, ChevronDown, FileText } from 'lucide-react';
+import axios from 'axios';
+import { Check, Hash, ChevronDown, FileText, Upload } from 'lucide-react';
 import ChatTemplateModal from '../../../component/Modals/ChatTemplateModal';
 
 export default function TemplateSelector({
@@ -11,19 +12,21 @@ export default function TemplateSelector({
   setVariableSources,
   excelHeaders = [],
   selectedContactDetails = [],
-  audienceType = null
+  audienceType = null,
+  headerMediaUrl = '',
+  setHeaderMediaUrl = () => {},
+  tokens = null
 }) {
   const [openDropdowns, setOpenDropdowns] = useState({});
   const dropdownRefs = useRef({});
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [tokens, setTokens] = useState(null);
+  const [tokensFromStorage, setTokensFromStorage] = useState(null);
 
-  // Load tokens from storage
   useEffect(() => {
+    if (tokens) return;
     const loadTokens = () => {
       try {
         if (typeof window === 'undefined') return;
-
         const storages = [sessionStorage, localStorage];
         for (const storage of storages) {
           try {
@@ -31,7 +34,7 @@ export default function TemplateSelector({
             if (data) {
               const parsed = JSON.parse(data);
               if (parsed && typeof parsed === 'object') {
-                setTokens(parsed);
+                setTokensFromStorage(parsed);
                 return;
               }
             }
@@ -39,25 +42,20 @@ export default function TemplateSelector({
             console.error('Failed to parse tokens from storage:', storageError);
           }
         }
-
-        // Clear tokens if nothing found
-        setTokens(null);
+        setTokensFromStorage(null);
       } catch (e) {
         console.error('Failed to load tokens:', e);
       }
     };
-
     loadTokens();
-
     const handleStorageChange = (event) => {
-      if (event.key === 'userData') {
-        loadTokens();
-      }
+      if (event.key === 'userData') loadTokens();
     };
-
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [tokens]);
+
+  const effectiveTokens = tokens || tokensFromStorage;
 
   const handleTemplateSelect = (template) => {
     // Convert API template format to campaign format
@@ -79,8 +77,44 @@ export default function TemplateSelector({
     });
     setVariableValues(newValues);
     setVariableSources({});
-    // Close all dropdowns when template changes
     setOpenDropdowns({});
+    // Reset header media when template changes
+    const headerComp = campaignTemplate.template_data?.components?.find((c) => c.type === 'HEADER');
+    const hasMediaHeader = headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format);
+    const defaultLink = hasMediaHeader ? (headerComp.example?.header_handle?.[0] || '') : '';
+    setHeaderMediaUrl(defaultLink);
+  };
+
+  const headerComponent = selectedTemplate?.template_data?.components?.find((c) => c.type === 'HEADER');
+  const headerFormat = headerComponent?.format || 'NONE';
+  const requiresHeaderMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
+  const [isUploadingHeader, setIsUploadingHeader] = useState(false);
+
+  useEffect(() => {
+    if (selectedTemplate && requiresHeaderMedia) {
+      const defaultLink = headerComponent?.example?.header_handle?.[0] || '';
+      setHeaderMediaUrl(defaultLink);
+    } else if (selectedTemplate && !requiresHeaderMedia) {
+      setHeaderMediaUrl('');
+    }
+  }, [selectedTemplate?.id, requiresHeaderMedia, headerComponent]);
+
+  const uploadHeaderMedia = async (file) => {
+    if (!file || !effectiveTokens?.token) return;
+    setIsUploadingHeader(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await axios.post('https://api.w1chat.com/upload/upload-media', form, {
+        headers: { 'Content-Type': 'multipart/form-data', token: effectiveTokens.token, username: effectiveTokens.username }
+      });
+      if (res?.data?.link) setHeaderMediaUrl(res.data.link);
+    } catch (e) {
+      console.error('Header media upload failed:', e);
+      alert('Upload failed. Please try again.');
+    } finally {
+      setIsUploadingHeader(false);
+    }
   };
 
   // Extract template content from API format
@@ -373,6 +407,36 @@ export default function TemplateSelector({
       {selectedTemplate && (
         <div className="bg-gray-50 rounded-lg p-6">
           <h3 className="font-semibold text-gray-700 mb-4">Map Template Variables</h3>
+
+          {requiresHeaderMedia && (
+            <div className="mb-6 p-4 bg-white rounded-lg border border-gray-200">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Header Media ({headerFormat})
+              </label>
+              <p className="text-xs text-gray-500 mb-2">Upload a custom file or use the default from the template.</p>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={headerMediaUrl || ''}
+                  onChange={(e) => setHeaderMediaUrl(e.target.value)}
+                  placeholder="https://... or upload below"
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                />
+                <label className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium cursor-pointer flex items-center gap-2 whitespace-nowrap disabled:opacity-50">
+                  <Upload className="w-4 h-4" />
+                  {isUploadingHeader ? 'Uploading...' : 'Upload'}
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={isUploadingHeader}
+                    accept={headerFormat === 'IMAGE' ? 'image/*' : headerFormat === 'VIDEO' ? 'video/*' : '*'}
+                    onChange={(e) => uploadHeaderMedia(e.target.files?.[0])}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
           {excelHeaders.length > 0 && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-700">
@@ -500,7 +564,7 @@ export default function TemplateSelector({
       <ChatTemplateModal
         isOpen={showTemplateModal}
         onClose={() => setShowTemplateModal(false)}
-        tokens={tokens}
+        tokens={effectiveTokens}
         onTemplateSelect={handleTemplateSelect}
         darkMode={false}
       />

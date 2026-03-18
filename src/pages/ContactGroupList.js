@@ -3,6 +3,8 @@ import { Header, Sidebar } from '../component/Menu';
 import Pagination from '../component/Pagination';
 import { useSelector } from 'react-redux';
 import axios from 'axios';
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import { Encrypt } from './encryption/payload-encryption';
 import {
   FiPlus,
@@ -14,11 +16,15 @@ import {
   FiSearch,
   FiCheckCircle,
   FiArrowLeft,
-  FiUsers
+  FiUsers,
+  FiMessageCircle
 } from 'react-icons/fi';
+
+const API_BASE_URL = 'https://api.w1chat.com';
 
 function ContactGroupList() {
   const permissions = useSelector((state) => state.project.permissions);
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [groupContacts, setGroupContacts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,11 +45,56 @@ function ContactGroupList() {
   const [removingContact, setRemovingContact] = useState(null);
   const [selectedContacts, setSelectedContacts] = useState([]);
   const [isAllSelected, setIsAllSelected] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteAllLoading, setDeleteAllLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [addSearchTerm, setAddSearchTerm] = useState('');
   const [groupInfo, setGroupInfo] = useState(null);
+
+  const CustomCheckbox = ({ checked, onChange, disabled, ariaLabel }) => {
+    return (
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={checked}
+        aria-label={ariaLabel}
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          onChange?.(!checked);
+        }}
+        className={`h-5 w-5 rounded border flex items-center justify-center transition-colors ${
+          disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+        } ${checked ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300 hover:border-indigo-400'}`}
+      >
+        {checked ? (
+          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+            <path
+              d="M16.5 5.5L8.25 13.75L3.5 9"
+              stroke="white"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        ) : null}
+      </button>
+    );
+  };
+
+  // Debounce search input for server-side fetch
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm || '');
+    }, 250);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  // When search changes, go back to page 1
+  useEffect(() => {
+    setPageNo(1);
+  }, [debouncedSearchTerm]);
 
   // Add-contact modal (infinite scroll) state
   const ADD_CONTACTS_PAGE_SIZE = 20;
@@ -126,15 +177,14 @@ function ContactGroupList() {
           project_id: projectId,
           group_id: getGroupId(),
           page_no: requestedPageNo,
-          limit: pageSize
+          limit: pageSize,
+          search: debouncedSearchTerm || ''
         };
 
         const { data, key } = Encrypt(payload);
-        const data_pass = JSON.stringify({ data, key });
-
         const response = await axios.post(
-          'https://api.w1chat.com/contact/group-contact-list',
-          data_pass,
+          `${API_BASE_URL}/contact/group-contact-list`,
+          { data, key },
           {
             headers: {
               'token': tokens.token,
@@ -203,7 +253,7 @@ function ContactGroupList() {
     };
 
     loadGroupContacts();
-  }, [tokens?.token, tokens?.username, tokens?.selected_project_id, tokens?.projects, pageNo, pageSize, reloadTick, permissions]);
+  }, [tokens?.token, tokens?.username, tokens?.selected_project_id, tokens?.projects, pageNo, pageSize, reloadTick, permissions, debouncedSearchTerm]);
 
   const loadAddContactsPage = useCallback(
     async ({ requestedPageNo, query, append }) => {
@@ -535,11 +585,9 @@ function ContactGroupList() {
       console.log('📤 Adding contact to group:', payload);
 
       const { data, key } = Encrypt(payload);
-      const data_pass = JSON.stringify({ data, key });
-
       const response = await axios.post(
-        'https://api.w1chat.com/contact/group-contact-add',
-        data_pass,
+        `${API_BASE_URL}/contact/group-contact-add`,
+        { data, key },
         {
           headers: {
             'token': tokens.token,
@@ -555,8 +603,7 @@ function ContactGroupList() {
 
         // Show success message
         const successMsg = response?.data?.msg || 'Contact added to group successfully';
-        setSuccessMessage(successMsg);
-        setShowSuccessModal(true);
+        toast.success(successMsg);
 
         // Remove from modal list immediately (so user can't add it twice)
         setAddContacts((prev) => prev.filter((c) => c.id !== contactId));
@@ -564,11 +611,16 @@ function ContactGroupList() {
           prev.includes(contactId) ? prev : [...prev, contactId]
         );
       } else {
-        alert('Failed to add contact to group: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
+        toast.error(
+          response?.data?.error ||
+            response?.data?.message ||
+            response?.data?.msg ||
+            'Failed to add contact to group'
+        );
       }
     } catch (error) {
       console.error('Failed to add contact to group:', error);
-      alert('Failed to add contact to group. Please try again.');
+      toast.error('Failed to add contact to group. Please try again.');
     }
   };
 
@@ -577,47 +629,287 @@ function ContactGroupList() {
     if (!tokens?.token || !tokens?.username || !removingContact?.unique_id) return;
 
     try {
-      const projectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
+      const projectId =
+        tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
+      const groupId = getGroupId();
+
+      if (!projectId || !groupId) {
+        toast.error('Project id / Group id missing');
+        return;
+      }
+
+      const unique_ids = Array.from(
+        new Set([removingContact?.unique_id].filter(Boolean))
+      );
+      const contact_ids = Array.from(
+        new Set([removingContact?.id].filter(Boolean))
+      );
+
+      if (unique_ids.length === 0 && contact_ids.length === 0) {
+        toast.error('Unable to determine contact id(s) to delete');
+        return;
+      }
+
+      setDeleteLoading(true);
       const payload = {
         project_id: projectId,
-        unique_id: removingContact.unique_id
+        group_id: groupId,
+        all_contact_delete: false,
+        unique_ids,
+        contact_ids
       };
 
       console.log('📤 Removing contact from group:', payload);
 
       const { data, key } = Encrypt(payload);
-      const data_pass = JSON.stringify({ data, key });
-
       const response = await axios.post(
-        'https://api.w1chat.com/contact/group-contact-delete',
-        data_pass,
+        `${API_BASE_URL}/contact/group-contact-delete`,
+        { data, key },
         {
           headers: {
-            'token': tokens.token,
-            'username': tokens.username,
+            token: tokens.token,
+            username: tokens.username,
             'Content-Type': 'application/json'
           }
         }
       );
 
-      if (!response?.data?.error) {
+      if (response?.data?.error === false) {
         // Close modal
         setShowRemoveModal(false);
         setRemovingContact(null);
 
-        setPageNo(1);
-        setReloadTick(t => t + 1);
+        setSelectedContacts([]);
+        setIsAllSelected(false);
+
+        // Remove from local table without refetch
+        setGroupContacts((prev) =>
+          prev.filter((c) => c?.id !== removingContact?.id)
+        );
+        setTotalContacts((prev) => Math.max(0, (prev || 0) - 1));
+        setContactsMeta((prev) => ({
+          ...prev,
+          total_records: Math.max(0, (prev?.total_records || 0) - 1)
+        }));
 
         // Show success message
-        const successMsg = response?.data?.msg || 'Contact removed from group successfully';
-        setSuccessMessage(successMsg);
-        setShowSuccessModal(true);
+        const deletedCount = response?.data?.deleted_count;
+        const baseMsg =
+          response?.data?.msg || 'Contact removed from group successfully';
+        const successMsg =
+          typeof deletedCount === 'number'
+            ? `${baseMsg} (${deletedCount} removed)`
+            : baseMsg;
+
+        toast.success(successMsg);
       } else {
-        alert('Failed to remove contact from group: ' + (response?.data?.message || response?.data?.msg || 'Unknown error'));
+        const msg =
+          response?.data?.error ||
+          response?.data?.message ||
+          response?.data?.msg ||
+          'Failed to remove contact from group';
+        toast.error(msg);
       }
     } catch (error) {
       console.error('Failed to remove contact from group:', error);
-      alert('Failed to remove contact from group. Please try again.');
+      toast.error('Failed to remove contact from group. Please try again.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // Build payload arrays from selected contacts
+  const buildSelectedIds = () => {
+    const selectedSet = new Set(selectedContacts);
+    const uniqueIdSet = new Set();
+    const contactIdSet = new Set();
+    for (const c of groupContacts) {
+      if (!c?.id) continue;
+      if (!selectedSet.has(c.id)) continue;
+      if (c?.unique_id) uniqueIdSet.add(c.unique_id);
+      contactIdSet.add(c.id);
+    }
+    return {
+      unique_ids: Array.from(uniqueIdSet).filter(Boolean),
+      contact_ids: Array.from(contactIdSet).filter(Boolean)
+    };
+  };
+
+  // Bulk delete selected contacts from group
+  const handleBulkDeleteSelected = async () => {
+    if (!tokens?.token || !tokens?.username) return;
+    if (!selectedContacts || selectedContacts.length === 0) {
+      toast.error('Please select at least one contact');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Are you sure you want to remove selected contacts from this group?'
+    );
+    if (!confirmed) return;
+
+    try {
+      const projectId =
+        tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
+      const groupId = getGroupId();
+
+      if (!projectId || !groupId) {
+        toast.error('Project id / Group id missing');
+        return;
+      }
+
+      const { unique_ids, contact_ids } = buildSelectedIds();
+
+      if (unique_ids.length === 0 && contact_ids.length === 0) {
+        toast.error('Provide at least one of unique_ids or contact_ids');
+        return;
+      }
+
+      setDeleteLoading(true);
+      const payload = {
+        project_id: projectId,
+        group_id: groupId,
+        all_contact_delete: false,
+        unique_ids,
+        contact_ids
+      };
+
+      console.log('📤 Bulk remove contacts from group:', payload);
+
+      const { data, key } = Encrypt(payload);
+      const response = await axios.post(
+        `${API_BASE_URL}/contact/group-contact-delete`,
+        { data, key },
+        {
+          headers: {
+            token: tokens.token,
+            username: tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response?.data?.error === false) {
+        const deletedCount = response?.data?.deleted_count;
+        const baseMsg =
+          response?.data?.msg ||
+          'Selected contacts removed from group successfully';
+        const successMsg =
+          typeof deletedCount === 'number'
+            ? `${baseMsg} (${deletedCount} removed)`
+            : baseMsg;
+
+        toast.success(successMsg);
+
+        // Remove from local table without refetch
+        const removeSet = new Set(selectedContacts);
+        setGroupContacts((prev) => prev.filter((c) => !removeSet.has(c?.id)));
+        setTotalContacts((prev) =>
+          Math.max(0, (prev || 0) - removeSet.size)
+        );
+        setContactsMeta((prev) => ({
+          ...prev,
+          total_records: Math.max(0, (prev?.total_records || 0) - removeSet.size)
+        }));
+
+        setSelectedContacts([]);
+        setIsAllSelected(false);
+      } else {
+        const msg =
+          response?.data?.error ||
+          response?.data?.message ||
+          response?.data?.msg ||
+          'Failed to remove selected contacts';
+        toast.error(msg);
+      }
+    } catch (error) {
+      console.error('Failed to bulk remove contacts from group:', error);
+      toast.error('Failed to remove selected contacts. Please try again.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // Delete all contacts in the group (when all checked)
+  const handleDeleteAllInGroup = async () => {
+    if (!tokens?.token || !tokens?.username) return;
+    if (!isAllSelected || filteredGroupContacts.length === 0) return;
+
+    const confirmed = window.confirm(
+      'Are you sure you want to remove all contacts from this group?'
+    );
+    if (!confirmed) return;
+
+    try {
+      const projectId =
+        tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
+      const groupId = getGroupId();
+
+      if (!projectId || !groupId) {
+        toast.error('Project id / Group id missing');
+        return;
+      }
+
+      setDeleteAllLoading(true);
+      const payload = {
+        project_id: projectId,
+        group_id: groupId,
+        all_contact_delete: true
+      };
+
+      console.log('📤 Delete ALL contacts in group:', payload);
+
+      const { data, key } = Encrypt(payload);
+      const response = await axios.post(
+        `${API_BASE_URL}/contact/group-contact-delete`,
+        { data, key },
+        {
+          headers: {
+            token: tokens.token,
+            username: tokens.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response?.data?.error === false) {
+        const deletedCount = response?.data?.deleted_count;
+        const baseMsg =
+          response?.data?.msg || 'All contacts removed from group successfully';
+        const successMsg =
+          typeof deletedCount === 'number'
+            ? `${baseMsg} (${deletedCount} removed)`
+            : baseMsg;
+
+        toast.success(successMsg);
+
+        // Remove from local table without refetch
+        setGroupContacts([]);
+        setTotalContacts(0);
+        setContactsMeta((prev) => ({
+          ...prev,
+          page_no: 1,
+          total_records: 0,
+          total_pages: 1,
+          has_more: false
+        }));
+
+        setSelectedContacts([]);
+        setIsAllSelected(false);
+        setPageNo(1);
+      } else {
+        const msg =
+          response?.data?.error ||
+          response?.data?.message ||
+          response?.data?.msg ||
+          'Failed to remove all contacts';
+        toast.error(msg);
+      }
+    } catch (error) {
+      console.error('Failed to remove all contacts from group:', error);
+      toast.error('Failed to remove all contacts. Please try again.');
+    } finally {
+      setDeleteAllLoading(false);
     }
   };
 
@@ -660,12 +952,8 @@ function ContactGroupList() {
     }));
   };
 
-  // Filter group contacts based on search
-  const filteredGroupContacts = groupContacts.filter(contact =>
-    (contact.name && contact.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (contact.mobile && contact.mobile.includes(searchTerm)) ||
-    (contact.firm_name && contact.firm_name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Server-side search is used for group contacts; keep rendering list as-is
+  const filteredGroupContacts = groupContacts;
 
   // Filter available contacts for adding
   const filteredAvailableContacts = addContacts.filter(
@@ -743,9 +1031,6 @@ function ContactGroupList() {
                     {getGroupName()} - Contacts
                   </h1>
                 </div>
-                <p className="text-gray-600 text-sm ml-12">
-                  Manage contacts in this group ({filteredGroupContacts.length} of {totalContacts} contacts)
-                </p>
               </div>
 
               <div className="flex flex-wrap gap-3 mt-4 sm:mt-0">
@@ -758,6 +1043,30 @@ function ContactGroupList() {
                   <FiPlus className="mr-2 h-4 w-4" />
                   Add Contact
                 </button>
+
+                {selectedContacts.length > 0 && (
+                  <button
+                    onClick={handleBulkDeleteSelected}
+                    disabled={deleteLoading || deleteAllLoading}
+                    className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 ${deleteLoading || deleteAllLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    title="Remove selected from group"
+                  >
+                    <FiTrash2 className="mr-2 h-4 w-4" />
+                    {deleteLoading ? 'Deleting...' : `Delete Selected (${selectedContacts.length})`}
+                  </button>
+                )}
+
+                {isAllSelected && filteredGroupContacts.length > 0 && (
+                  <button
+                    onClick={handleDeleteAllInGroup}
+                    disabled={deleteAllLoading || deleteLoading}
+                    className={`inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 ${deleteAllLoading || deleteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    title="Remove all contacts in this group"
+                  >
+                    <FiTrash2 className="mr-2 h-4 w-4" />
+                    {deleteAllLoading ? 'Deleting all...' : 'Delete All'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -777,8 +1086,8 @@ function ContactGroupList() {
           </div>
 
           {/* Group Contacts Table */}
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="px-4 py-5 sm:p-6">
+          <div className="bg-white shadow-sm rounded-xl overflow-hidden border border-gray-100">
+            <div className="px-4 py-4 sm:p-6">
               {loading ? (
                 <div className="flex justify-center items-center py-12">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -788,30 +1097,29 @@ function ContactGroupList() {
                 <>
                   {/* Table Header */}
                   <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-gray-100">
+                      <thead className="bg-gray-50/60">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            <input
-                              type="checkbox"
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-14">
+                            <CustomCheckbox
                               checked={isAllSelected}
-                              onChange={handleSelectAll}
-                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                              onChange={() => handleSelectAll()}
+                              ariaLabel="Select all contacts"
                             />
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                             Contact
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                             Mobile
                           </th>
 
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
                             Actions
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
+                      <tbody className="bg-white divide-y divide-gray-50">
                         {filteredGroupContacts.length === 0 ? (
                           <tr>
                             <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
@@ -823,13 +1131,12 @@ function ContactGroupList() {
                           </tr>
                         ) : (
                           filteredGroupContacts.map((contact) => (
-                            <tr key={contact.id} className="hover:bg-gray-50">
+                            <tr key={contact.id} className="hover:bg-gray-50/70">
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <input
-                                  type="checkbox"
+                                <CustomCheckbox
                                   checked={selectedContacts.includes(contact.id)}
                                   onChange={() => handleSelectContact(contact.id)}
-                                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                  ariaLabel={`Select ${contact?.name || 'contact'}`}
                                 />
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
@@ -841,25 +1148,47 @@ function ContactGroupList() {
                                   </div>
                                   <div className="ml-4">
                                     <div className="text-sm font-medium text-gray-900">
-                                      {contact.name}
+                                      {contact?.name || '-'}
                                     </div>
+                                    {(contact?.firm_name || contact?.website) && (
+                                      <div className="text-xs text-gray-500 mt-0.5 truncate max-w-[340px]">
+                                        {contact?.firm_name || contact?.website}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 <div className="flex items-center">
                                   <FiPhone className="h-4 w-4 text-gray-400 mr-2" />
-                                  {contact.mobile}
+                                  {contact?.mobile || '-'}
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button
-                                  onClick={() => handleOpenRemoveModal(contact)}
-                                  className="text-red-600 hover:text-red-900"
-                                  title="Remove from group"
-                                >
-                                  <FiTrash2 className="h-4 w-4" />
-                                </button>
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => {
+                                      const number = contact?.mobile || '';
+                                      if (!number) {
+                                        toast.error('Mobile number not found');
+                                        return;
+                                      }
+                                      navigate(`/live-chat/${encodeURIComponent(number)}`);
+                                    }}
+                                    className="inline-flex items-center justify-center h-9 w-9 rounded-lg border border-gray-200 bg-white text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200"
+                                    title="Open chat"
+                                  >
+                                    <FiMessageCircle className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenRemoveModal(contact)}
+                                    disabled={deleteLoading || deleteAllLoading}
+                                    className={`inline-flex items-center justify-center h-9 w-9 rounded-lg border border-gray-200 bg-white text-red-600 hover:bg-red-50 hover:border-red-200 ${deleteLoading || deleteAllLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    title="Remove from group"
+                                  >
+                                    <FiTrash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))
@@ -1082,30 +1411,6 @@ function ContactGroupList() {
         </div>
       )}
 
-      {/* Success Modal */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-5/6 sm:w-3/6 md:w-2/6 lg:w-2/6 xl:w-1/4 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-center mb-4">
-                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-                  <FiCheckCircle className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-              <div className="text-center">
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Success</h3>
-                <p className="text-sm text-gray-600 mb-4">{successMessage}</p>
-                <button
-                  onClick={() => setShowSuccessModal(false)}
-                  className="w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  OK
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

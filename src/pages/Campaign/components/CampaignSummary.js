@@ -12,6 +12,7 @@ export default function CampaignSummary({
   setActiveTab,
   audienceType,
   selectedContacts,
+  isSelectAllContacts = false,
   selectedGroups,
   excelMapping,
   sheetLink,
@@ -26,11 +27,12 @@ export default function CampaignSummary({
   excelData = [],
   excelFileUrl = '',
   selectedContactDetails = [],
+  headerMediaUrl = '',
   tokens
 }) {
   const [isScheduled, setIsScheduled] = useState(false);
   const navigate = useNavigate();
-  
+
   const handleProceed = () => {
     if (activeTab === 'audience') {
       setActiveTab('template');
@@ -60,6 +62,60 @@ export default function CampaignSummary({
 
   const campaignCreateUrl = 'https://api.w1chat.com/campaign/create';
 
+  /**
+   * Build complete component array for campaign API (header + body).
+   * Passes full template structure - header (media or text), body.
+   * Uses headerMediaUrl for media header, or template's default example link.
+   */
+  const buildFormattedComponents = (getParamText) => {
+    const formattedComponents = [];
+    const templateComponents = selectedTemplate?.template_data?.components || [];
+
+    // HEADER component
+    const headerComponent = templateComponents.find((c) => c.type === 'HEADER');
+    if (headerComponent) {
+      const headerFormat = (headerComponent.format || 'NONE').toUpperCase();
+      if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat)) {
+        const link = headerMediaUrl || headerComponent?.example?.header_handle?.[0] || '';
+        if (link) {
+          const mediaType = headerFormat.toLowerCase();
+          formattedComponents.push({
+            type: 'header',
+            parameters: [{ type: mediaType, [mediaType]: { link } }]
+          });
+        }
+      } else if (headerFormat === 'TEXT' && headerComponent.text) {
+        const variableMatches = headerComponent.text.match(/\{\{\d+\}\}/g) || [];
+        if (variableMatches.length > 0) {
+          const parameters = variableMatches.map((match) => {
+            const varNum = match.match(/\d+/)?.[0];
+            const varName = `var_${varNum}`;
+            const source = variableSources[varName];
+            const text = getParamText(varName, source);
+            return { type: 'text', text };
+          });
+          formattedComponents.push({ type: 'header', parameters });
+        }
+      }
+    }
+
+    // BODY component - always include
+    const bodyComponent = templateComponents.find((c) => c.type === 'BODY');
+    if (bodyComponent?.text) {
+      const variableMatches = bodyComponent.text.match(/\{\{\d+\}\}/g) || [];
+      const parameters = variableMatches.map((match) => {
+        const varNum = match.match(/\d+/)?.[0];
+        const varName = `var_${varNum}`;
+        const source = variableSources[varName];
+        const text = getParamText(varName, source);
+        return { type: 'text', text };
+      });
+      formattedComponents.push({ type: 'body', parameters });
+    }
+
+    return formattedComponents;
+  };
+
   const handleLaunchCampaign = async () => {
     if (!tokens?.token || !tokens?.username) {
       alert('You must be signed in to launch a campaign.');
@@ -74,147 +130,70 @@ export default function CampaignSummary({
       return;
     }
 
+    const headerComponent = selectedTemplate?.template_data?.components?.find((c) => c.type === 'HEADER');
+    const requiresHeaderMedia = headerComponent && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComponent?.format);
+    const headerLink = headerMediaUrl || headerComponent?.example?.header_handle?.[0];
+    if (requiresHeaderMedia && !headerLink) {
+      alert('Please upload header media or ensure the template has a default media link.');
+      return;
+    }
+
     // Handle Contact campaigns
     if (audienceType === 'contacts') {
       try {
-        if (!selectedContacts || selectedContacts.length === 0) {
-          alert('Please select at least one contact.');
-          return;
+        let phoneNumbers = [];
+
+        if (!isSelectAllContacts) {
+          if (!selectedContacts || selectedContacts.length === 0) {
+            alert('Please select at least one contact.');
+            return;
+          }
+
+          if (!selectedContactDetails || selectedContactDetails.length === 0) {
+            alert('Contact details are missing. Please reselect your contacts.');
+            return;
+          }
+
+          // Extract phone numbers from selected contacts
+          phoneNumbers = selectedContactDetails
+            .map(contact => contact?.number || contact?.phone)
+            .filter(phone => phone && phone.trim() !== '');
+
+          if (phoneNumbers.length === 0) {
+            alert('No valid phone numbers found in selected contacts.');
+            return;
+          }
         }
 
-        if (!selectedContactDetails || selectedContactDetails.length === 0) {
-          alert('Contact details are missing. Please reselect your contacts.');
-          return;
-        }
-
-        // Extract phone numbers from selected contacts
-        const phoneNumbers = selectedContactDetails
-          .map(contact => contact?.number || contact?.phone)
-          .filter(phone => phone && phone.trim() !== '');
-
-        if (phoneNumbers.length === 0) {
-          alert('No valid phone numbers found in selected contacts.');
-          return;
-        }
-
-        // Build WhatsApp component parameters based on template variables
-        // Map template variables to contact variables ({{name}}, {{number}}, etc.)
-        const formattedComponents = [];
-        const templateComponents = selectedTemplate?.template_data?.components || [];
-        
-        // Helper function to map variable source to contact variable name
         const getContactVariableName = (varName, source) => {
           if (source?.type === 'contact') {
-            // Map contact field keys to variable names
             const keyMap = {
-              'contact.name': 'name',
-              'contact.number': 'number',
-              'contact.firm_name': 'firm_name',
-              'contact.website': 'website',
-              'contact.email': 'email',
-              'contact.current_date': 'current_date',
-              'contact.current_time': 'current_time',
-              'contact.current_day': 'current_day'
+              'contact.name': 'name', 'contact.number': 'number', 'contact.firm_name': 'firm_name',
+              'contact.website': 'website', 'contact.email': 'email',
+              'contact.current_date': 'current_date', 'contact.current_time': 'current_time', 'contact.current_day': 'current_day'
             };
             return keyMap[source.key] || null;
           }
-          
-          // Check if it's a manual value that matches a contact variable pattern
           const manualValue = variableValues[varName] || '';
           if (manualValue.trim() === '') return null;
-          
-          // Check for dynamic variables (current_date, current_time, current_day)
           const lowerValue = manualValue.toLowerCase();
-          if (lowerValue.includes('current_date') || lowerValue.includes('date')) {
-            return 'current_date';
-          }
-          if (lowerValue.includes('current_time') || lowerValue.includes('time')) {
-            return 'current_time';
-          }
-          if (lowerValue.includes('current_day') || lowerValue.includes('day')) {
-            return 'current_day';
-          }
-          
+          if (lowerValue.includes('current_date') || lowerValue.includes('date')) return 'current_date';
+          if (lowerValue.includes('current_time') || lowerValue.includes('time')) return 'current_time';
+          if (lowerValue.includes('current_day') || lowerValue.includes('day')) return 'current_day';
           return null;
         };
-        
-        // Process HEADER component - only if it has variables
-        const headerComponent = templateComponents.find((c) => c.type === 'HEADER' && c.format === 'TEXT' && c.text);
-        if (headerComponent?.text) {
-          const variableMatches = headerComponent.text.match(/\{\{\d+\}\}/g) || [];
-          
-          if (variableMatches.length > 0) {
-            const parameters = [];
-            
-            variableMatches.forEach((match) => {
-              const varNum = match.match(/\d+/)?.[0];
-              const varName = `var_${varNum}`;
-              const source = variableSources[varName];
-              
-              const contactVarName = getContactVariableName(varName, source);
-              
-              if (contactVarName) {
-                parameters.push({
-                  type: 'text',
-                  text: `{{${contactVarName}}}`
-                });
-              } else {
-                const manualValue = variableValues[varName] || '';
-                parameters.push({
-                  type: 'text',
-                  text: manualValue
-                });
-              }
-            });
-            
-            formattedComponents.push({
-              type: 'header',
-              parameters
-            });
-          }
-        }
-        
-        // Process BODY component - always include with parameters array
-        const bodyComponent = templateComponents.find((c) => c.type === 'BODY' && c.text);
-        if (bodyComponent?.text) {
-          const variableMatches = bodyComponent.text.match(/\{\{\d+\}\}/g) || [];
-          const parameters = [];
-          
-          if (variableMatches.length > 0) {
-            variableMatches.forEach((match) => {
-              const varNum = match.match(/\d+/)?.[0];
-              const varName = `var_${varNum}`;
-              const source = variableSources[varName];
-              
-              // Try to get contact variable name
-              const contactVarName = getContactVariableName(varName, source);
-              
-              if (contactVarName) {
-                // Use contact variable format: {{name}}, {{number}}, etc.
-                parameters.push({
-                  type: 'text',
-                  text: `{{${contactVarName}}}`
-                });
-              } else {
-                // Fallback: use manual value if provided
-                const manualValue = variableValues[varName] || '';
-                parameters.push({
-                  type: 'text',
-                  text: manualValue
-                });
-              }
-            });
-          }
-          
-          // Always include body component with parameters array (empty or populated)
-          formattedComponents.push({
-            type: 'body',
-            parameters
-          });
-        }
+
+        const getParamText = (varName, source) => {
+          const contactVarName = getContactVariableName(varName, source);
+          if (contactVarName) return `{{${contactVarName}}}`;
+          return variableValues[varName] || '';
+        };
+
+        const formattedComponents = buildFormattedComponents(getParamText);
 
         const payload = {
           numbers: phoneNumbers,
+          is_select_all: isSelectAllContacts === true,
           name: campaignName,
           template_id: selectedTemplate.id,
           project_id: tokens?.selected_project_id || tokens?.projects?.[0]?.project_id || '',
@@ -279,129 +258,36 @@ export default function CampaignSummary({
           return;
         }
 
-        // Backend expects group_ids as an array
-        const groupIds = selectedGroups; // Send all selected groups as array
+        const groupIds = selectedGroups;
 
-        // Build WhatsApp component parameters based on template variables
-        // Map template variables to contact variables ({{name}}, {{number}}, etc.)
-        // Groups use the same contact variables as individual contacts
-        const formattedComponents = [];
-        const templateComponents = selectedTemplate?.template_data?.components || [];
-        
-        // Helper function to map variable source to contact variable name
-        // Same as contact campaigns since groups contain contacts
         const getContactVariableName = (varName, source) => {
           if (source?.type === 'contact') {
-            // Map contact field keys to variable names
             const keyMap = {
-              'contact.name': 'name',
-              'contact.number': 'number',
-              'contact.firm_name': 'firm_name',
-              'contact.website': 'website',
-              'contact.email': 'email',
-              'contact.current_date': 'current_date',
-              'contact.current_time': 'current_time',
-              'contact.current_day': 'current_day'
+              'contact.name': 'name', 'contact.number': 'number', 'contact.firm_name': 'firm_name',
+              'contact.website': 'website', 'contact.email': 'email',
+              'contact.current_date': 'current_date', 'contact.current_time': 'current_time', 'contact.current_day': 'current_day'
             };
             return keyMap[source.key] || null;
           }
-          
-          // Check if it's a manual value that matches a contact variable pattern
           const manualValue = variableValues[varName] || '';
           if (manualValue.trim() === '') return null;
-          
-          // Check for dynamic variables (current_date, current_time, current_day)
           const lowerValue = manualValue.toLowerCase();
-          if (lowerValue.includes('current_date') || lowerValue.includes('date')) {
-            return 'current_date';
-          }
-          if (lowerValue.includes('current_time') || lowerValue.includes('time')) {
-            return 'current_time';
-          }
-          if (lowerValue.includes('current_day') || lowerValue.includes('day')) {
-            return 'current_day';
-          }
-          
+          if (lowerValue.includes('current_date') || lowerValue.includes('date')) return 'current_date';
+          if (lowerValue.includes('current_time') || lowerValue.includes('time')) return 'current_time';
+          if (lowerValue.includes('current_day') || lowerValue.includes('day')) return 'current_day';
           return null;
         };
-        
-        // Process HEADER component - only if it has variables
-        const headerComponent = templateComponents.find((c) => c.type === 'HEADER' && c.format === 'TEXT' && c.text);
-        if (headerComponent?.text) {
-          const variableMatches = headerComponent.text.match(/\{\{\d+\}\}/g) || [];
-          
-          if (variableMatches.length > 0) {
-            const parameters = [];
-            
-            variableMatches.forEach((match) => {
-              const varNum = match.match(/\d+/)?.[0];
-              const varName = `var_${varNum}`;
-              const source = variableSources[varName];
-              
-              const contactVarName = getContactVariableName(varName, source);
-              
-              if (contactVarName) {
-                parameters.push({
-                  type: 'text',
-                  text: `{{${contactVarName}}}`
-                });
-              } else {
-                const manualValue = variableValues[varName] || '';
-                parameters.push({
-                  type: 'text',
-                  text: manualValue
-                });
-              }
-            });
-            
-            formattedComponents.push({
-              type: 'header',
-              parameters
-            });
-          }
-        }
-        
-        // Process BODY component - always include with parameters array
-        const bodyComponent = templateComponents.find((c) => c.type === 'BODY' && c.text);
-        if (bodyComponent?.text) {
-          const variableMatches = bodyComponent.text.match(/\{\{\d+\}\}/g) || [];
-          const parameters = [];
-          
-          if (variableMatches.length > 0) {
-            variableMatches.forEach((match) => {
-              const varNum = match.match(/\d+/)?.[0];
-              const varName = `var_${varNum}`;
-              const source = variableSources[varName];
-              
-              // Try to get contact variable name
-              const contactVarName = getContactVariableName(varName, source);
-              
-              if (contactVarName) {
-                // Use contact variable format: {{name}}, {{number}}, etc.
-                parameters.push({
-                  type: 'text',
-                  text: `{{${contactVarName}}}`
-                });
-              } else {
-                // Fallback: use manual value if provided
-                const manualValue = variableValues[varName] || '';
-                parameters.push({
-                  type: 'text',
-                  text: manualValue
-                });
-              }
-            });
-          }
-          
-          // Always include body component with parameters array (empty or populated)
-          formattedComponents.push({
-            type: 'body',
-            parameters
-          });
-        }
+
+        const getParamText = (varName, source) => {
+          const contactVarName = getContactVariableName(varName, source);
+          if (contactVarName) return `{{${contactVarName}}}`;
+          return variableValues[varName] || '';
+        };
+
+        const formattedComponents = buildFormattedComponents(getParamText);
 
         const payload = {
-          group_ids: groupIds, // Changed from group_id to group_ids (array)
+          group_ids: groupIds,
           name: campaignName,
           template_id: selectedTemplate.id,
           project_id: tokens?.selected_project_id || tokens?.projects?.[0]?.project_id || '',
@@ -495,100 +381,16 @@ export default function CampaignSummary({
         const startRow = 1;
         const endRow = Array.isArray(excelData) && excelData.length > 0 ? excelData.length : 1;
 
-        // Build WhatsApp component parameters based on template components
-        // For Excel/Sheet campaigns, only include components that have variables/parameters
-        // BUTTONS and FOOTER are part of the template and should NOT be sent in the component array
-        const formattedComponents = [];
-        const templateComponents = selectedTemplate?.template_data?.components || [];
-        
-        // Process HEADER component (TEXT format) - only if it has variables
-        const headerComponent = templateComponents.find((c) => c.type === 'HEADER' && c.format === 'TEXT' && c.text);
-        if (headerComponent?.text) {
-          const variableMatches = headerComponent.text.match(/\{\{\d+\}\}/g) || [];
-          
-          // Only include HEADER if it has variables
-          if (variableMatches.length > 0) {
-            const parameters = [];
-            
-            variableMatches.forEach((match) => {
-              const varNum = match.match(/\d+/)?.[0];
-              const varName = `var_${varNum}`;
-              const source = variableSources[varName];
-              
-              if (source?.type === 'excel' && source?.key) {
-                const excelColumnIndex = excelHeaders.indexOf(source.key);
-                if (excelColumnIndex >= 0) {
-                  parameters.push({
-                    type: 'text',
-                    text: `{{${excelColumnIndex}}}`
-                  });
-                } else {
-                  parameters.push({
-                    type: 'text',
-                    text: ''
-                  });
-                }
-              } else {
-                const manualValue = variableValues[varName] || '';
-                parameters.push({
-                  type: 'text',
-                  text: manualValue
-                });
-              }
-            });
-            
-            formattedComponents.push({
-              type: 'HEADER',
-              parameters: parameters
-            });
+        const getParamText = (varName, source) => {
+          if (source?.type === 'excel' && source?.key) {
+            const excelColumnIndex = excelHeaders.indexOf(source.key);
+            if (excelColumnIndex >= 0) return `{{${excelColumnIndex}}}`;
+            return '';
           }
-        }
-        
-        // Process BODY component - always include (with empty or populated parameters array)
-        const bodyComponent = templateComponents.find((c) => c.type === 'BODY' && c.text);
-        if (bodyComponent?.text) {
-          const variableMatches = bodyComponent.text.match(/\{\{\d+\}\}/g) || [];
-          const parameters = [];
-          
-          if (variableMatches.length > 0) {
-            variableMatches.forEach((match) => {
-              const varNum = match.match(/\d+/)?.[0];
-              const varName = `var_${varNum}`;
-              const source = variableSources[varName];
-              
-              if (source?.type === 'excel' && source?.key) {
-                const excelColumnIndex = excelHeaders.indexOf(source.key);
-                if (excelColumnIndex >= 0) {
-                  parameters.push({
-                    type: 'text',
-                    text: `{{${excelColumnIndex}}}`
-                  });
-                } else {
-                  parameters.push({
-                    type: 'text',
-                    text: ''
-                  });
-                }
-              } else {
-                const manualValue = variableValues[varName] || '';
-                parameters.push({
-                  type: 'text',
-                  text: manualValue
-                });
-              }
-            });
-          }
-          
-          // Always include BODY component with parameters array (empty or populated)
-          formattedComponents.push({
-            type: 'BODY',
-            parameters: parameters
-          });
-        }
-        
-        // DO NOT include FOOTER - it's part of the template definition
-        // DO NOT include BUTTONS - they're part of the template definition
-        // DO NOT include media HEADER without variables - it's part of the template definition
+          return variableValues[varName] || '';
+        };
+
+        const formattedComponents = buildFormattedComponents(getParamText);
 
         const payload = {
           url: fileUrl,
@@ -684,7 +486,7 @@ export default function CampaignSummary({
   return (
     <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-6">
       <h3 className="font-semibold text-gray-800 mb-4">Campaign Summary</h3>
-      
+
       <div className="space-y-4">
         <div>
           <div className="text-sm text-gray-500">Audience</div>
@@ -759,11 +561,10 @@ export default function CampaignSummary({
             <button
               onClick={handleProceed}
               disabled={!proceedEnabled}
-              className={`w-full py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
-                proceedEnabled
-                  ? 'bg-gradient-to-r from-indigo-500 to-indigo-500 text-white hover:from-indigo-600 hover:to-indigo-600 shadow-lg hover:shadow-xl'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
+              className={`w-full py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${proceedEnabled
+                ? 'bg-gradient-to-r from-indigo-500 to-indigo-500 text-white hover:from-indigo-600 hover:to-indigo-600 shadow-lg hover:shadow-xl'
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
             >
               Next: Choose Template
               <ChevronRight className="w-5 h-5" />
@@ -781,11 +582,10 @@ export default function CampaignSummary({
               <button
                 onClick={handleLaunchCampaign}
                 disabled={!proceedEnabled || !campaignName || campaignName.trim() === '' || (isScheduled && !scheduleDate)}
-                className={`w-full py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
-                  proceedEnabled && campaignName && campaignName.trim() !== '' && (!isScheduled || scheduleDate)
-                    ? 'bg-gradient-to-r from-indigo-500 to-indigo-500 text-white hover:from-indigo-600 hover:to-indigo-600 shadow-lg hover:shadow-xl'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
+                className={`w-full py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${proceedEnabled && campaignName && campaignName.trim() !== '' && (!isScheduled || scheduleDate)
+                  ? 'bg-gradient-to-r from-indigo-500 to-indigo-500 text-white hover:from-indigo-600 hover:to-indigo-600 shadow-lg hover:shadow-xl'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
               >
                 {isScheduled ? (
                   <>

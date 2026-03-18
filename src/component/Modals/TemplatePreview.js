@@ -287,6 +287,8 @@ const TemplatePreview = ({
                 component: formattedComponents
             };
 
+            console.log('Sending template with payload:', payload);
+
             const { data, key } = Encrypt(payload);
 
             if (onSendTemplate) {

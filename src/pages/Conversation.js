@@ -3166,6 +3166,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 component: formattedComponents
             };
 
+            console.log('Sending template with payload:', payload);
+
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
 

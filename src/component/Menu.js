@@ -39,7 +39,7 @@ const getUserData = () => {
 };
 
 const requiresProject = (item) => {
-  const protectedPaths = ['/live-chat', '/template', '/campaigns', '/contact', '/contact-group', '/auto-reply', '/flow', '/agent-management', '/permission-list', '/project-config'];
+  const protectedPaths = ['/live-chat', '/open-cases', '/template', '/campaigns', '/contact', '/contact-group', '/auto-reply', '/flow', '/agent-management', '/permission-list', '/project-config'];
   const protectedKeys = ['contact', 'automation', 'management'];
   return protectedPaths.includes(item.path) ||
     protectedKeys.includes(item.key) ||
@@ -574,6 +574,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
   const allMenuItems = [
     { key: 'dashboard', title: 'Dashboard', icon: <FiPieChart size={18} />, path: '/' },
     { key: 'live-chat', title: 'Live Chat', icon: <FiMessageSquare size={18} />, path: '/live-chat' },
+    { key: 'open-cases', title: 'Open Cases', icon: <FiBriefcase size={18} />, path: '/open-cases' },
     {
       key: 'contact', title: 'Audience', icon: <FiUsers size={18} />,
       submenus: [
@@ -583,13 +584,13 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
     },
     { key: 'templates', title: 'Templates', icon: <FiMail size={18} />, path: '/template' },
     { key: 'campaigns', title: 'Campaigns', icon: <FiZap size={18} />, path: '/campaigns' },
-    {
-      key: 'automation', title: 'Automation', icon: <FiCpu size={18} />,
-      submenus: [
-        { title: 'Auto Reply', path: '/auto-reply' },
-        { title: 'Flow Builder', path: '/flow' }
-      ]
-    },
+    // {
+    //   key: 'automation', title: 'Automation', icon: <FiCpu size={18} />,
+    //   submenus: [
+    //     { title: 'Auto Reply', path: '/auto-reply' },
+    //     { title: 'Flow Builder', path: '/flow' }
+    //   ]
+    // },
     { key: 'projects', title: 'Projects', icon: <FiBriefcase size={18} />, path: '/projects' },
     {
       key: 'management', title: 'Management', icon: <FiSettings size={18} />,

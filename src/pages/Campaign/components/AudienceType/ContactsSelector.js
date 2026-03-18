@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Check, Loader2, Search, User } from 'lucide-react';
 import axios from 'axios';
 import { Encrypt } from '../../../encryption/payload-encryption';
@@ -172,32 +172,6 @@ export default function ContactsSelector({
     });
   }, [contactsMap, setSelectedContacts, updateSelectedContactDetails]);
 
-  const isAllSelected = useMemo(() => {
-    if (!contacts.length) return false;
-    return contacts.every(contact => selectedContacts.includes(contact.contact_id));
-  }, [contacts, selectedContacts]);
-
-  const handleSelectAll = useCallback(() => {
-    if (!contacts.length) return;
-    setSelectedContacts(prev => {
-      let updated;
-      if (isAllSelected) {
-        const currentIds = new Set(contacts.map(contact => contact.contact_id));
-        updated = prev.filter(id => !currentIds.has(id));
-      } else {
-        const union = new Set(prev);
-        contacts.forEach(contact => {
-          if (contact?.contact_id) {
-            union.add(contact.contact_id);
-          }
-        });
-        updated = Array.from(union);
-      }
-      updateSelectedContactDetails(updated, contactsMap);
-      return updated;
-    });
-  }, [contacts, contactsMap, isAllSelected, setSelectedContacts, updateSelectedContactDetails]);
-
   const loadMore = () => {
     if (loadingMore || !hasMore) return;
     fetchContacts(page + 1, false, debouncedSearch);
@@ -219,13 +193,6 @@ export default function ContactsSelector({
         <h3 className="font-semibold text-gray-700">
           Select Contacts ({selectedContacts.length} selected)
         </h3>
-        <button
-          onClick={handleSelectAll}
-          className="text-sm text-indigo-600 hover:text-indigo-700 font-medium disabled:text-gray-400"
-          disabled={!contacts.length}
-        >
-          {isAllSelected ? 'Deselect All' : 'Select All'}
-        </button>
       </div>
 
       <div className="relative">

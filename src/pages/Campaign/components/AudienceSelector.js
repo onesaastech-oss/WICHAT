@@ -11,6 +11,8 @@ export default function AudienceSelector({
   selectedContacts,
   setSelectedContacts,
   setSelectedContactDetails,
+  isSelectAllContacts,
+  setIsSelectAllContacts,
   selectedGroups,
   setSelectedGroups,
   excelMapping,
@@ -85,11 +87,45 @@ export default function AudienceSelector({
       </div>
 
       {audienceType === 'contacts' && (
-        <ContactsSelector
-          selectedContacts={selectedContacts}
-          setSelectedContacts={setSelectedContacts}
-          setSelectedContactDetails={setSelectedContactDetails}
-        />
+        <div className="space-y-4">
+          <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+            <div>
+              <div className="text-sm font-semibold text-gray-800">Select all contacts</div>
+              <div className="text-xs text-gray-500 mt-0.5">
+                If enabled, the campaign will be sent to all contacts and individual selection will be hidden.
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={Boolean(isSelectAllContacts)}
+                onChange={(e) => {
+                  const next = Boolean(e.target.checked);
+                  setIsSelectAllContacts(next);
+                  if (next) {
+                    setSelectedContacts([]);
+                    if (typeof setSelectedContactDetails === 'function') setSelectedContactDetails([]);
+                  }
+                }}
+              />
+              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-200 rounded-full peer peer-checked:bg-indigo-600 transition-colors" />
+              <div className="absolute left-0.5 top-0.5 h-5 w-5 bg-white rounded-full shadow-sm transition-transform peer-checked:translate-x-5" />
+            </label>
+          </div>
+
+          {!isSelectAllContacts ? (
+            <ContactsSelector
+              selectedContacts={selectedContacts}
+              setSelectedContacts={setSelectedContacts}
+              setSelectedContactDetails={setSelectedContactDetails}
+            />
+          ) : (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+              All contacts will be used for this campaign.
+            </div>
+          )}
+        </div>
       )}
 
       {audienceType === 'excel' && (

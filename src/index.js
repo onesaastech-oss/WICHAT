@@ -28,6 +28,7 @@ import CampaignList from './pages/Campaign/CampaignList';
 import CampaignDetails from './pages/Campaign/CampaignDetails.js';
 import AutoReply from './pages/Automation/AutoReply';
 import Flow from './pages/Automation/Flow';
+import OpenCaseList from './pages/OpenCaseList';
 import MyProfile from './pages/MyProfile.js';
 import ChangePassword from './pages/ChangePassword.js';
 import WalletRecharge from './pages/WalletRecharge.js';
@@ -84,6 +85,11 @@ root.render(
           <Route path="/live-chat" element={
             <ProtectedRoute requiresProject={true}>
               <LiveChat />
+            </ProtectedRoute>
+          } />
+          <Route path="/open-cases" element={
+            <ProtectedRoute requiresProject={true}>
+              <OpenCaseList />
             </ProtectedRoute>
           } />
           <Route path="/live-chat/:phone" element={
@@ -173,7 +179,7 @@ root.render(
           <Route path="/my-plan" element={<MyPlan />} />
           <Route path="/blank" element={<Blank />} />
           <Route path="/projects" element={<Projects />} />
-          <Route path="/project-details/:projectId" element={<ProjectDetails />} />
+          <Route path="/project-details/:projectId?" element={<ProjectDetails />} />
           {/* Login related page */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />

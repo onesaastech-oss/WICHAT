@@ -13,6 +13,7 @@ export default function CampaignBuilder() {
   const [excelMapping, setExcelMapping] = useState({ name: '', phone: '' });
   const [selectedContacts, setSelectedContacts] = useState([]);
   const [selectedContactDetails, setSelectedContactDetails] = useState([]);
+  const [isSelectAllContacts, setIsSelectAllContacts] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [variableValues, setVariableValues] = useState({});
@@ -25,6 +26,7 @@ export default function CampaignBuilder() {
   const [excelFileUrl, setExcelFileUrl] = useState('');
   const [campaignName, setCampaignName] = useState('');
   const [scheduleDate, setScheduleDate] = useState('');
+  const [headerMediaUrl, setHeaderMediaUrl] = useState('');
   const [tokens, setTokens] = useState(null);
 
   const [isMinimized, setIsMinimized] = useState(() => {
@@ -77,7 +79,7 @@ export default function CampaignBuilder() {
         isMinimized={isMinimized}
         setIsMinimized={setIsMinimized}
       />
-      
+
       <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isMinimized ? 'lg:ml-16' : 'lg:ml-64'}`}>
         <Header
           mobileMenuOpen={mobileMenuOpen}
@@ -85,7 +87,7 @@ export default function CampaignBuilder() {
           isMinimized={isMinimized}
           setIsMinimized={setIsMinimized}
         />
-        
+
         <main className="mt-16 flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="max-w-7xl mx-auto">
             <CampaignHeader activeTab={activeTab} />
@@ -96,10 +98,15 @@ export default function CampaignBuilder() {
                 {activeTab === 'audience' && (
                   <AudienceSelector
                     audienceType={audienceType}
-                    setAudienceType={setAudienceType}
+                    setAudienceType={(t) => {
+                      setAudienceType(t);
+                      if (t !== 'contacts') setIsSelectAllContacts(false);
+                    }}
                     selectedContacts={selectedContacts}
                     setSelectedContacts={setSelectedContacts}
                     setSelectedContactDetails={setSelectedContactDetails}
+                    isSelectAllContacts={isSelectAllContacts}
+                    setIsSelectAllContacts={setIsSelectAllContacts}
                     selectedGroups={selectedGroups}
                     setSelectedGroups={setSelectedGroups}
                     excelMapping={excelMapping}
@@ -130,6 +137,9 @@ export default function CampaignBuilder() {
                     excelHeaders={excelHeaders}
                     selectedContactDetails={selectedContactDetails}
                     audienceType={audienceType}
+                    headerMediaUrl={headerMediaUrl}
+                    setHeaderMediaUrl={setHeaderMediaUrl}
+                    tokens={tokens}
                   />
                 )}
               </div>
@@ -151,6 +161,7 @@ export default function CampaignBuilder() {
                   setActiveTab={setActiveTab}
                   audienceType={audienceType}
                   selectedContacts={selectedContacts}
+                  isSelectAllContacts={isSelectAllContacts}
                   selectedGroups={selectedGroups}
                   excelMapping={excelMapping}
                   sheetLink={sheetLink}
@@ -166,6 +177,7 @@ export default function CampaignBuilder() {
                   excelHeaders={excelHeaders}
                   excelFileUrl={excelFileUrl}
                   selectedContactDetails={selectedContactDetails}
+                  headerMediaUrl={headerMediaUrl}
                   tokens={tokens}
                 />
               </div>

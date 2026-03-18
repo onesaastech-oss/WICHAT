@@ -604,10 +604,10 @@ function ProjectProfileCard({ project, profile, loading, error, projectId, navig
                     className="flex-1 min-w-0 group cursor-pointer p-4 rounded-lg border border-gray-200 
                hover:border-indigo-400 hover:shadow-md hover:bg-indigo-50/30 
                transition-all duration-200 active:scale-[0.99]"
-                    onClick={() => projectId && navigate(`/project-details/${projectId}`)}
+                    onClick={() => navigate('/project-details')}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && projectId && navigate(`/project-details/${projectId}`)}
+                    onKeyDown={(e) => e.key === 'Enter' && navigate('/project-details')}
                 >
                     <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">

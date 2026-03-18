@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Header, Sidebar } from '../component/Menu';
 import { getProjectMetaDetails, updateWabaProfileDetails, submitWabaId } from '../api/auth';
 import axios from 'axios';
@@ -38,6 +38,7 @@ const ProjectDetails = () => {
     // --- Routing & UI State ---
     const { projectId } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isMinimized, setIsMinimized] = useState(() => {
         const saved = localStorage.getItem('sidebarMinimized');
@@ -80,6 +81,23 @@ const ProjectDetails = () => {
         websites: []
     });
 
+    const activeProjectId = useMemo(() => {
+        // Prefer query param: ?project_id=...
+        const qp = new URLSearchParams(location?.search || '');
+        const queryProjectId = qp.get('project_id');
+        if (queryProjectId) return queryProjectId;
+        // Backward compatible: /project-details/:projectId
+        if (projectId) return projectId;
+        // Fallback: selected project in storage
+        try {
+            const stored = localStorage.getItem('userData');
+            const parsed = stored ? JSON.parse(stored) : null;
+            return parsed?.selected_project_id || '';
+        } catch (e) {
+            return '';
+        }
+    }, [location?.search, projectId]);
+
     // --- Helper Functions ---
     const addDebugLog = (message, data = null) => {
         const timestamp = new Date().toLocaleTimeString();
@@ -111,7 +129,7 @@ const ProjectDetails = () => {
 
     useEffect(() => {
         fetchData();
-    }, [projectId]);
+    }, [activeProjectId]);
 
     // Cleanup intervals on unmount
     useEffect(() => {
@@ -128,12 +146,9 @@ const ProjectDetails = () => {
     const fetchData = async () => {
         try {
             setLoading(true);
-            // Logic to get ID (kept from your original code)
-            const activeId = projectId || JSON.parse(localStorage.getItem('userData'))?.selected_project_id;
+            if (!activeProjectId) throw new Error("Project ID missing");
 
-            if (!activeId) throw new Error("Project ID missing");
-
-            const response = await getProjectMetaDetails({ project_id: activeId });
+            const response = await getProjectMetaDetails({ project_id: activeProjectId });
 
             if (response?.data) {
                 setData(response.data);
@@ -255,7 +270,7 @@ const ProjectDetails = () => {
         setSuccessMessage(null);
 
         try {
-            const activeId = projectId || JSON.parse(localStorage.getItem('userData'))?.selected_project_id;
+            const activeId = activeProjectId;
             if (!activeId) {
                 throw new Error("Project ID missing");
             }
@@ -672,7 +687,7 @@ const ProjectDetails = () => {
             setIsLoadingSignupLink(true);
             setError(null);
 
-            const activeId = projectId || JSON.parse(localStorage.getItem('userData'))?.selected_project_id;
+            const activeId = activeProjectId;
             if (!activeId) {
                 addDebugLog('ERROR: Project ID missing');
                 throw new Error("Project ID missing");
@@ -733,7 +748,7 @@ const ProjectDetails = () => {
             setShowManualRefresh(false);
             setError(null);
 
-            const activeId = projectId || JSON.parse(localStorage.getItem('userData'))?.selected_project_id;
+            const activeId = activeProjectId;
             if (!activeId) {
                 throw new Error("Project ID missing");
             }
@@ -1178,6 +1193,45 @@ const ProjectDetails = () => {
 
                                             </div>
                                         </div>
+                                    </div>
+
+                                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                                        <div className="flex items-center justify-between gap-2 mb-4">
+                                            <div className="flex items-center gap-2">
+                                                <FiCheckCircle className="text-indigo-500" />
+                                                <h3 className="font-semibold text-gray-900 dark:text-white">Template Message Charges</h3>
+                                            </div>
+                                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                Currency: <span className="font-semibold">{data.project?.billing_currency || '-'}</span>
+                                            </div>
+                                        </div>
+
+                                        {data?.charges ? (
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-4">
+                                                    <div className="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">Marketing</div>
+                                                    <div className="mt-1 text-lg font-bold text-gray-900 dark:text-white">
+                                                        {typeof data.charges?.marketing === 'number' ? data.charges.marketing.toFixed(2) : (data.charges?.marketing ?? '-')}
+                                                    </div>
+                                                </div>
+                                                <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-4">
+                                                    <div className="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">Utility</div>
+                                                    <div className="mt-1 text-lg font-bold text-gray-900 dark:text-white">
+                                                        {typeof data.charges?.utility === 'number' ? data.charges.utility.toFixed(2) : (data.charges?.utility ?? '-')}
+                                                    </div>
+                                                </div>
+                                                <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-4">
+                                                    <div className="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">Authentication</div>
+                                                    <div className="mt-1 text-lg font-bold text-gray-900 dark:text-white">
+                                                        {typeof data.charges?.authentication === 'number' ? data.charges.authentication.toFixed(2) : (data.charges?.authentication ?? '-')}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-sm text-gray-500 dark:text-gray-400">
+                                                Charges not available for this project.
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
