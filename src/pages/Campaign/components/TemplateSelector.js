@@ -209,30 +209,25 @@ export default function TemplateSelector({
     const firstContact = selectedContactDetails?.[0] || {};
     const options = [];
 
-    // For groups, always show all contact variables even without contact details
-    // For contacts, show variables based on available contact details
+    // For groups and contacts (including select all), always show name and number
     const isGroup = audienceType === 'groups';
 
-    // Contact name
-    if (isGroup || firstContact?.name) {
-      options.push({
-        type: 'contact',
-        key: 'contact.name',
-        label: 'Name',
-        sample: firstContact?.name || 'John Doe'
-      });
-    }
+    // Contact name - always show for contacts and groups
+    options.push({
+      type: 'contact',
+      key: 'contact.name',
+      label: 'Name',
+      sample: firstContact?.name || 'John Doe'
+    });
 
-    // Contact number
+    // Contact number - always show for contacts and groups
     const contactNumber = firstContact?.number || firstContact?.phone;
-    if (isGroup || contactNumber) {
-      options.push({
-        type: 'contact',
-        key: 'contact.number',
-        label: 'Number',
-        sample: contactNumber || '1234567890'
-      });
-    }
+    options.push({
+      type: 'contact',
+      key: 'contact.number',
+      label: 'Number',
+      sample: contactNumber || '1234567890'
+    });
 
     // Firm name
     if (isGroup || firstContact?.firm_name) {

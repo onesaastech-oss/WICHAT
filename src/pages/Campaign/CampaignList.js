@@ -5,9 +5,10 @@ import Pagination from '../../component/Pagination';
 import {
     FiPlus,
     FiSearch,
-    FiEdit,
     FiTrash2,
     FiEye,
+    FiX,
+    FiLoader,
     FiZap,
     FiUsers,
     FiCalendar,
@@ -18,7 +19,11 @@ import {
 } from 'react-icons/fi';
 import moment from 'moment';
 import axios from 'axios';
+import toast from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Encrypt } from '../encryption/payload-encryption';
+
+const API_BASE_URL = 'https://api.w1chat.com';
 
 const CampaignList = () => {
     const navigate = useNavigate();
@@ -37,6 +42,12 @@ const CampaignList = () => {
     const [totalPages, setTotalPages] = useState(1);
     const [totalRecords, setTotalRecords] = useState(0);
     const [pageSize, setPageSize] = useState(20);
+
+    // Delete modal state
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [campaignToDelete, setCampaignToDelete] = useState(null);
+    const [deleteLoading, setDeleteLoading] = useState(false);
+    const [deleteError, setDeleteError] = useState(null);
 
     useEffect(() => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -96,7 +107,7 @@ const CampaignList = () => {
                 project_id: tokens.selected_project_id || '',
                 page_no: page,
                 limit: pageSize,
-                status: filterStatus // filterStatus already uses API values: 'all', 'complete', 'pending', 'stopped'
+                status: filterStatus // 'all', 'complete', 'pending', 'stopped'
             };
 
             const { data, key } = Encrypt(payload);
@@ -119,17 +130,18 @@ const CampaignList = () => {
 
                 // Map API response to component format
                 const mappedCampaigns = apiCampaigns.map(campaign => {
-                    // Map status: API uses 'pending'/'complete'/'stopped', component uses 'scheduled'/'completed'/'failed'
+                    // Map status: API uses 'pending'/'scheduled'/'complete'/'stopped', component uses 'scheduled'/'completed'/'failed'
                     let status = campaign.status;
                     if (status === 'pending') status = 'scheduled';
                     else if (status === 'complete') status = 'completed';
                     else if (status === 'stopped') status = 'failed';
 
-                    // Get audience source
-                    const audienceSource = campaign.source === 'excel' ? 'Excel Upload' :
-                        campaign.source === 'sheet' ? 'Google Sheet' :
-                            campaign.source === 'group' ? 'Contact Groups' :
-                                'Custom';
+                    // Get audience source (contact, group, excel, sheet)
+                    const audienceSource = campaign.source === 'contact' ? 'Contacts' :
+                        campaign.source === 'group' ? 'Contact Groups' :
+                            campaign.source === 'excel' ? 'Excel Upload' :
+                                campaign.source === 'sheet' ? 'Google Sheet' :
+                                    'Custom';
 
                     return {
                         id: campaign.campaign_id,
@@ -142,7 +154,7 @@ const CampaignList = () => {
                         read: parseInt(campaign.recipients?.read || 0),
                         status: status,
                         createdDate: campaign.create_date,
-                        scheduledDate: null, // API doesn't provide this
+                        scheduledDate: campaign.schedule_date || null,
                         completedDate: campaign.status === 'complete' ? campaign.modify_date : null,
                         hasError: campaign.has_error,
                         errorFile: campaign.error_file
@@ -275,15 +287,52 @@ const CampaignList = () => {
         navigate(`/campaign/${campaignId}`);
     };
 
-    const handleEditCampaign = (campaignId) => {
-        // Navigate to edit campaign page
-        console.log('Edit campaign:', campaignId);
+    const openDeleteModal = (campaign) => {
+        setCampaignToDelete(campaign);
+        setDeleteError(null);
+        setShowDeleteModal(true);
     };
 
-    const handleDeleteCampaign = (campaignId) => {
-        // Handle delete campaign
-        if (window.confirm('Are you sure you want to delete this campaign?')) {
-            console.log('Delete campaign:', campaignId);
+    const closeDeleteModal = () => {
+        setShowDeleteModal(false);
+        setCampaignToDelete(null);
+        setDeleteLoading(false);
+        setDeleteError(null);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!campaignToDelete || !tokens?.token || !tokens?.username) {
+            setDeleteError(campaignToDelete ? 'Session expired. Please log in again.' : 'No campaign selected.');
+            return;
+        }
+        const projectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
+        if (!projectId) {
+            setDeleteError('Project not selected.');
+            return;
+        }
+        setDeleteLoading(true);
+        setDeleteError(null);
+        try {
+            const payload = { project_id: projectId, campaign_id: campaignToDelete.id };
+            const { data, key } = Encrypt(payload);
+            const response = await axios.post(`${API_BASE_URL}/campaign/delete`, JSON.stringify({ data, key }), {
+                headers: {
+                    token: tokens.token,
+                    username: tokens.username,
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (response?.data?.error) {
+                setDeleteError(response?.data?.msg || response?.data?.error || 'Failed to delete campaign');
+                return;
+            }
+            toast.success('Campaign deleted successfully');
+            closeDeleteModal();
+            fetchCampaigns(currentPage);
+        } catch (err) {
+            setDeleteError(err?.response?.data?.msg || err?.message || 'Failed to delete campaign');
+        } finally {
+            setDeleteLoading(false);
         }
     };
 
@@ -504,18 +553,20 @@ const CampaignList = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    {getStatusBadge(campaign.status)}
+                                                    <div className="flex flex-col">
+                                                        {getStatusBadge(campaign.status)}
+                                                        {campaign.status === 'scheduled' && campaign.scheduledDate && (
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                                {moment(campaign.scheduledDate).format('MMM DD, HH:mm')}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                                     <div className="flex items-center">
                                                         <FiCalendar className="mr-1" size={14} />
                                                         {moment(campaign.createdDate).format('MMM DD, YYYY')}
                                                     </div>
-                                                    {campaign.scheduledDate && (
-                                                        <div className="text-xs mt-1">
-                                                            Scheduled: {moment(campaign.scheduledDate).format('MMM DD, HH:mm')}
-                                                        </div>
-                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                     <div className="flex items-center justify-end space-x-2">
@@ -526,17 +577,8 @@ const CampaignList = () => {
                                                         >
                                                             <FiEye size={18} />
                                                         </button>
-                                                        {(campaign.status === 'draft' || campaign.status === 'scheduled' || campaign.status === 'pending') && (
-                                                            <button
-                                                                onClick={() => handleEditCampaign(campaign.id)}
-                                                                className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                                                                title="Edit campaign"
-                                                            >
-                                                                <FiEdit size={18} />
-                                                            </button>
-                                                        )}
                                                         <button
-                                                            onClick={() => handleDeleteCampaign(campaign.id)}
+                                                            onClick={() => openDeleteModal(campaign)}
                                                             className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                                                             title="Delete campaign"
                                                         >
@@ -569,6 +611,82 @@ const CampaignList = () => {
 
                 </div>
             </div>
+
+            {/* Delete Campaign Confirmation Modal */}
+            <AnimatePresence>
+                {showDeleteModal && campaignToDelete && (
+                    <div key="delete-modal" className="fixed inset-0 z-50 overflow-y-auto">
+                        <div className="flex min-h-screen items-center justify-center p-4">
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+                                onClick={closeDeleteModal}
+                                aria-hidden="true"
+                            />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                transition={{ duration: 0.2, ease: 'easeOut' }}
+                                className="relative w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+                            >
+                                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-red-600" />
+                                <div className="p-6">
+                                    <div className="flex items-start gap-4">
+                                        <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                                            <FiTrash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Delete Campaign</h3>
+                                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                                                Are you sure you want to delete this campaign? This action cannot be undone.
+                                            </p>
+                                            <div className="mt-3 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                                                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                                    {campaignToDelete.name}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {deleteError && (
+                                        <div className="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                                            <p className="text-sm text-red-800 dark:text-red-200">{deleteError}</p>
+                                        </div>
+                                    )}
+                                    <div className="mt-6 flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={closeDeleteModal}
+                                            disabled={deleteLoading}
+                                            className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleDeleteConfirm}
+                                            disabled={deleteLoading}
+                                            className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                                        >
+                                            {deleteLoading ? (
+                                                <FiLoader className="animate-spin" size={18} />
+                                            ) : (
+                                                <>
+                                                    <FiTrash2 size={16} />
+                                                    Delete
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

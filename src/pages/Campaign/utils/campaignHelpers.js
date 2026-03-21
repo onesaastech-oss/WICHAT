@@ -18,10 +18,13 @@ export const canProceed = (
   excelMapping,
   sheetLink,
   selectedTemplate,
-  variableValues
+  variableValues,
+  options = {}
 ) => {
+  const isSelectAllContacts = options?.isSelectAllContacts === true;
+
   if (activeTab === 'audience') {
-    if (audienceType === 'contacts') return selectedContacts.length > 0;
+    if (audienceType === 'contacts') return isSelectAllContacts || (selectedContacts?.length > 0);
     if (audienceType === 'excel') return excelMapping.name && excelMapping.phone;
     if (audienceType === 'sheet') return sheetLink.trim() !== '' && excelMapping.name && excelMapping.phone;
     if (audienceType === 'groups') return selectedGroups.length > 0;
@@ -43,9 +46,10 @@ export const canProceed = (
  * @param {string} sheetLink - Google Sheet link
  * @returns {string} Summary text
  */
-export const getAudienceSummary = (audienceType, selectedContacts, selectedGroups, excelMapping, sheetLink) => {
+export const getAudienceSummary = (audienceType, selectedContacts, selectedGroups, excelMapping, sheetLink, options = {}) => {
+  const isSelectAllContacts = options?.isSelectAllContacts === true;
   if (!audienceType) return 'Not selected';
-  if (audienceType === 'contacts') return `${selectedContacts.length} contacts`;
+  if (audienceType === 'contacts') return isSelectAllContacts ? 'All contacts' : `${selectedContacts.length} contacts`;
   if (audienceType === 'excel') return (excelMapping.phone && excelMapping.name ? 'Excel file mapped' : 'Mapping required');
   if (audienceType === 'sheet') return (sheetLink && excelMapping.phone && excelMapping.name ? 'Sheet connected' : 'Configuration required');
   if (audienceType === 'groups') return `${selectedGroups.length} groups`;

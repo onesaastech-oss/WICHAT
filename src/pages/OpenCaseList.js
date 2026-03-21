@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { Header, Sidebar } from '../component/Menu';
 import { Encrypt } from './encryption/payload-encryption';
 import Pagination from '../component/Pagination';
-import { FiAlertCircle, FiHash, FiPhone, FiFileText, FiUser, FiSearch, FiEye, FiEdit2, FiX, FiPlus } from 'react-icons/fi';
+import { FiAlertCircle, FiHash, FiPhone, FiFileText, FiUser, FiSearch, FiEye, FiEdit2, FiX, FiPlus, FiClock, FiCalendar } from 'react-icons/fi';
 
 function OpenCaseList() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -251,8 +251,16 @@ function OpenCaseList() {
 
     useEffect(() => {
         if (!showCaseCreateModal) return;
+        const q = String(caseCreateContactsQuery || '').trim();
+        // Don't load contacts by default. User must type first.
+        if (q.length === 0) {
+            setCaseCreateContacts([]);
+            setCaseCreateContactsPage(1);
+            setCaseCreateContactsTotalPages(1);
+            return;
+        }
         const t = setTimeout(() => {
-            fetchContactsForCaseCreate(1);
+            fetchContactsForCaseCreate(1, q);
         }, 250);
         return () => clearTimeout(t);
     }, [showCaseCreateModal, caseCreateContactsQuery, fetchContactsForCaseCreate]);
@@ -474,12 +482,14 @@ function OpenCaseList() {
             toast.success(response?.data?.msg ?? 'Case updated successfully');
             closeCaseEditModal();
             fetchCaseListForNumber(caseModalNumber, caseListPageNo);
+            // Refresh main page table (not just modal)
+            fetchOpenCases(pageNo, { search });
         } catch (error) {
             setCaseEditError(error?.response?.data?.error ?? 'Failed to update case. Please try again.');
         } finally {
             setCaseEditLoading(false);
         }
-    }, [tokens?.token, tokens?.username, tokens?.selected_project_id, caseEditRow, caseEditName, caseEditRemark, caseEditStatus, closeCaseEditModal, fetchCaseListForNumber, caseModalNumber, caseListPageNo]);
+    }, [tokens?.token, tokens?.username, tokens?.selected_project_id, caseEditRow, caseEditName, caseEditRemark, caseEditStatus, closeCaseEditModal, fetchCaseListForNumber, caseModalNumber, caseListPageNo, fetchOpenCases, pageNo, search]);
 
     return (
         <div className="fixed inset-0 z-40 flex flex-col bg-white dark:bg-gray-900">
@@ -654,24 +664,37 @@ function OpenCaseList() {
                                                         {sortedCases.length === 0 ? (
                                                             <div className="text-sm text-gray-700 dark:text-gray-200">-</div>
                                                         ) : (
-                                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                                                                 {sortedCases.map((c, idx) => {
                                                                     const caseCreateDate = c?.create_date || c?.created_at || c?.createdAt || c?.created_date;
                                                                     return (
                                                                         <div
                                                                             key={c?.case_id || c?.id || `${item.number || 'n'}-${idx}`}
-                                                                            className="rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/40 px-3 py-2"
+                                                                            className="rounded-xl border border-indigo-100/70 dark:border-indigo-900/40 bg-gradient-to-br from-white to-indigo-50/40 dark:from-gray-900 dark:to-indigo-900/10 px-3 py-2.5 shadow-sm hover:shadow-md transition-shadow"
                                                                         >
-                                                                            <div className="text-sm text-gray-800 dark:text-gray-100 font-semibold">
-                                                                                {c?.name || '-'}
+                                                                            <div className="flex items-start justify-between gap-2">
+                                                                                <div className="min-w-0">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <span className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-indigo-600 text-white shadow-sm flex-shrink-0">
+                                                                                            <FiFileText className="h-4 w-4" />
+                                                                                        </span>
+                                                                                        <div className="min-w-0">
+                                                                                            <div className="text-sm text-gray-900 dark:text-gray-100 font-semibold truncate">
+                                                                                                {c?.name || '-'}
+                                                                                            </div>
+                                                                                            <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200 px-2 py-0.5 text-[11px] font-semibold">
+                                                                                                <FiClock className="h-3 w-3" />
+                                                                                                Open {formatOpenSince(caseCreateDate)}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
                                                                             </div>
-                                                                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                                                <span className="font-medium text-gray-600 dark:text-gray-300">Open since:</span>{' '}
-                                                                                {formatOpenSince(caseCreateDate)}
-                                                                            </div>
-                                                                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                                                <span className="font-medium text-gray-600 dark:text-gray-300">Created:</span>{' '}
-                                                                                {formatShortDateTime(caseCreateDate)}
+
+                                                                            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+                                                                                <FiCalendar className="h-3.5 w-3.5 text-indigo-500/80" />
+                                                                                <span className="font-medium text-gray-600 dark:text-gray-300">Created:</span>
+                                                                                <span className="truncate">{formatShortDateTime(caseCreateDate)}</span>
                                                                             </div>
                                                                         </div>
                                                                     );
@@ -739,24 +762,32 @@ function OpenCaseList() {
                                             {sortedCases.length === 0 ? (
                                                 <div className="text-xs text-gray-500 dark:text-gray-400">No cases</div>
                                             ) : (
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                     {sortedCases.map((c, idx) => {
                                                         const caseCreateDate = c?.create_date || c?.created_at || c?.createdAt || c?.created_date;
                                                         return (
                                                             <div
                                                                 key={c?.case_id || c?.id || `${item.number || 'n'}-${idx}`}
-                                                                className="rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/30 px-3 py-2"
+                                                                className="rounded-xl border border-indigo-100/70 dark:border-indigo-900/40 bg-gradient-to-br from-white to-indigo-50/40 dark:from-gray-900 dark:to-indigo-900/10 px-3 py-2.5 shadow-sm"
                                                             >
-                                                                <div className="text-sm text-gray-800 dark:text-gray-100 font-semibold">
-                                                                    {c?.name || '-'}
+                                                                <div className="flex items-start gap-2">
+                                                                    <span className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-indigo-600 text-white shadow-sm flex-shrink-0">
+                                                                        <FiFileText className="h-4 w-4" />
+                                                                    </span>
+                                                                    <div className="min-w-0">
+                                                                        <div className="text-sm text-gray-900 dark:text-gray-100 font-semibold truncate">
+                                                                            {c?.name || '-'}
+                                                                        </div>
+                                                                        <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200 px-2 py-0.5 text-[11px] font-semibold">
+                                                                            <FiClock className="h-3 w-3" />
+                                                                            Open {formatOpenSince(caseCreateDate)}
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                                    <span className="font-medium text-gray-600 dark:text-gray-300">Open since:</span>{' '}
-                                                                    {formatOpenSince(caseCreateDate)}
-                                                                </div>
-                                                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                                    <span className="font-medium text-gray-600 dark:text-gray-300">Created:</span>{' '}
-                                                                    {formatShortDateTime(caseCreateDate)}
+                                                                <div className="mt-2 flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+                                                                    <FiCalendar className="h-3.5 w-3.5 text-indigo-500/80" />
+                                                                    <span className="font-medium text-gray-600 dark:text-gray-300">Created:</span>
+                                                                    <span className="truncate">{formatShortDateTime(caseCreateDate)}</span>
                                                                 </div>
                                                             </div>
                                                         );
@@ -800,7 +831,7 @@ function OpenCaseList() {
                 {/* Create Case Modal (contact picker + create form) */}
                 {showCaseCreateModal && (
                     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden">
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
                             <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                                 <div>
                                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create case</h3>
@@ -818,7 +849,7 @@ function OpenCaseList() {
                                 </button>
                             </div>
 
-                            <div className="px-6 py-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="px-6 py-4 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto">
                                 {/* Contact picker */}
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
@@ -849,8 +880,12 @@ function OpenCaseList() {
                                     </div>
 
                                     <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-                                        <div className="max-h-72 overflow-y-auto bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
-                                            {caseCreateContactsLoading ? (
+                                        <div className="h-72 overflow-y-auto bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+                                            {String(caseCreateContactsQuery || '').trim().length === 0 ? (
+                                                <div className="p-4 text-sm text-gray-500 dark:text-gray-400">
+                                                    Type to search contacts.
+                                                </div>
+                                            ) : caseCreateContactsLoading ? (
                                                 <div className="p-4 text-sm text-gray-500 dark:text-gray-400">Loading contacts...</div>
                                             ) : caseCreateContacts.length === 0 ? (
                                                 <div className="p-4 text-sm text-gray-500 dark:text-gray-400">No contacts found.</div>

@@ -8,6 +8,7 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiClock,
+  FiCopy,
   FiDownload,
   FiEye,
   FiLoader,
@@ -16,12 +17,16 @@ import {
   FiSend,
   FiTrash2,
   FiUsers,
+  FiX,
   FiXCircle,
   FiZap
 } from 'react-icons/fi';
 import moment from 'moment';
 import axios from 'axios';
+import toast from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Encrypt } from '../encryption/payload-encryption';
+import DateTimePicker from './components/DateTimePicker';
 
 const API_BASE_URL = 'https://api.w1chat.com';
 
@@ -103,6 +108,19 @@ const CampaignDetails = () => {
   const [totalRecords, setTotalRecords] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+
+  // Duplicate modal state
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateName, setDuplicateName] = useState('');
+  const [duplicateScheduleDate, setDuplicateScheduleDate] = useState('');
+  const [duplicateIsScheduled, setDuplicateIsScheduled] = useState(false);
+  const [duplicateLoading, setDuplicateLoading] = useState(false);
+  const [duplicateError, setDuplicateError] = useState(null);
+
+  // Delete modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   useEffect(() => {
     localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -363,15 +381,130 @@ const CampaignDetails = () => {
   const showFailedReasonColumn = recipients.some((r) => r.failedReason);
 
   const handleBack = () => navigate('/campaigns');
-  const handleDelete = () => {
-    if (window.confirm('Are you sure you want to delete this campaign?')) {
-      // API not provided; keeping navigation behavior consistent.
+
+  const openDeleteModal = () => {
+    setDeleteError(null);
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setDeleteLoading(false);
+    setDeleteError(null);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!tokens?.token || !tokens?.username) {
+      setDeleteError('Session expired. Please log in again.');
+      return;
+    }
+    const projectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
+    if (!projectId) {
+      setDeleteError('Project not selected.');
+      return;
+    }
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const payload = {
+        project_id: projectId,
+        campaign_id: campaignId
+      };
+      const response = await postEncrypted('/campaign/delete', payload);
+      if (response?.data?.error) {
+        setDeleteError(response?.data?.msg || response?.data?.error || 'Failed to delete campaign');
+        return;
+      }
+      toast.success('Campaign deleted successfully');
+      closeDeleteModal();
       navigate('/campaigns');
+    } catch (err) {
+      setDeleteError(err?.response?.data?.msg || err?.message || 'Failed to delete campaign');
+    } finally {
+      setDeleteLoading(false);
     }
   };
+
   const handleExport = () => {
     const url = campaignDetails?.url;
     if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const openDuplicateModal = () => {
+    setDuplicateName(campaignDetails?.name ? `Copy of ${campaignDetails.name}` : '');
+    setDuplicateScheduleDate('');
+    setDuplicateIsScheduled(false);
+    setDuplicateError(null);
+    setShowDuplicateModal(true);
+  };
+
+  const closeDuplicateModal = () => {
+    setShowDuplicateModal(false);
+    setDuplicateName('');
+    setDuplicateScheduleDate('');
+    setDuplicateIsScheduled(false);
+    setDuplicateLoading(false);
+    setDuplicateError(null);
+  };
+
+  const formatScheduleDate = (dateTimeLocal) => {
+    if (!dateTimeLocal) return null;
+    const [date, time] = dateTimeLocal.split('T');
+    return `${date} ${time}:00`;
+  };
+
+  const getMinDateTime = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 5);
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  const handleDuplicateSubmit = async (e) => {
+    e.preventDefault();
+    setDuplicateError(null);
+    const trimmedName = duplicateName?.trim();
+    if (!trimmedName) {
+      setDuplicateError('Please enter a campaign name.');
+      return;
+    }
+    if (duplicateIsScheduled && !duplicateScheduleDate) {
+      setDuplicateError('Please select a schedule date and time.');
+      return;
+    }
+    if (!tokens?.token || !tokens?.username) {
+      setDuplicateError('Session expired. Please log in again.');
+      return;
+    }
+    setDuplicateLoading(true);
+    try {
+      const payload = {
+        campaign_id: campaignId,
+        name: trimmedName,
+        schedule_date: duplicateIsScheduled ? formatScheduleDate(duplicateScheduleDate) : null
+      };
+      const response = await postEncrypted('/campaign/duplicate', payload);
+      if (response?.data?.error) {
+        setDuplicateError(response?.data?.msg || 'Failed to duplicate campaign');
+        return;
+      }
+      toast.success('Campaign duplicated successfully');
+      closeDuplicateModal();
+      const newCampaignId = response?.data?.campaign_id || response?.data?.data?.campaign_id;
+      if (newCampaignId) {
+        navigate(`/campaign/${newCampaignId}`);
+      } else {
+        fetchCampaignDetails();
+      }
+    } catch (err) {
+      setDuplicateError(err?.response?.data?.msg || err?.message || 'Failed to duplicate campaign');
+    } finally {
+      setDuplicateLoading(false);
+    }
   };
 
   return (
@@ -408,7 +541,6 @@ const CampaignDetails = () => {
                   </div>
                   <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{campaignDetails?.name || 'Campaign Details'}</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{campaignId}</p>
                   </div>
                 </div>
                 {detailsError && (
@@ -419,6 +551,13 @@ const CampaignDetails = () => {
               </div>
               <div className="mt-4 sm:mt-0 flex items-center space-x-3">
                 <button
+                  onClick={openDuplicateModal}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <FiCopy className="mr-2" size={16} />
+                  Duplicate
+                </button>
+                <button
                   onClick={handleExport}
                   disabled={!campaignDetails?.url}
                   className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -427,7 +566,7 @@ const CampaignDetails = () => {
                   Export
                 </button>
                 <button
-                  onClick={handleDelete}
+                  onClick={openDeleteModal}
                   className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                 >
                   <FiTrash2 className="mr-2" size={16} />
@@ -473,18 +612,19 @@ const CampaignDetails = () => {
                 Loading details...
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-6">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Template</p>
-                  <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white truncate" title={campaignDetails?.template?.template_name}>
-                    {campaignDetails?.template?.template_name || 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Recipients</p>
-                  <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
-                    {campaignStats.total.toLocaleString()}
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white truncate" title={campaignDetails?.template?.template_name}>
+                      {campaignDetails?.template?.template_name || 'N/A'}
+                    </p>
+                    {campaignDetails?.template?.category && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200">
+                        {campaignDetails.template.category}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Created By</p>
@@ -518,6 +658,34 @@ const CampaignDetails = () => {
                     {campaignDetails?.source || 'N/A'}
                   </p>
                 </div>
+                {campaignDetails?.cost && (
+                  <>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Cost</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1">
+                        <span className="text-gray-600 dark:text-gray-400">₹</span>
+                        {Number(campaignDetails.cost.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">per message × total recipients</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Per Message Cost</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1">
+                        <span className="text-gray-600 dark:text-gray-400">₹</span>
+                        {Number(campaignDetails.cost.per_message ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">when delivered</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Cost Used</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1">
+                        <span className="text-gray-600 dark:text-gray-400">₹</span>
+                        {Number(campaignDetails.cost.used ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">delivered messages</p>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -699,6 +867,173 @@ const CampaignDetails = () => {
           </div>
         </div>
       </div>
+
+      {/* Duplicate Campaign Modal */}
+      {showDuplicateModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center p-4">
+            <div
+              className="fixed inset-0 bg-black/50 transition-opacity"
+              onClick={closeDuplicateModal}
+              aria-hidden="true"
+            />
+            <div className="relative w-full max-w-md rounded-lg bg-white dark:bg-gray-800 shadow-xl">
+              <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Duplicate Campaign</h3>
+                <button
+                  onClick={closeDuplicateModal}
+                  className="rounded p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <FiX size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleDuplicateSubmit} className="p-6 space-y-4">
+                {duplicateError && (
+                  <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                    <p className="text-sm text-red-800 dark:text-red-200">{duplicateError}</p>
+                  </div>
+                )}
+                <div>
+                  <label htmlFor="duplicate-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Campaign Name
+                  </label>
+                  <input
+                    id="duplicate-name"
+                    type="text"
+                    value={duplicateName}
+                    onChange={(e) => setDuplicateName(e.target.value)}
+                    placeholder="Enter campaign name"
+                    className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={duplicateIsScheduled}
+                      onChange={(e) => setDuplicateIsScheduled(e.target.checked)}
+                      className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Schedule for later</span>
+                  </label>
+                </div>
+                {duplicateIsScheduled && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Schedule Date & Time
+                    </label>
+                    <DateTimePicker
+                      selectedDate={duplicateScheduleDate}
+                      onChange={setDuplicateScheduleDate}
+                      minDate={getMinDateTime()}
+                      placeholder="Select date and time"
+                    />
+                  </div>
+                )}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeDuplicateModal}
+                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={duplicateLoading}
+                    className="flex-1 px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    {duplicateLoading ? (
+                      <FiLoader className="animate-spin" size={18} />
+                    ) : (
+                      'Duplicate'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Campaign Confirmation Modal */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <div key="delete-modal" className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex min-h-screen items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+                onClick={closeDeleteModal}
+                aria-hidden="true"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="relative w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+              >
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-red-600" />
+              <div className="p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                    <FiTrash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Delete Campaign</h3>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                      Are you sure you want to delete this campaign? This action cannot be undone.
+                    </p>
+                    {campaignDetails?.name && (
+                      <div className="mt-3 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {campaignDetails.name}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {deleteError && (
+                  <div className="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                    <p className="text-sm text-red-800 dark:text-red-200">{deleteError}</p>
+                  </div>
+                )}
+                <div className="mt-6 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={closeDeleteModal}
+                    disabled={deleteLoading}
+                    className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteConfirm}
+                    disabled={deleteLoading}
+                    className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                  >
+                    {deleteLoading ? (
+                      <FiLoader className="animate-spin" size={18} />
+                    ) : (
+                      <>
+                        <FiTrash2 size={16} />
+                        Delete
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+              </motion.div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

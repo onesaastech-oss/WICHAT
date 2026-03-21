@@ -34,15 +34,25 @@ export const formatWhatsAppText = (text) => {
 
 /**
  * Gets preview text with variables replaced
+ * When a variable is mapped to contact.name, shows {name}; for contact.number, shows {number}
  * @param {Object} template - The selected template
  * @param {Object} variableValues - Object mapping variable names to values
+ * @param {Object} variableSources - Object mapping variable names to their source (e.g. { type: 'contact', key: 'contact.name' })
  * @returns {string} Formatted preview text
  */
-export const getPreviewText = (template, variableValues) => {
+export const getPreviewText = (template, variableValues, variableSources = {}) => {
   if (!template) return '';
   let text = template.content;
   template.variables.forEach((variable, index) => {
-    const value = variableValues[variable] || `{{${index + 1}}}`;
+    const source = variableSources[variable];
+    let value;
+    if (source?.type === 'contact' && source?.key === 'contact.name') {
+      value = '{name}';
+    } else if (source?.type === 'contact' && source?.key === 'contact.number') {
+      value = '{number}';
+    } else {
+      value = variableValues[variable] || `{{${index + 1}}}`;
+    }
     text = text.replace(new RegExp(`{{\\s*${index + 1}\\s*}}`, 'g'), value);
   });
   return text;

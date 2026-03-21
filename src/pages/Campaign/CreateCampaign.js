@@ -152,6 +152,8 @@ export default function CampaignBuilder() {
                     <WhatsAppPreview
                       selectedTemplate={selectedTemplate}
                       variableValues={variableValues}
+                      variableSources={variableSources}
+                      headerMediaUrl={headerMediaUrl}
                     />
                   </div>
                 )}

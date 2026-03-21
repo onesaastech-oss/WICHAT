@@ -1077,6 +1077,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 return;
             }
             toast.success(response?.data?.msg ?? 'Case updated successfully');
+            window.dispatchEvent(new CustomEvent('case_updated'));
             closeCaseEditModal();
             fetchCaseList(caseListPageNo, caseListLimit);
             if (showContactDetails && activeChat?.number) {
@@ -1138,6 +1139,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 return;
             }
             toast.success(response?.data?.msg ?? 'Case created successfully');
+            window.dispatchEvent(new CustomEvent('case_updated'));
             closeCaseCreateModal();
             fetchCaseList(caseListPageNo, caseListLimit);
             if (showContactDetails && activeChat?.number) {

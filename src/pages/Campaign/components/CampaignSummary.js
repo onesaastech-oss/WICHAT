@@ -480,7 +480,8 @@ export default function CampaignSummary({
     excelMapping,
     sheetLink,
     selectedTemplate,
-    variableValues
+    variableValues,
+    { isSelectAllContacts }
   );
 
   return (
@@ -491,7 +492,7 @@ export default function CampaignSummary({
         <div>
           <div className="text-sm text-gray-500">Audience</div>
           <div className="font-medium text-gray-800">
-            {getAudienceSummary(audienceType, selectedContacts, selectedGroups, excelMapping, sheetLink)}
+            {getAudienceSummary(audienceType, selectedContacts, selectedGroups, excelMapping, sheetLink, { isSelectAllContacts })}
           </div>
         </div>
 

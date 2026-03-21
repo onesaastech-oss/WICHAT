@@ -239,6 +239,17 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         }
     };
 
+    // Refresh chat list when cases are edited/created elsewhere
+    useEffect(() => {
+        const handler = () => {
+            // Re-sync to refresh case_open_count + latest chat data
+            syncWithAPI();
+        };
+        window.addEventListener('case_updated', handler);
+        return () => window.removeEventListener('case_updated', handler);
+        // Intentionally depends on tokens so sync uses latest auth
+    }, [tokens]);
+
     const processApiResponse = async (apiChats) => {
         try {
             // Build list from API response
