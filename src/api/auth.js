@@ -1,9 +1,60 @@
 import axios from 'axios';
 import { Encrypt } from '../pages/encryption/payload-encryption';
 
+// Submit new password with reset token (from email link)
+export const submitPasswordResetWithToken = async ({ token, password, captcha_token }) => {
+  const payload = { token, password, captcha_token };
+
+  const { data, key } = Encrypt(payload);
+
+  const data_pass = JSON.stringify({
+    data,
+    key
+  });
+
+  const config = {
+    method: 'post',
+    maxBodyLength: Infinity,
+    url: 'https://api.w1chat.com/account/reset-password',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    data: data_pass
+  };
+
+  const response = await axios.request(config);
+  return response.data;
+};
+
+// Request password reset - sends link to email
+export const requestPasswordReset = async ({ email, captcha_token }) => {
+  const payload = { email, captcha_token };
+
+  const { data, key } = Encrypt(payload);
+
+  const data_pass = JSON.stringify({
+    data,
+    key
+  });
+
+  const config = {
+    method: 'post',
+    maxBodyLength: Infinity,
+    url: 'https://api.w1chat.com/account/reset-password-request',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    data: data_pass
+  };
+
+  const response = await axios.request(config);
+  return response.data;
+};
+
 // Perform login and return the raw API response data
-export const loginUser = async ({ email, password }) => {
-  const payload = { email, password };
+// captchaToken: Cloudflare Turnstile response token
+export const loginUser = async ({ email, password, captcha_token }) => {
+  const payload = { email, password, ...(captcha_token && { captcha_token }) };
 
   const { data, key } = Encrypt(payload);
 

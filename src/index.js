@@ -31,6 +31,8 @@ import Flow from './pages/Automation/Flow';
 import OpenCaseList from './pages/OpenCaseList';
 import MyProfile from './pages/MyProfile.js';
 import ChangePassword from './pages/ChangePassword.js';
+import ResetPassword from './pages/ResetPassword.js';
+import PasswordResetForm from './pages/PasswordResetForm.js';
 import WalletRecharge from './pages/WalletRecharge.js';
 import PaymentStatus from './pages/PaymentStatus.js';
 import ProjectDetails from './pages/ProjectDetails';
@@ -183,6 +185,8 @@ root.render(
           {/* Login related page */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/reset-password/:token" element={<PasswordResetForm />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/my-profile" element={<MyProfile />} />
           <Route path="/change-password" element={<ChangePassword />} />

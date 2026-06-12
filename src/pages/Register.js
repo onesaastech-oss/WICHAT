@@ -7,6 +7,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
+import { Turnstile } from '@marsidev/react-turnstile';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -33,6 +34,8 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordInfo, setShowPasswordInfo] = useState(false);
   const [showGlobalError, setShowGlobalError] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const turnstileSiteKey = process.env.REACT_APP_TURNSTILE_SITE_KEY || '0x4AAAAAACuMb3QQyxLqxHpe';
 
   // Password validation checks
   const passwordChecks = {
@@ -202,7 +205,8 @@ const Register = () => {
         name: formData.name,
         firm_name: formData.firmName,
         mobile: formData.mobile,
-        country_code: '+91'
+        country_code: '+91',
+        ...(turnstileToken && { captcha_token: turnstileToken })
       };
 
       const { data, key } = Encrypt(payload);
@@ -693,6 +697,21 @@ const Register = () => {
                       )}
                     </AnimatePresence>
                   </div>
+
+                  {turnstileSiteKey && (
+                    <div className="flex justify-center">
+                      <Turnstile
+                        siteKey={turnstileSiteKey}
+                        onSuccess={(token) => setTurnstileToken(token)}
+                        onError={() => setTurnstileToken('')}
+                        onExpire={() => setTurnstileToken('')}
+                        options={{
+                          theme: 'light',
+                          size: 'normal'
+                        }}
+                      />
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>

@@ -9,6 +9,8 @@ import { jwtDecode } from 'jwt-decode';
 import { useDispatch } from 'react-redux';
 import { setAuthData, setSelectedProjectId } from '../store/authSlice';
 import { loginUser } from '../api/auth';
+import SwitchProjectModal from '../component/Modals/SwitchProjectModal';
+import { Turnstile } from '@marsidev/react-turnstile';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -27,10 +29,13 @@ const Login = () => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showGlobalError, setShowGlobalError] = useState(false);
 
-  // Project selection modal state
+  // Project selection modal state (uses SwitchProjectModal - same as Menu)
   const [showProjectModal, setShowProjectModal] = useState(false);
-  const [projects, setProjects] = useState([]);
-  const [selectedProjectIdLocal, setSelectedProjectIdLocal] = useState('');
+  const [loginProjects, setLoginProjects] = useState([]);
+
+  // Cloudflare Turnstile
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const turnstileSiteKey = process.env.REACT_APP_TURNSTILE_SITE_KEY || '0x4AAAAAACuMb3QQyxLqxHpe';
 
   // Prefill form from URL query params (?username=...&password=...)
   useEffect(() => {
@@ -103,7 +108,8 @@ const Login = () => {
     try {
       const data = await loginUser({
         email: formData.username,
-        password: formData.password
+        password: formData.password,
+        captcha_token: turnstileToken || undefined
       });
 
       if (data.error === false) {
@@ -150,11 +156,10 @@ const Login = () => {
           return;
         }
 
-        // More than one project → open in-page modal for selection
+        // More than one project → open SwitchProjectModal (same as Menu) for selection
         localStorage.setItem('userData', JSON.stringify(userDataToStore));
         dispatch(setAuthData(userDataToStore));
-        setProjects(projects);
-        setSelectedProjectIdLocal(projects[0]?.project_id || '');
+        setLoginProjects(projects);
         setShowProjectModal(true);
         toast.success('Login successful. Please choose a project.');
       } else {
@@ -171,32 +176,33 @@ const Login = () => {
     }
   };
 
-  const handleProjectConfirm = () => {
-    if (!selectedProjectIdLocal) return;
+  const handleProjectSelect = (project) => {
+    if (!project) return;
+
+    const selectedId = project.project_id || project.id || null;
+    if (!selectedId) return;
 
     try {
       const stored = localStorage.getItem('userData');
       const parsed = stored ? JSON.parse(stored) : {};
       const updated = {
         ...parsed,
-        selected_project_id: selectedProjectIdLocal
+        selected_project_id: selectedId
       };
 
       localStorage.setItem('userData', JSON.stringify(updated));
-
-      // Keep Redux auth state in sync
-      dispatch(setSelectedProjectId(selectedProjectIdLocal));
+      dispatch(setSelectedProjectId(selectedId));
       dispatch(setAuthData(updated));
     } catch (error) {
       console.error('Failed to set selected project', error);
     }
 
     setShowProjectModal(false);
-    toast.loading('Redirecting...');
+    toast.success('Redirecting...');
     setTimeout(() => {
       toast.dismiss();
       navigate('/');
-    }, 800);
+    }, 500);
   };
 
   // Handle Google Login Success
@@ -463,11 +469,26 @@ const Login = () => {
               </div>
 
               <div className="text-sm">
-                <a href="#" className="font-medium text-indigo-600 hover:text-indigo-500">
+                <Link to="/reset-password" className="font-medium text-indigo-600 hover:text-indigo-500">
                   Forgot password?
-                </a>
+                </Link>
               </div>
             </div>
+
+            {turnstileSiteKey ? (
+              <div className="flex justify-center">
+                <Turnstile
+                  siteKey={turnstileSiteKey}
+                  onSuccess={(token) => setTurnstileToken(token)}
+                  onError={() => setTurnstileToken('')}
+                  onExpire={() => setTurnstileToken('')}
+                  options={{
+                    theme: 'light',
+                    size: 'normal'
+                  }}
+                />
+              </div>
+            ) : null}
 
             <div>
               <motion.button
@@ -502,68 +523,13 @@ const Login = () => {
       </motion.div>
       <Toaster />
 
-      {/* Project selection modal after successful login */}
-      <AnimatePresence>
-        {showProjectModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 px-4"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              transition={{ type: 'spring', duration: 0.35 }}
-              className="w-full max-w-md bg-white rounded-xl shadow-2xl p-6"
-            >
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                Choose your project
-              </h2>
-              <p className="text-sm text-gray-600 mb-4">
-                You have access to multiple projects. Please select one to continue.
-              </p>
-
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Project
-                </label>
-                <select
-                  value={selectedProjectIdLocal}
-                  onChange={(e) => setSelectedProjectIdLocal(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {projects.map((project) => (
-                    <option key={project.project_id} value={project.project_id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowProjectModal(false)}
-                  className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleProjectConfirm}
-                  disabled={!selectedProjectIdLocal}
-                  className={`px-4 py-2 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!selectedProjectIdLocal ? 'opacity-70 cursor-not-allowed' : ''
-                    }`}
-                >
-                  Continue
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Project selection modal - same as Menu's Switch Project */}
+      <SwitchProjectModal
+        isOpen={showProjectModal}
+        onClose={() => setShowProjectModal(false)}
+        onSelectCompany={handleProjectSelect}
+        companies={loginProjects}
+      />
     </div>
   );
 };
