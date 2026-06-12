@@ -180,7 +180,7 @@ export const updateUserProfile = async ({ name, email, country_code, mobile, gen
 };
 
 // Create payment order (wallet topup – no project_id)
-export const createPaymentOrder = async ({ amount, redirect_url }) => {
+export const createPaymentOrder = async ({ amount, redirect_url, origin }) => {
   // Load auth tokens from localStorage to match existing API requirements
   const stored =
     typeof window !== 'undefined' ? localStorage.getItem('userData') : null;
@@ -194,7 +194,8 @@ export const createPaymentOrder = async ({ amount, redirect_url }) => {
 
   const payload = {
     amount,
-    redirect_url
+    redirect_url,
+    ...(origin ? { origin } : {})
   };
 
 

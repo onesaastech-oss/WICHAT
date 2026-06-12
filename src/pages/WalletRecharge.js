@@ -41,6 +41,100 @@ const loadLayerScript = () => {
   });
 };
 
+const RAZORPAY_SCRIPT_URL = 'https://checkout.razorpay.com/v1/checkout.js';
+
+const loadRazorpayScript = () => {
+  return new Promise((resolve, reject) => {
+    if (typeof window !== 'undefined' && window.Razorpay) {
+      resolve();
+      return;
+    }
+    const existing = document.getElementById('razorpay-checkout-script');
+    if (existing) {
+      if (window.Razorpay) resolve();
+      else existing.addEventListener('load', () => resolve());
+      return;
+    }
+    const script = document.createElement('script');
+    script.id = 'razorpay-checkout-script';
+    script.type = 'text/javascript';
+    script.src = RAZORPAY_SCRIPT_URL;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Razorpay checkout'));
+    document.head.appendChild(script);
+  });
+};
+
+const getUserPrefill = () => {
+  try {
+    const userData = localStorage.getItem('userData');
+    if (userData) {
+      const parsed = JSON.parse(userData);
+      const profile = parsed.profile || {};
+      return {
+        name: profile.name || parsed.name || '',
+        email: profile.email || parsed.username || parsed.email || '',
+        contact: profile.mobile || parsed.mobile || ''
+      };
+    }
+  } catch (error) {
+    console.error('Error getting user prefill:', error);
+  }
+  return { name: '', email: '', contact: '' };
+};
+
+// Registered production URL (must match Razorpay Dashboard → Business website details)
+const getPaymentBaseUrl = () => {
+  const configured = process.env.REACT_APP_PUBLIC_URL?.trim().replace(/\/$/, '');
+  return configured || window.location.origin;
+};
+
+const isLocalDevHost = (hostname = window.location.hostname) =>
+  hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.local');
+
+const isRazorpayLiveKey = (keyId) =>
+  typeof keyId === 'string' && keyId.startsWith('rzp_live_');
+
+const isRazorpayDomainMismatchError = (error) => {
+  if (!error) return false;
+  const description = (error.description || error.message || '').toLowerCase();
+  return (
+    error.reason === 'payment_risk_check_failed' ||
+    description.includes('does not match registered website')
+  );
+};
+
+const getRazorpayDomainMismatchMessage = () => {
+  const currentOrigin = window.location.origin;
+  const registeredUrl = process.env.REACT_APP_PUBLIC_URL?.trim().replace(/\/$/, '');
+  let message =
+    `Razorpay blocked payment because "${currentOrigin}" is not registered. ` +
+    'Add this exact URL in Razorpay Dashboard → Account & Settings → Business website details.';
+  if (registeredUrl && registeredUrl !== currentOrigin) {
+    message += ` Open the app at your registered URL: ${registeredUrl}`;
+  }
+  return message;
+};
+
+const validateRazorpayLiveEnvironment = (keyId) => {
+  if (!isRazorpayLiveKey(keyId)) return null;
+
+  if (isLocalDevHost()) {
+    return 'Live Razorpay payments only work on your registered production domain, not localhost. Use test keys locally or deploy to the registered site.';
+  }
+
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(window.location.hostname)) {
+    return 'Live Razorpay payments cannot run on an IP address. Use your registered domain (HTTPS).';
+  }
+
+  const registeredUrl = process.env.REACT_APP_PUBLIC_URL?.trim().replace(/\/$/, '');
+  if (registeredUrl && registeredUrl !== window.location.origin) {
+    return `Open this app at ${registeredUrl} — your Razorpay-registered domain. You are currently on ${window.location.origin}.`;
+  }
+
+  return null;
+};
+
 const WalletRecharge = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -118,7 +212,7 @@ const WalletRecharge = () => {
       return;
     }
 
-    const POLL_INTERVAL_MS = 5000;
+    const POLL_INTERVAL_MS = 2000;
     let pollInterval;
     let pollTimeout;
 
@@ -317,7 +411,117 @@ const WalletRecharge = () => {
   //   setDiscount(0);
   // };
 
-  // Proceed to payment: create token → open Layer checkout → poll status every 5s
+  const openRazorpayCheckout = async (topupResponse) => {
+    await loadRazorpayScript();
+    if (!window.Razorpay) {
+      throw new Error('Razorpay checkout not available');
+    }
+
+    const prefill = getUserPrefill();
+    const paymentBaseUrl = getPaymentBaseUrl();
+    const paymentStatusUrl = `${paymentBaseUrl}/payment-status/${topupResponse.order_id}`;
+
+    const liveEnvError = validateRazorpayLiveEnvironment(topupResponse.key_id);
+    if (liveEnvError) {
+      throw new Error(liveEnvError);
+    }
+
+    const options = {
+      key: topupResponse.key_id,
+      amount: topupResponse.amount,
+      currency: topupResponse.currency || 'INR',
+      name: 'OneChatting',
+      description: 'Wallet Topup',
+      order_id: topupResponse.token_id,
+      callback_url: paymentStatusUrl,
+      prefill: {
+        name: prefill.name,
+        email: prefill.email,
+        contact: prefill.contact
+      },
+      // Ensure UPI (incl. desktop QR) stays visible when dashboard blocks are customized
+      config: {
+        display: {
+          preferences: {
+            show_default_blocks: true
+          }
+        }
+      },
+      handler: () => {
+        setIsPolling(true);
+      },
+      modal: {
+        ondismiss: () => {
+          setIsPolling(true);
+        },
+        confirm_close: true,
+        escape: true
+      }
+    };
+
+    const rzp = new window.Razorpay(options);
+    rzp.on('payment.failed', (paymentResponse) => {
+      console.error('Razorpay payment failed:', paymentResponse.error);
+      const error = paymentResponse.error;
+      if (isRazorpayDomainMismatchError(error)) {
+        toast.error(getRazorpayDomainMismatchMessage(), { duration: 10000 });
+        setIsPolling(false);
+        setProcessing(false);
+        return;
+      }
+      toast.error(error?.description || 'Payment failed');
+      setIsPolling(true);
+      window.location.href = paymentStatusUrl;
+    });
+    rzp.open();
+  };
+
+  const openZwitchCheckout = async (topupResponse) => {
+    const tokenId = topupResponse.token_id || topupResponse.payment_token || topupResponse.token;
+    const orderId = topupResponse.order_id;
+    const accessKey = process.env.REACT_APP_LAYER_ACCESS_KEY || 'ebab5ff3-8ff5-423c-b1bf-4f5a0f99fec0';
+
+    if (!tokenId) {
+      throw new Error('Invalid Zwitch response: missing token_id');
+    }
+    if (!accessKey) {
+      throw new Error('Layer access key not configured. Set REACT_APP_LAYER_ACCESS_KEY.');
+    }
+
+    await loadLayerScript();
+    if (!window.Layer || typeof window.Layer.checkout !== 'function') {
+      throw new Error('Layer checkout not available');
+    }
+
+    const origin = window.location.origin;
+    const paymentStatusUrl = `${origin}/payment-status/${orderId}`;
+
+    window.Layer.checkout(
+      {
+        token: tokenId,
+        accesskey: accessKey,
+        theme: {
+          logo: process.env.REACT_APP_LAYER_LOGO || '',
+          color: process.env.REACT_APP_LAYER_COLOR || '#4f46e5',
+          error_color: process.env.REACT_APP_LAYER_ERROR_COLOR || '#ef4444'
+        }
+      },
+      (res) => {
+        setIsPolling(false);
+        if (res.status === 'captured' || res.status === 'failed' || res.status === 'cancelled') {
+          window.location.href = paymentStatusUrl;
+        }
+      },
+      (err) => {
+        console.error('Layer checkout error:', err);
+        toast.error('Payment gateway error. Please try again.');
+        setProcessing(false);
+        setIsPolling(false);
+      }
+    );
+  };
+
+  // Proceed to payment: create order → open Razorpay or Zwitch checkout → poll status
   const initializePayment = async () => {
     const amount = getActiveAmount();
     if (!amount || amount < 1) {
@@ -326,27 +530,26 @@ const WalletRecharge = () => {
     }
 
     setProcessing(true);
-    const origin = window.location.origin;
+    const paymentBaseUrl = getPaymentBaseUrl();
 
     try {
       const response = await createPaymentOrder({
         amount: getPayableAmount(),
-        redirect_url: `${origin}/payment-status`
+        redirect_url: `${paymentBaseUrl}/payment-status`,
+        origin: window.location.origin
       });
 
       if (response.error) {
-        throw new Error(response.msg || 'Failed to create payment order');
+        throw new Error(
+          typeof response.error === 'string'
+            ? response.error
+            : (response.msg || 'Failed to create payment order')
+        );
       }
 
-      const tokenId = response.token_id || response.payment_token || response.token;
       const orderId = response.order_id;
-      const accessKey = "164d87e7-f365-4a8a-9e03-976ea49560e7"
-
-      if (!tokenId || !orderId) {
-        throw new Error('Invalid response: missing token_id or order_id');
-      }
-      if (!accessKey) {
-        throw new Error('Layer access key not configured. Set layer access key.');
+      if (!orderId) {
+        throw new Error('Invalid response: missing order_id');
       }
 
       setCurrentOrderId(orderId);
@@ -356,40 +559,21 @@ const WalletRecharge = () => {
         discount: promoApplied ? discount : 0
       }));
 
-      await loadLayerScript();
-      if (!window.Layer || typeof window.Layer.checkout !== 'function') {
-        throw new Error('Layer checkout not available');
-      }
-
       setProcessing(false);
       setIsPolling(true);
 
-      const paymentStatusUrl = `${origin}/payment-status/${orderId}`;
+      const gateway = (response.gateway || 'zwitch').toLowerCase();
 
-      window.Layer.checkout(
-        {
-          token: tokenId,
-          accesskey: accessKey,
-          theme: {
-            logo: process.env.REACT_APP_LAYER_LOGO || '',
-            color: process.env.REACT_APP_LAYER_COLOR || '#4f46e5',
-            error_color: process.env.REACT_APP_LAYER_ERROR_COLOR || '#ef4444'
-          }
-        },
-        (res) => {
-          setIsPolling(false);
-          if (res.status === 'captured' || res.status === 'failed' || res.status === 'cancelled') {
-            window.location.href = paymentStatusUrl;
-          }
-          // created / pending: keep polling
-        },
-        (err) => {
-          console.error('Layer checkout error:', err);
-          toast.error('Payment gateway error. Please try again.');
-          setProcessing(false);
-          setIsPolling(false);
+      if (gateway === 'razorpay') {
+        if (!response.token_id || !response.key_id) {
+          throw new Error('Invalid Razorpay response: missing token_id or key_id');
         }
-      );
+        await openRazorpayCheckout(response);
+      } else if (gateway === 'zwitch') {
+        await openZwitchCheckout(response);
+      } else {
+        throw new Error(`Unsupported payment gateway: ${gateway}`);
+      }
     } catch (error) {
       console.error('Payment initialization error:', error);
       toast.error(error.message || 'Failed to initialize payment');
