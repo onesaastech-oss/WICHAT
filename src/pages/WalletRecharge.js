@@ -65,6 +65,37 @@ const loadRazorpayScript = () => {
   });
 };
 
+const CASHFREE_SCRIPT_URL = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+
+const loadCashfreeScript = () => {
+  return new Promise((resolve, reject) => {
+    if (typeof window !== 'undefined' && window.Cashfree) {
+      resolve();
+      return;
+    }
+    const existing = document.getElementById('cashfree-checkout-script');
+    if (existing) {
+      if (window.Cashfree) resolve();
+      else existing.addEventListener('load', () => resolve());
+      return;
+    }
+    const script = document.createElement('script');
+    script.id = 'cashfree-checkout-script';
+    script.type = 'text/javascript';
+    script.src = CASHFREE_SCRIPT_URL;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Cashfree checkout'));
+    document.head.appendChild(script);
+  });
+};
+
+const getCashfreeSdkMode = (environment) => {
+  if (process.env.REACT_APP_CASHFREE_MODE === 'production' && environment === 'production') {
+    return 'production';
+  }
+  return 'sandbox';
+};
+
 const getUserPrefill = () => {
   try {
     const userData = localStorage.getItem('userData');
@@ -83,11 +114,18 @@ const getUserPrefill = () => {
   return { name: '', email: '', contact: '' };
 };
 
-// Registered production URL (must match Razorpay Dashboard → Business website details)
+// Registered app URL for payment return redirects (Cashfree, Razorpay callbacks).
+// CRA loads .env.development on `npm start` and .env.production on `npm run build`.
 const getPaymentBaseUrl = () => {
+  if (typeof window !== 'undefined' && isLocalDevHost()) {
+    return window.location.origin;
+  }
+
   const configured = process.env.REACT_APP_PUBLIC_URL?.trim().replace(/\/$/, '');
   return configured || window.location.origin;
 };
+
+const getWalletReturnUrl = () => `${getPaymentBaseUrl()}/wallet`;
 
 const isLocalDevHost = (hostname = window.location.hostname) =>
   hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.local');
@@ -242,6 +280,7 @@ const WalletRecharge = () => {
 
           // Clear pending payment
           sessionStorage.removeItem('pending_payment');
+          sessionStorage.removeItem('pending_wallet_order_id');
 
           // Redirect to payment status page with order_id in path
           const orderId = response.order_id || currentOrderId;
@@ -264,6 +303,7 @@ const WalletRecharge = () => {
 
           // Clear pending payment
           sessionStorage.removeItem('pending_payment');
+          sessionStorage.removeItem('pending_wallet_order_id');
 
           // Redirect to payment status page with order_id in path
           const orderId = response.order_id || currentOrderId;
@@ -476,6 +516,35 @@ const WalletRecharge = () => {
     rzp.open();
   };
 
+  const openCashfreeCheckout = async (topupResponse) => {
+    const paymentSessionId =
+      topupResponse.payment_session_id || topupResponse.token_id;
+    const orderId = topupResponse.order_id;
+
+    if (!paymentSessionId) {
+      throw new Error('Invalid Cashfree response: missing payment_session_id');
+    }
+    if (!orderId) {
+      throw new Error('Invalid Cashfree response: missing order_id');
+    }
+
+    await loadCashfreeScript();
+    if (!window.Cashfree || typeof window.Cashfree !== 'function') {
+      throw new Error('Cashfree checkout not available');
+    }
+
+    sessionStorage.setItem('pending_wallet_order_id', orderId);
+
+    const cashfree = window.Cashfree({
+      mode: getCashfreeSdkMode(topupResponse.environment)
+    });
+
+    await cashfree.checkout({
+      paymentSessionId,
+      redirectTarget: '_self'
+    });
+  };
+
   const openZwitchCheckout = async (topupResponse) => {
     const tokenId = topupResponse.token_id || topupResponse.payment_token || topupResponse.token;
     const orderId = topupResponse.order_id;
@@ -521,7 +590,33 @@ const WalletRecharge = () => {
     );
   };
 
-  // Proceed to payment: create order → open Razorpay or Zwitch checkout → poll status
+  // Resume polling after Cashfree redirect back to /wallet or /wallet-recharge
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const orderIdFromUrl = params.get('order_id');
+    const orderId =
+      orderIdFromUrl ||
+      sessionStorage.getItem('pending_wallet_order_id') ||
+      (() => {
+        try {
+          const pending = sessionStorage.getItem('pending_payment');
+          return pending ? JSON.parse(pending).order_id : null;
+        } catch {
+          return null;
+        }
+      })();
+
+    if (!orderId) return;
+
+    setCurrentOrderId(orderId);
+    setIsPolling(true);
+
+    if (orderIdFromUrl) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  // Proceed to payment: create order → open gateway checkout → poll status
   const initializePayment = async () => {
     const amount = getActiveAmount();
     if (!amount || amount < 1) {
@@ -531,15 +626,16 @@ const WalletRecharge = () => {
 
     setProcessing(true);
     const paymentBaseUrl = getPaymentBaseUrl();
+    const walletReturnUrl = getWalletReturnUrl();
 
     try {
       const response = await createPaymentOrder({
         amount: getPayableAmount(),
-        redirect_url: `${paymentBaseUrl}/payment-status`,
-        origin: window.location.origin
+        redirect_url: walletReturnUrl,
+        origin: paymentBaseUrl
       });
 
-      if (response.error) {
+      if (response.error === true || response.error === 1 || response.error === 'true') {
         throw new Error(
           typeof response.error === 'string'
             ? response.error
@@ -559,17 +655,24 @@ const WalletRecharge = () => {
         discount: promoApplied ? discount : 0
       }));
 
+      const gateway = String(
+        response.gateway || response.payment_gateway || 'zwitch'
+      )
+        .trim()
+        .toLowerCase();
+
       setProcessing(false);
-      setIsPolling(true);
 
-      const gateway = (response.gateway || 'zwitch').toLowerCase();
-
-      if (gateway === 'razorpay') {
+      if (gateway === 'cashfree') {
+        await openCashfreeCheckout(response);
+      } else if (gateway === 'razorpay') {
+        setIsPolling(true);
         if (!response.token_id || !response.key_id) {
           throw new Error('Invalid Razorpay response: missing token_id or key_id');
         }
         await openRazorpayCheckout(response);
       } else if (gateway === 'zwitch') {
+        setIsPolling(true);
         await openZwitchCheckout(response);
       } else {
         throw new Error(`Unsupported payment gateway: ${gateway}`);

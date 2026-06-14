@@ -191,6 +191,7 @@ root.render(
           <Route path="/my-profile" element={<MyProfile />} />
           <Route path="/change-password" element={<ChangePassword />} />
           <Route path="/wallet-recharge/:amount?" element={<WalletRecharge />} />
+          <Route path="/wallet" element={<WalletRecharge />} />
           <Route path="/payment-status/:order_id" element={<PaymentStatus />} />
           <Route path="/support" element={<Support />} />
           {/* Add more routes as needed */}

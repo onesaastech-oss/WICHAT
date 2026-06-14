@@ -82,6 +82,7 @@ const PaymentStatus = () => {
     orderIdFromPath ||
     location.state?.orderId ||
     searchParams.get('order_id') ||
+    sessionStorage.getItem('pending_wallet_order_id') ||
     (() => {
       try {
         const pending = sessionStorage.getItem('pending_payment');
