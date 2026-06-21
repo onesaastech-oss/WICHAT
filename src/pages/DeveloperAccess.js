@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { API_BASE_URL } from '../config/api';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
@@ -50,53 +51,147 @@ const getProjectId = () => {
 };
 
 function ConfirmModal({ isOpen, title, message, confirmLabel, loading, onConfirm, onClose }) {
-    if (!isOpen) return null;
+    return (
+        <AnimatePresence>
+            {isOpen && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+                >
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 12 }}
+                        transition={{ duration: 0.2, ease: 'easeOut' }}
+                        className="w-full max-w-md rounded-xl bg-white shadow-xl border border-slate-200"
+                    >
+                        <div className="flex items-start justify-between px-5 pt-5 pb-3 border-b border-slate-100">
+                            <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-lg bg-amber-50 text-amber-600">
+                                    <FiAlertTriangle className="w-5 h-5" />
+                                </div>
+                                <h3 className="text-lg font-semibold text-slate-800 pt-1">{title}</h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                disabled={loading}
+                                className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                            >
+                                <FiX className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="px-5 py-4">
+                            <p className="text-sm text-slate-600 leading-relaxed">{message}</p>
+                        </div>
+                        <div className="flex justify-end gap-3 px-5 py-4 border-t border-slate-100">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                disabled={loading}
+                                className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={onConfirm}
+                                disabled={loading}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60"
+                            >
+                                {loading && (
+                                    <span className="inline-block h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                )}
+                                {confirmLabel}
+                            </button>
+                        </div>
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
+}
+
+function TokenViewModal({ isOpen, userName, userEmail, token, onClose }) {
+    const handleCopy = async () => {
+        if (!token) return;
+        try {
+            await navigator.clipboard.writeText(token);
+            toast.success('Token copied');
+        } catch (_) {
+            toast.error('Failed to copy token');
+        }
+    };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-xl bg-white shadow-xl border border-slate-200">
-                <div className="flex items-start justify-between px-5 pt-5 pb-3 border-b border-slate-100">
-                    <div className="flex items-start gap-3">
-                        <div className="p-2 rounded-lg bg-amber-50 text-amber-600">
-                            <FiAlertTriangle className="w-5 h-5" />
+        <AnimatePresence>
+            {isOpen && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+                    onClick={onClose}
+                >
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 12 }}
+                        transition={{ duration: 0.2, ease: 'easeOut' }}
+                        className="w-full max-w-lg rounded-xl bg-white shadow-xl border border-slate-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between px-5 pt-5 pb-3 border-b border-slate-100">
+                            <div className="flex items-start gap-3 min-w-0">
+                                <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 shrink-0">
+                                    <FiKey className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0">
+                                    <h3 className="text-lg font-semibold text-slate-800">Developer Token</h3>
+                                    <p className="text-sm text-slate-500 mt-0.5 truncate">{userName}</p>
+                                    {userEmail && (
+                                        <p className="text-xs text-slate-400 truncate">{userEmail}</p>
+                                    )}
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 shrink-0"
+                            >
+                                <FiX className="w-5 h-5" />
+                            </button>
                         </div>
-                        <h3 className="text-lg font-semibold text-slate-800 pt-1">{title}</h3>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        disabled={loading}
-                        className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-50"
-                    >
-                        <FiX className="w-5 h-5" />
-                    </button>
-                </div>
-                <div className="px-5 py-4">
-                    <p className="text-sm text-slate-600 leading-relaxed">{message}</p>
-                </div>
-                <div className="flex justify-end gap-3 px-5 py-4 border-t border-slate-100">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        disabled={loading}
-                        className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onConfirm}
-                        disabled={loading}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60"
-                    >
-                        {loading && (
-                            <span className="inline-block h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        )}
-                        {confirmLabel}
-                    </button>
-                </div>
-            </div>
-        </div>
+                        <div className="px-5 py-4">
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                                <p className="text-sm font-mono text-slate-800 break-all leading-relaxed">{token}</p>
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-3 px-5 py-4 border-t border-slate-100">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50"
+                            >
+                                Close
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleCopy}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+                            >
+                                <FiCopy className="w-4 h-4" />
+                                Copy Token
+                            </button>
+                        </div>
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>
     );
 }
 
@@ -194,6 +289,12 @@ function DeveloperAccess() {
         onConfirm: null,
     });
     const [confirmLoading, setConfirmLoading] = useState(false);
+    const [tokenViewModal, setTokenViewModal] = useState({
+        open: false,
+        userName: '',
+        userEmail: '',
+        token: '',
+    });
 
     useEffect(() => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -208,6 +309,25 @@ function DeveloperAccess() {
     useEffect(() => {
         setProjectId(getProjectId());
     }, []);
+
+    const closeTokenViewModal = () => {
+        setTokenViewModal({
+            open: false,
+            userName: '',
+            userEmail: '',
+            token: '',
+        });
+    };
+
+    const openTokenViewModal = (user) => {
+        if (!user?.developer_token) return;
+        setTokenViewModal({
+            open: true,
+            userName: user.name || '',
+            userEmail: user.email || '',
+            token: user.developer_token,
+        });
+    };
 
     const closeConfirmModal = () => {
         if (confirmLoading) return;
@@ -304,12 +424,28 @@ function DeveloperAccess() {
             }
 
             setDeveloperAccess(checked);
-            toast.success(response?.data?.msg || 'Developer access updated successfully');
+            toast.success(
+                response?.data?.msg ||
+                (checked
+                    ? 'Developer access has been enabled'
+                    : 'Developer access has been disabled')
+            );
         } catch (error) {
             toast.error(error?.response?.data?.error || 'Failed to update developer access');
         } finally {
             setAccessLoading(false);
         }
+    };
+
+    const requestAccessChange = (checked) => {
+        openConfirmModal({
+            title: checked ? 'Enable developer access?' : 'Disable developer access?',
+            message: checked
+                ? 'External applications will be able to use developer tokens to access this project via the API.'
+                : 'Developer API access for this project will be blocked until you enable it again.',
+            confirmLabel: checked ? 'Enable' : 'Disable',
+            onConfirm: () => handleAccessChange(checked),
+        });
     };
 
     const handleRegenerateProjectToken = async () => {
@@ -471,8 +607,8 @@ function DeveloperAccess() {
                                             <input
                                                 type="checkbox"
                                                 checked={developerAccess}
-                                                disabled={accessLoading}
-                                                onChange={(e) => handleAccessChange(e.target.checked)}
+                                                disabled={accessLoading || confirmLoading}
+                                                onChange={(e) => requestAccessChange(e.target.checked)}
                                                 className="sr-only peer"
                                             />
                                             <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600 peer-disabled:opacity-60" />
@@ -536,6 +672,7 @@ function DeveloperAccess() {
                                                         user={user}
                                                         loading={Boolean(userTokenLoading[user.unique_id])}
                                                         onRegenerate={() => requestUserTokenRegenerate(user)}
+                                                        onViewToken={() => openTokenViewModal(user)}
                                                     />
                                                 ))
                                             )}
@@ -557,30 +694,20 @@ function DeveloperAccess() {
                 onConfirm={handleConfirmAction}
                 onClose={closeConfirmModal}
             />
+
+            <TokenViewModal
+                isOpen={tokenViewModal.open}
+                userName={tokenViewModal.userName}
+                userEmail={tokenViewModal.userEmail}
+                token={tokenViewModal.token}
+                onClose={closeTokenViewModal}
+            />
         </div>
     );
 }
 
-function UserTokenRow({ serialNo, user, loading, onRegenerate }) {
-    const [visible, setVisible] = useState(false);
+function UserTokenRow({ serialNo, user, loading, onRegenerate, onViewToken }) {
     const token = user.developer_token || '';
-
-    const handleCopy = async () => {
-        if (!token) {
-            toast.error('Nothing to copy');
-            return;
-        }
-        try {
-            await navigator.clipboard.writeText(token);
-            toast.success('Token copied');
-        } catch (_) {
-            toast.error('Failed to copy token');
-        }
-    };
-
-    const displayToken = token
-        ? (visible ? token : `${token.slice(0, 6)}••••••••${token.slice(-6)}`)
-        : 'Not generated';
 
     return (
         <tr className="hover:bg-slate-50/80 transition-colors">
@@ -593,31 +720,19 @@ function UserTokenRow({ serialNo, user, loading, onRegenerate }) {
                 </span>
             </td>
             <td className="px-6 py-4 text-sm">
-                <div className="flex items-center gap-2 max-w-md">
-                    <span className={`font-mono break-all ${token ? 'text-slate-800' : 'text-slate-400 italic'}`}>
-                        {displayToken}
-                    </span>
-                    {token && (
-                        <>
-                            <button
-                                type="button"
-                                onClick={() => setVisible((prev) => !prev)}
-                                className="p-1 rounded text-slate-500 hover:text-indigo-600"
-                                title={visible ? 'Hide token' : 'Show token'}
-                            >
-                                {visible ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleCopy}
-                                className="p-1 rounded text-slate-500 hover:text-indigo-600"
-                                title="Copy token"
-                            >
-                                <FiCopy className="w-4 h-4" />
-                            </button>
-                        </>
-                    )}
-                </div>
+                {token ? (
+                    <button
+                        type="button"
+                        onClick={onViewToken}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-colors"
+                        title="View developer token"
+                    >
+                        <FiEye className="w-4 h-4" />
+                        View Token
+                    </button>
+                ) : (
+                    <span className="text-slate-400 italic">Not generated</span>
+                )}
             </td>
             <td className="px-6 py-4 whitespace-nowrap text-right">
                 <button
