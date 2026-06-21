@@ -35,7 +35,7 @@ const getAuthHeaders = (projectId) => {
     return {
         token,
         username,
-        branch_id: projectId,
+        project_id: projectId,
         'Content-Type': 'application/json',
     };
 };
