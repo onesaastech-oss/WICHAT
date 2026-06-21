@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { Header, Sidebar } from '../component/Menu';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -130,7 +131,7 @@ function TemplateView() {
                         const data_pass = JSON.stringify({ data, key });
 
                         const response = await axios.post(
-                            'https://api.w1chat.com/template/template-details',
+                            `${API_BASE_URL}/template/template-details`,
                             data_pass,
                             {
                                 headers: {

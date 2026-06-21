@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
+import { API_BASE_URL } from '../config/api';
+import { parseServerDate, toServerTimestamp } from '../utils/dateTime';
 import { useDispatch } from 'react-redux';
 import { useSelector } from 'react-redux';
 import { fetchProjectInfo } from '../store/projectSlice';
@@ -841,7 +843,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         const { data, key } = Encrypt(payload);
                         const data_pass = JSON.stringify({ data, key });
                         const response = await axios.post(
-                            'https://api.w1chat.com/contact/contact-details',
+                            `${API_BASE_URL}/contact/contact-details`,
                             data_pass,
                             {
                                 headers: {
@@ -899,7 +901,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/contact/contact-details',
+                `${API_BASE_URL}/contact/contact-details`,
                 data_pass,
                 {
                     headers: {
@@ -936,7 +938,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
             const response = await axios.post(
-                'https://api.w1chat.com/message/open-case-count',
+                `${API_BASE_URL}/message/open-case-count`,
                 data_pass,
                 {
                     headers: {
@@ -977,7 +979,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
             const response = await axios.post(
-                'https://api.w1chat.com/message/case-list',
+                `${API_BASE_URL}/message/case-list`,
                 data_pass,
                 {
                     headers: {
@@ -1061,7 +1063,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
             const response = await axios.post(
-                'https://api.w1chat.com/message/case-edit',
+                `${API_BASE_URL}/message/case-edit`,
                 data_pass,
                 {
                     headers: {
@@ -1123,7 +1125,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
             const response = await axios.post(
-                'https://api.w1chat.com/message/case-create',
+                `${API_BASE_URL}/message/case-create`,
                 data_pass,
                 {
                     headers: {
@@ -1205,8 +1207,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const data_pass = JSON.stringify({ data, key });
 
             const apiUrl = isUpdate
-                ? 'https://api.w1chat.com/contact/update-contact'
-                : 'https://api.w1chat.com/contact/create-contact';
+                ? `${API_BASE_URL}/contact/update-contact`
+                : `${API_BASE_URL}/contact/create-contact`;
 
             const response = await axios.post(apiUrl, data_pass, {
                 headers: {
@@ -1391,7 +1393,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         const getSearchResultDate = (timestamp) => {
             if (!timestamp) return '';
             try {
-                const date = typeof timestamp === 'number' ? new Date(timestamp) : new Date(timestamp);
+                const date = typeof timestamp === 'number' ? new Date(timestamp) : parseServerDate(timestamp);
+                if (!date) return '';
                 const today = new Date();
 
                 // Reset time to compare only dates
@@ -1815,7 +1818,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                `https://api.w1chat.com/message/chat-assign`,
+                `${API_BASE_URL}/message/chat-assign`,
                 data_pass,
                 {
                     headers: {
@@ -1889,7 +1892,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const data_pass = JSON.stringify({ "data": data, "key": key });
 
             const response = await axios.post(
-                `https://api.w1chat.com/message/chat-history`,
+                `${API_BASE_URL}/message/chat-history`,
                 data_pass,
                 {
                     headers: {
@@ -2069,7 +2072,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     longitude: apiMessage.longitude || '',
                     name: apiMessage.name || '',
                     reply_wamid: apiMessage.reply_wamid || '',
-                    timestamp: apiMessage.timestamp || (apiMessage.create_date ? new Date(apiMessage.create_date).getTime() : ''),
+                    timestamp: apiMessage.timestamp || toServerTimestamp(apiMessage.create_date) || '',
                     retryCount: apiMessage.retryCount || '',
                     chat_number: activeChat.number,
                     // Store template and component data for rendering
@@ -2147,7 +2150,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const data_pass = JSON.stringify({ "data": data, "key": key });
 
             await axios.post(
-                `https://api.w1chat.com/message/mark-as-read`,
+                `${API_BASE_URL}/message/mark-as-read`,
                 data_pass,
                 {
                     headers: {
@@ -2327,7 +2330,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const data_pass = JSON.stringify({ "data": data, "key": key });
 
             const response = await axios.post(
-                `https://api.w1chat.com/message/send-text-message`,
+                `${API_BASE_URL}/message/send-text-message`,
                 data_pass,
                 {
                     headers: {
@@ -2707,7 +2710,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             formData.append('project_id', tokens.selected_project_id || '');
 
             const uploadResponse = await axios.post(
-                `https://api.w1chat.com/upload/upload-media`,
+                `${API_BASE_URL}/upload/upload-media`,
                 formData,
                 {
                     headers: {
@@ -2758,7 +2761,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             formData.append('project_id', tokens.selected_project_id || '');
 
             const uploadResponse = await axios.post(
-                `https://api.w1chat.com/upload/upload-media`,
+                `${API_BASE_URL}/upload/upload-media`,
                 formData,
                 {
                     headers: {
@@ -2832,7 +2835,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 const data_pass = JSON.stringify({ "data": data, "key": key });
 
                 const messageResponse = await axios.post(
-                    `https://api.w1chat.com/message/${api_url}`,
+                    `${API_BASE_URL}/message/${api_url}`,
                     data_pass,
                     {
                         headers: {
@@ -2977,7 +2980,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const data_pass = JSON.stringify({ "data": data, "key": key });
 
             const messageResponse = await axios.post(
-                `https://api.w1chat.com/message/${api_url}`,
+                `${API_BASE_URL}/message/${api_url}`,
                 data_pass,
                 {
                     headers: {
@@ -3174,7 +3177,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/message/send-template',
+                `${API_BASE_URL}/message/send-template`,
                 data_pass,
                 {
                     headers: {
@@ -4962,7 +4965,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 const formatTime = (value) => {
     if (!value) return '';
     try {
-        const date = typeof value === 'number' ? new Date(value) : new Date(value);
+        const date = typeof value === 'number' ? new Date(value) : parseServerDate(value);
+        if (!date) return '';
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch {
         return '';
@@ -4973,7 +4977,8 @@ const formatTime = (value) => {
 const getDateString = (timestamp) => {
     if (!timestamp) return '';
     try {
-        const date = typeof timestamp === 'number' ? new Date(timestamp) : new Date(timestamp);
+        const date = typeof timestamp === 'number' ? new Date(timestamp) : parseServerDate(timestamp);
+        if (!date) return '';
         return date.toDateString(); // Returns format like "Mon Oct 26 2025"
     } catch {
         return '';
@@ -4984,7 +4989,8 @@ const getDateString = (timestamp) => {
 const formatDateForDisplay = (timestamp) => {
     if (!timestamp) return '';
     try {
-        const date = typeof timestamp === 'number' ? new Date(timestamp) : new Date(timestamp);
+        const date = typeof timestamp === 'number' ? new Date(timestamp) : parseServerDate(timestamp);
+        if (!date) return '';
         const today = new Date();
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);

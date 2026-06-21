@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import axios from 'axios';
@@ -82,7 +83,7 @@ function ProjectConfig() {
                 const parsed = userDataRaw ? JSON.parse(userDataRaw) : null;
                 token = parsed?.token || '';
                 username = parsed?.username || '';
-            } catch (_) {}
+            } catch (_) { }
             if (!token || !username) {
                 setAutoCaseCreateStatusLoading(false);
                 return;
@@ -91,7 +92,7 @@ function ProjectConfig() {
                 const payload = { project_id: projectId };
                 const { data, key } = Encrypt(payload);
                 const response = await axios.post(
-                    'https://api.w1chat.com/project/auto-case-create-status',
+                    `${API_BASE_URL}/project/auto-case-create-status`,
                     JSON.stringify({ data, key }),
                     {
                         headers: {
@@ -128,7 +129,7 @@ function ProjectConfig() {
             const parsed = userDataRaw ? JSON.parse(userDataRaw) : null;
             token = parsed?.token || '';
             username = parsed?.username || '';
-        } catch (_) {}
+        } catch (_) { }
         if (!token || !username) {
             toast.error('Session expired. Please log in again.');
             return;
@@ -141,7 +142,7 @@ function ProjectConfig() {
             };
             const { data, key } = Encrypt(payload);
             const response = await axios.post(
-                'https://api.w1chat.com/project/update-auto-case-create',
+                `${API_BASE_URL}/project/update-auto-case-create`,
                 JSON.stringify({ data, key }),
                 {
                     headers: {

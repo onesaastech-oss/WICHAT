@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { Header, Sidebar } from '../component/Menu';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -162,7 +163,7 @@ function TemplateEdit() {
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-              'https://api.w1chat.com/template/template-details',
+              `${API_BASE_URL}/template/template-details`,
               data_pass,
               {
                 headers: {
@@ -408,7 +409,7 @@ function TemplateEdit() {
 
         // Upload file to API
         const response = await axios.post(
-          'https://api.w1chat.com/upload/upload-media',
+          `${API_BASE_URL}/upload/upload-media`,
           formData,
           {
             headers: {
@@ -842,7 +843,7 @@ function TemplateEdit() {
 
       // Use the correct API endpoint for editing templates
       const response = await axios.post(
-        'https://api.w1chat.com/template/template-edit',
+        `${API_BASE_URL}/template/template-edit`,
         data_pass,
         {
           headers: {

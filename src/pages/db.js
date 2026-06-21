@@ -1,4 +1,5 @@
 import Dexie from 'dexie';
+import { toServerTimestamp } from '../utils/dateTime';
 
 let dbInstance = null;
 let changeListeners = [];
@@ -300,7 +301,7 @@ export const dbHelper = {
                         reply_wamid: message.reply_wamid || '',
                         timestamp: (
                             message.timestamp
-                            || (message.create_date ? new Date(message.create_date).getTime() : undefined)
+                            || toServerTimestamp(message.create_date)
                             || Date.now()
                         ),
                         retryCount: message.retryCount || '',
@@ -583,7 +584,7 @@ export const dbHelper = {
                     component: serverMessage.component || candidate.component,
                     timestamp: (
                         serverMessage.timestamp
-                        || (serverMessage.create_date ? new Date(serverMessage.create_date).getTime() : undefined)
+                        || toServerTimestamp(serverMessage.create_date)
                         || candidate.timestamp
                         || Date.now()
                     )
@@ -613,7 +614,7 @@ export const dbHelper = {
                 chat_number: chatNumber,
                 timestamp: (
                     serverMessage.timestamp
-                    || (serverMessage.create_date ? new Date(serverMessage.create_date).getTime() : undefined)
+                    || toServerTimestamp(serverMessage.create_date)
                     || Date.now()
                 )
             }]);

@@ -23,7 +23,7 @@
     img-src 'self' data: blob: https: https://*.razorpay.com https://cdn.razorpay.com; \
     font-src 'self' data: https://fonts.gstatic.com; \
     connect-src 'self' https: wss: \
-      https://api.w1chat.com https://*.w1chat.com \
+      https://server.onechatting.com https://*.w1chat.com \
       https://checkout.razorpay.com https://api.razorpay.com https://cdn.razorpay.com https://*.razorpay.com \
       https://challenges.cloudflare.com \
       https://*.cashfree.com https://sdk.cashfree.com; \
@@ -40,6 +40,7 @@
     base-uri 'self'; \
     form-action 'self' https://api.razorpay.com https://*.cashfree.com"
 
-  # Allows Razorpay netbanking/card popups and nested checkout frames
-  Header always set Cross-Origin-Opener-Policy "same-origin-allow-popups"
+# Allows Razorpay netbanking/card popups and nested checkout frames
+
+Header always set Cross-Origin-Opener-Policy "same-origin-allow-popups"
 </IfModule>

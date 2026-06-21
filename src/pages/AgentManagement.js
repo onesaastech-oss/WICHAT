@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { Header, Sidebar } from '../component/Menu';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -31,6 +32,7 @@ import {
 } from 'react-icons/fi';
 import { Encrypt } from './encryption/payload-encryption';
 import axios from 'axios';
+import { parseServerDate } from '../utils/dateTime';
 import { LuRefreshCcwDot } from 'react-icons/lu';
 import { MdEdit } from 'react-icons/md';
 
@@ -227,14 +229,14 @@ function AgentManagement() {
     const fetchPermissions = async () => {
         try {
             const payload = {
-                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
+                project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
             };
 
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/permission/list',
+                `${API_BASE_URL}/permission/list`,
                 data_pass,
                 {
                     headers: {
@@ -273,14 +275,14 @@ function AgentManagement() {
         setLoading(true);
         try {
             const payload = {
-                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
+                project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
             };
 
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/agent/list',
+                `${API_BASE_URL}/agent/list`,
                 data_pass,
                 {
                     headers: {
@@ -313,7 +315,7 @@ function AgentManagement() {
     const fetchAgentByEmail = async (email) => {
         try {
             const payload = {
-                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
+                project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
                 email: email
             };
 
@@ -321,7 +323,7 @@ function AgentManagement() {
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/agent/fetch-agent', // Updated endpoint
+                `${API_BASE_URL}/agent/fetch-agent`, // Updated endpoint
                 data_pass,
                 {
                     headers: {
@@ -352,7 +354,7 @@ function AgentManagement() {
     const fetchAgentByMappingId = async (mappingId) => {
         try {
             const payload = {
-                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
+                project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
                 mapping_id: mappingId
             };
 
@@ -360,7 +362,7 @@ function AgentManagement() {
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/agent/mapping', // Assuming this endpoint exists
+                `${API_BASE_URL}/agent/mapping`, // Assuming this endpoint exists
                 data_pass,
                 {
                     headers: {
@@ -444,7 +446,7 @@ function AgentManagement() {
 
         try {
             const payload = {
-                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
+                project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
                 mapping_id: currentAgent?.mapping_id,
             };
 
@@ -452,7 +454,7 @@ function AgentManagement() {
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/agent/delete', // Assuming this endpoint exists
+                `${API_BASE_URL}/agent/delete`, // Assuming this endpoint exists
                 data_pass,
                 {
                     headers: {
@@ -560,7 +562,7 @@ function AgentManagement() {
 
         try {
             const payload = {
-                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
+                project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
                 mapping_id: currentAgent?.mapping_id,
                 permission_id: selectedPermission
             };
@@ -569,7 +571,7 @@ function AgentManagement() {
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/agent/change-permission', // Updated endpoint
+                `${API_BASE_URL}/agent/change-permission`, // Updated endpoint
                 data_pass,
                 {
                     headers: {
@@ -661,7 +663,7 @@ function AgentManagement() {
         try {
 
             const payload = {
-                project_id: tokens.selected_project_id ||tokens.projects?.[0]?.project_id,
+                project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
                 email: newAgent?.email,
                 permission_id: newAgent?.permission_id,
             };
@@ -670,7 +672,7 @@ function AgentManagement() {
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/agent/add', // Updated endpoint
+                `${API_BASE_URL}/agent/add`, // Updated endpoint
                 data_pass,
                 {
                     headers: {
@@ -710,7 +712,8 @@ function AgentManagement() {
     // Format date for display
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
-        const date = new Date(dateString);
+        const date = parseServerDate(dateString);
+        if (!date) return 'N/A';
         return date.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'short',

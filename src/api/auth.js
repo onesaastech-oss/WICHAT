@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
 import { Encrypt } from '../pages/encryption/payload-encryption';
 
 // Submit new password with reset token (from email link)
@@ -15,7 +16,7 @@ export const submitPasswordResetWithToken = async ({ token, password, captcha_to
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/account/reset-password',
+    url: `${API_BASE_URL}/account/reset-password`,
     headers: {
       'Content-Type': 'application/json'
     },
@@ -40,7 +41,7 @@ export const requestPasswordReset = async ({ email, captcha_token }) => {
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/account/reset-password-request',
+    url: `${API_BASE_URL}/account/reset-password-request`,
     headers: {
       'Content-Type': 'application/json'
     },
@@ -66,7 +67,7 @@ export const loginUser = async ({ email, password, captcha_token }) => {
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/account/login',
+    url: `${API_BASE_URL}/account/login`,
     headers: {
       'Content-Type': 'application/json'
     },
@@ -96,7 +97,7 @@ export const fetchUserProfile = async () => {
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/account/profile',
+    url: `${API_BASE_URL}/account/profile`,
     headers: {
       'token': token,
       'username': username,
@@ -166,7 +167,7 @@ export const updateUserProfile = async ({ name, email, country_code, mobile, gen
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/account/edit-profile',
+    url: `${API_BASE_URL}/account/edit-profile`,
     headers: {
       'token': token,
       'username': username,
@@ -210,7 +211,7 @@ export const createPaymentOrder = async ({ amount, redirect_url, origin }) => {
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/payment/wallet-topup',
+    url: `${API_BASE_URL}/payment/wallet-topup`,
     headers: {
       'Content-Type': 'application/json',
       'token': token,
@@ -254,7 +255,7 @@ export const verifyPayment = async ({
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/payment/verify',
+    url: `${API_BASE_URL}/payment/verify`,
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
@@ -273,7 +274,7 @@ export const validatePromoCode = async (code) => {
   const config = {
     method: 'get',
     maxBodyLength: Infinity,
-    url: `https://api.w1chat.com/payment/promo-code/validate?code=${code}`,
+    url: `${API_BASE_URL}/payment/promo-code/validate?code=${code}`,
     headers: {
       'Authorization': `Bearer ${token}`
     }
@@ -290,7 +291,7 @@ export const getPaymentTransactions = async () => {
   const config = {
     method: 'get',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/payment/transactions',
+    url: `${API_BASE_URL}/payment/transactions`,
     headers: {
       'Authorization': `Bearer ${token}`
     }
@@ -338,7 +339,7 @@ export const checkPaymentStatus = async ({ project_id, order_id }) => {
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/payment/payment-status',
+    url: `${API_BASE_URL}/payment/payment-status`,
     headers: {
       'Content-Type': 'application/json',
       'token': token,
@@ -387,7 +388,7 @@ export const getProjectMetaDetails = async ({ project_id }) => {
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/project/meta-details',
+    url: `${API_BASE_URL}/project/meta-details`,
     headers: {
       'Content-Type': 'application/json',
       'token': token,
@@ -429,7 +430,7 @@ export const updateWabaProfilePicture = async ({ project_id, profile_picture }) 
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/project/update-waba-profile-picture',
+    url: `${API_BASE_URL}/project/update-waba-profile-picture`,
     headers: {
       'Content-Type': 'application/json',
       'token': token,
@@ -486,7 +487,7 @@ export const updateWabaProfileDetails = async ({
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/project/update-waba-profile-details',
+    url: `${API_BASE_URL}/project/update-waba-profile-details`,
     headers: {
       'Content-Type': 'application/json',
       'token': token,
@@ -527,7 +528,7 @@ export const getEmbedSignupLink = async ({ project_id }) => {
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/project/embed-signup',
+    url: `${API_BASE_URL}/project/embed-signup`,
     headers: {
       'Content-Type': 'application/json',
       'token': token,
@@ -575,7 +576,7 @@ export const submitWabaId = async ({ project_id, waba_id }) => {
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/project/submit-waba-id',
+    url: `${API_BASE_URL}/project/submit-waba-id`,
     headers: {
       'Content-Type': 'application/json',
       'token': token,
@@ -637,7 +638,7 @@ export const createProject = async ({ company_name, project_name, package_id }) 
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/project/create-project',
+    url: `${API_BASE_URL}/project/create-project`,
     headers: {
       'Content-Type': 'application/json',
       'token': token,
@@ -675,7 +676,7 @@ export const checkSession = async () => {
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/account/session-check',
+    url: `${API_BASE_URL}/account/session-check`,
     headers: {
       'token': token,
       'username': username,
@@ -728,7 +729,7 @@ export const changePassword = async ({ old_password, new_password }) => {
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/account/change-password',
+    url: `${API_BASE_URL}/account/change-password`,
     headers: {
       'Content-Type': 'application/json',
       'token': token,
@@ -764,7 +765,7 @@ export const getSubscriptionPacks = async () => {
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/plan',
+    url: `${API_BASE_URL}/plan`,
     headers: {
       'Content-Type': 'application/json',
       'token': token,
@@ -813,7 +814,7 @@ export const purchasePlan = async ({ project }) => {
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/plan/purchase',
+    url: `${API_BASE_URL}/plan/purchase`,
     headers: {
       'Content-Type': 'application/json',
       token,
@@ -861,7 +862,7 @@ export const getTotalUnreadCount = async ({ project_id }) => {
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: 'https://api.w1chat.com/message/total-unread-count',
+    url: `${API_BASE_URL}/message/total-unread-count`,
     headers: {
       'Content-Type': 'application/json',
       'token': token,

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../config/api';
 import { FiX, FiSearch, FiChevronDown, FiChevronUp, FiCheck, FiClock, FiAlertCircle, FiCheckCircle, FiEye, FiFolder } from 'react-icons/fi';
 import axios from 'axios';
 import { Encrypt } from '../../pages/encryption/payload-encryption';
@@ -32,7 +33,7 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/template/template-list',
+                `${API_BASE_URL}/template/template-list`,
                 data_pass,
                 {
                     headers: {
@@ -137,7 +138,7 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
             console.log('Sending template with payload:', payload);
 
             const response = await axios.post(
-                'https://api.w1chat.com/message/send-template',
+                `${API_BASE_URL}/message/send-template`,
                 data_pass,
                 {
                     headers: {
@@ -278,8 +279,8 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className={`w-full pl-10 pr-4 py-2 sm:py-3 rounded-lg border transition-colors ${darkMode
-                                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500'
-                                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500'
+                                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500'
+                                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500'
                                     } text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
                             />
                         </div>
@@ -289,8 +290,8 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                             <button
                                 onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
                                 className={`flex items-center gap-2 px-4 py-2 sm:py-3 rounded-lg border transition-colors text-base sm:text-sm ${darkMode
-                                        ? 'bg-gray-700 border-gray-600 text-white hover:bg-gray-600'
-                                        : 'bg-white border-gray-300 text-gray-900 hover:bg-gray-50'
+                                    ? 'bg-gray-700 border-gray-600 text-white hover:bg-gray-600'
+                                    : 'bg-white border-gray-300 text-gray-900 hover:bg-gray-50'
                                     } focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
                             >
                                 <span className="text-sm font-medium">
@@ -306,8 +307,8 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                             {/* Category Dropdown */}
                             {showCategoryDropdown && (
                                 <div className={`absolute top-full left-0 mt-1 w-full min-w-[200px] rounded-lg border shadow-lg z-10 ${darkMode
-                                        ? 'bg-gray-700 border-gray-600'
-                                        : 'bg-white border-gray-200'
+                                    ? 'bg-gray-700 border-gray-600'
+                                    : 'bg-white border-gray-200'
                                     }`}>
                                     <div className="py-1">
                                         <button
@@ -316,12 +317,12 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                                                 setShowCategoryDropdown(false);
                                             }}
                                             className={`w-full text-left px-4 py-2 text-sm transition-colors ${categoryFilter === 'ALL'
-                                                    ? darkMode
-                                                        ? 'bg-blue-600 text-white'
-                                                        : 'bg-blue-50 text-blue-700'
-                                                    : darkMode
-                                                        ? 'text-gray-300 hover:bg-gray-600'
-                                                        : 'text-gray-700 hover:bg-gray-50'
+                                                ? darkMode
+                                                    ? 'bg-blue-600 text-white'
+                                                    : 'bg-blue-50 text-blue-700'
+                                                : darkMode
+                                                    ? 'text-gray-300 hover:bg-gray-600'
+                                                    : 'text-gray-700 hover:bg-gray-50'
                                                 }`}
                                         >
                                             <div className="flex items-center gap-2">
@@ -337,12 +338,12 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                                                     setShowCategoryDropdown(false);
                                                 }}
                                                 className={`w-full text-left px-4 py-2 text-sm transition-colors ${categoryFilter === category
-                                                        ? darkMode
-                                                            ? 'bg-blue-600 text-white'
-                                                            : 'bg-blue-50 text-blue-700'
-                                                        : darkMode
-                                                            ? 'text-gray-300 hover:bg-gray-600'
-                                                            : 'text-gray-700 hover:bg-gray-50'
+                                                    ? darkMode
+                                                        ? 'bg-blue-600 text-white'
+                                                        : 'bg-blue-50 text-blue-700'
+                                                    : darkMode
+                                                        ? 'text-gray-300 hover:bg-gray-600'
+                                                        : 'text-gray-700 hover:bg-gray-50'
                                                     }`}
                                             >
                                                 <div className="flex items-center gap-2">
@@ -381,8 +382,8 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                                     <div
                                         key={template.id}
                                         className={`group p-4 rounded-xl border transition-all duration-200 hover:shadow-lg ${darkMode
-                                                ? 'bg-gray-700 border-gray-600 hover:border-gray-500'
-                                                : 'bg-white border-gray-200 hover:border-blue-300'
+                                            ? 'bg-gray-700 border-gray-600 hover:border-gray-500'
+                                            : 'bg-white border-gray-200 hover:border-blue-300'
                                             }`}
                                     >
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -418,8 +419,8 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                                                             onTemplatePreview(template);
                                                         }}
                                                         className={`p-2 rounded-lg transition-colors ${darkMode
-                                                                ? 'hover:bg-gray-600 text-gray-400 hover:text-white'
-                                                                : 'hover:bg-gray-100 text-gray-500 hover:text-gray-900'
+                                                            ? 'hover:bg-gray-600 text-gray-400 hover:text-white'
+                                                            : 'hover:bg-gray-100 text-gray-500 hover:text-gray-900'
                                                             }`}
                                                         title="Preview Template"
                                                     >
@@ -433,8 +434,8 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                                                             handleTemplateSelect(template);
                                                         }}
                                                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm ${darkMode
-                                                                ? 'bg-blue-600 text-white hover:bg-blue-500'
-                                                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                                                            ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                                            : 'bg-blue-600 text-white hover:bg-blue-700'
                                                             }`}
                                                     >
                                                         <span>Select</span>
@@ -454,8 +455,8 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                                         onClick={loadMore}
                                         disabled={loading}
                                         className={`px-6 py-2 rounded-lg transition-colors ${loading
-                                                ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 cursor-not-allowed'
-                                                : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                            ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 cursor-not-allowed'
+                                            : 'bg-blue-500 hover:bg-blue-600 text-white'
                                             }`}
                                     >
                                         {loading ? 'Loading...' : 'Load More'}

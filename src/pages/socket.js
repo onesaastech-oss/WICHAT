@@ -1,4 +1,5 @@
 import { io } from "socket.io-client";
+import { API_BASE_URL } from '../config/api';
 import { dbHelper } from './db';
 
 /** Get currently selected project ID from localStorage (used to filter socket payloads by project). */
@@ -137,7 +138,7 @@ class SocketManager {
 
             console.log("🔌 Creating new socket connection...");
 
-            this.socket = io("https://api.w1chat.com", {
+            this.socket = io(API_BASE_URL, {
                 transports: ["polling"],
                 auth: {
                     token: token,

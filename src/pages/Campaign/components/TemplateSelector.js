@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { API_BASE_URL } from '../../../config/api';
 import axios from 'axios';
 import { Check, Hash, ChevronDown, FileText, Upload } from 'lucide-react';
 import ChatTemplateModal from '../../../component/Modals/ChatTemplateModal';
@@ -14,7 +15,7 @@ export default function TemplateSelector({
   selectedContactDetails = [],
   audienceType = null,
   headerMediaUrl = '',
-  setHeaderMediaUrl = () => {},
+  setHeaderMediaUrl = () => { },
   tokens = null
 }) {
   const [openDropdowns, setOpenDropdowns] = useState({});
@@ -69,7 +70,7 @@ export default function TemplateSelector({
       template_data: template.template_data,
       language: template.language
     };
-    
+
     setSelectedTemplate(campaignTemplate);
     const newValues = {};
     campaignTemplate.variables.forEach(v => {
@@ -105,7 +106,7 @@ export default function TemplateSelector({
     try {
       const form = new FormData();
       form.append('file', file);
-      const res = await axios.post('https://api.w1chat.com/upload/upload-media', form, {
+      const res = await axios.post(`${API_BASE_URL}/upload/upload-media`, form, {
         headers: { 'Content-Type': 'multipart/form-data', token: effectiveTokens.token, username: effectiveTokens.username }
       });
       if (res?.data?.link) setHeaderMediaUrl(res.data.link);
@@ -120,7 +121,7 @@ export default function TemplateSelector({
   // Extract template content from API format
   const extractTemplateContent = (templateData) => {
     if (!templateData?.components) return '';
-    
+
     let content = '';
     templateData.components.forEach(component => {
       if (component.type === 'HEADER' && component.format === 'TEXT' && component.text) {
@@ -139,7 +140,7 @@ export default function TemplateSelector({
   // Extract variables from template
   const extractVariables = (templateData) => {
     if (!templateData?.components) return [];
-    
+
     const variables = [];
     templateData.components.forEach(component => {
       // Handle BODY variables
@@ -181,8 +182,8 @@ export default function TemplateSelector({
   useEffect(() => {
     const handleClickOutside = (event) => {
       Object.keys(openDropdowns).forEach(variable => {
-        if (openDropdowns[variable] && dropdownRefs.current[variable] && 
-            !dropdownRefs.current[variable].contains(event.target)) {
+        if (openDropdowns[variable] && dropdownRefs.current[variable] &&
+          !dropdownRefs.current[variable].contains(event.target)) {
           setOpenDropdowns(prev => ({ ...prev, [variable]: false }));
         }
       });
@@ -363,7 +364,7 @@ export default function TemplateSelector({
   return (
     <div className="bg-white rounded-2xl shadow-lg p-6">
       <h2 className="text-xl font-bold text-gray-800 mb-6">Choose Your Template</h2>
-      
+
       {/* Select Template Button */}
       <div className="mb-6">
         <button
@@ -450,105 +451,103 @@ export default function TemplateSelector({
             {selectedTemplate.variables.map((variable, index) => {
               const varNumber = variable.match(/\d+/)?.[0] || (index + 1);
               return (
-              <div key={variable}>
-                <label htmlFor={variable} className="block text-sm font-medium text-gray-700 mb-2">
-                  <Hash className="w-4 h-4 inline mr-2" />
-                  {variable.replace('_', ' ').toUpperCase()} {`{{${varNumber}}}`}
-                </label>
-                <div className="relative">
-                  <input
-                    id={variable}
-                    type="text"
-                    value={variableValues[variable] || ''}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setVariableValues(prev => ({ ...prev, [variable]: value }));
-                      setVariableSources(prev => ({
-                        ...prev,
-                        [variable]: { type: 'manual' }
-                      }));
-                    }}
-                    placeholder={`Enter ${variable.replace('_', ' ')}`}
-                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                  {hasDropdownOptions && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => toggleDropdown(variable)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded transition-colors"
-                        aria-label="Select value"
-                      >
-                        <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${openDropdowns[variable] ? 'rotate-180' : ''}`} />
-                      </button>
-                      {openDropdowns[variable] && (
-                        <div
-                          ref={el => dropdownRefs.current[variable] = el}
-                          className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-72 overflow-y-auto"
+                <div key={variable}>
+                  <label htmlFor={variable} className="block text-sm font-medium text-gray-700 mb-2">
+                    <Hash className="w-4 h-4 inline mr-2" />
+                    {variable.replace('_', ' ').toUpperCase()} {`{{${varNumber}}}`}
+                  </label>
+                  <div className="relative">
+                    <input
+                      id={variable}
+                      type="text"
+                      value={variableValues[variable] || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setVariableValues(prev => ({ ...prev, [variable]: value }));
+                        setVariableSources(prev => ({
+                          ...prev,
+                          [variable]: { type: 'manual' }
+                        }));
+                      }}
+                      placeholder={`Enter ${variable.replace('_', ' ')}`}
+                      className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    {hasDropdownOptions && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => toggleDropdown(variable)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded transition-colors"
+                          aria-label="Select value"
                         >
-                          <div className="p-2 space-y-2">
-                            {contactFieldOptions.length > 0 && (
-                              <div className="space-y-1">
-                                <div className="text-xs font-semibold text-gray-500 px-2 py-1 uppercase tracking-wide">
-                                  Contact Fields
+                          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${openDropdowns[variable] ? 'rotate-180' : ''}`} />
+                        </button>
+                        {openDropdowns[variable] && (
+                          <div
+                            ref={el => dropdownRefs.current[variable] = el}
+                            className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-72 overflow-y-auto"
+                          >
+                            <div className="p-2 space-y-2">
+                              {contactFieldOptions.length > 0 && (
+                                <div className="space-y-1">
+                                  <div className="text-xs font-semibold text-gray-500 px-2 py-1 uppercase tracking-wide">
+                                    Contact Fields
+                                  </div>
+                                  {contactFieldOptions.map((option) => {
+                                    const isSelected = variableSources[variable]?.type === 'contact' && variableSources[variable]?.key === option.key;
+                                    return (
+                                      <button
+                                        key={option.key}
+                                        type="button"
+                                        onClick={() => handleAutoFillOption(variable, option)}
+                                        className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center justify-between gap-3 ${isSelected ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-gray-700 hover:bg-indigo-50'
+                                          }`}
+                                      >
+                                        <div className="flex flex-col">
+                                          <span>{option.label}</span>
+                                          {option.sample && (
+                                            <span className="text-xs text-gray-500">
+                                              Sample: {option.sample}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {isSelected && <Check className="w-4 h-4 flex-shrink-0" />}
+                                      </button>
+                                    );
+                                  })}
                                 </div>
-                                {contactFieldOptions.map((option) => {
-                                  const isSelected = variableSources[variable]?.type === 'contact' && variableSources[variable]?.key === option.key;
-                                  return (
-                                    <button
-                                      key={option.key}
-                                      type="button"
-                                      onClick={() => handleAutoFillOption(variable, option)}
-                                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center justify-between gap-3 ${
-                                        isSelected ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-gray-700 hover:bg-indigo-50'
-                                      }`}
-                                    >
-                                      <div className="flex flex-col">
-                                        <span>{option.label}</span>
-                                        {option.sample && (
-                                          <span className="text-xs text-gray-500">
-                                            Sample: {option.sample}
-                                          </span>
-                                        )}
-                                      </div>
-                                      {isSelected && <Check className="w-4 h-4 flex-shrink-0" />}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            )}
+                              )}
 
-                            {excelHeaders.length > 0 && (
-                              <div className="space-y-1">
-                                <div className="text-xs font-semibold text-gray-500 px-2 py-1 uppercase tracking-wide">
-                                  Excel Columns
+                              {excelHeaders.length > 0 && (
+                                <div className="space-y-1">
+                                  <div className="text-xs font-semibold text-gray-500 px-2 py-1 uppercase tracking-wide">
+                                    Excel Columns
+                                  </div>
+                                  {excelHeaders.map((header) => {
+                                    const isSelected = variableSources[variable]?.type === 'excel' && variableSources[variable]?.key === header;
+                                    const option = { type: 'excel', key: header, label: header, sample: header };
+                                    return (
+                                      <button
+                                        key={header}
+                                        type="button"
+                                        onClick={() => handleAutoFillOption(variable, option)}
+                                        className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center justify-between ${isSelected ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-gray-700 hover:bg-indigo-50'
+                                          }`}
+                                      >
+                                        <span>{header}</span>
+                                        {isSelected && <Check className="w-4 h-4 flex-shrink-0" />}
+                                      </button>
+                                    );
+                                  })}
                                 </div>
-                                {excelHeaders.map((header) => {
-                                  const isSelected = variableSources[variable]?.type === 'excel' && variableSources[variable]?.key === header;
-                                  const option = { type: 'excel', key: header, label: header, sample: header };
-                                  return (
-                                    <button
-                                      key={header}
-                                      type="button"
-                                      onClick={() => handleAutoFillOption(variable, option)}
-                                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center justify-between ${
-                                        isSelected ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-gray-700 hover:bg-indigo-50'
-                                      }`}
-                                    >
-                                      <span>{header}</span>
-                                      {isSelected && <Check className="w-4 h-4 flex-shrink-0" />}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            )}
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </>
-                  )}
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
               );
             })}
           </div>

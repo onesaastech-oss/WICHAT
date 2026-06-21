@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { useNavigate } from 'react-router-dom';
+import { toServerTimestamp, parseServerDate } from '../utils/dateTime';
 import { FiSearch, FiStar, FiImage, FiVideo, FiFile, FiMusic, FiUser, FiCheck, FiClock, FiAlertCircle, FiMoreVertical, FiMessageCircle, FiRefreshCw, FiDelete, FiTrash2, FiChevronLeft, FiChevronRight, FiX, FiBriefcase } from 'react-icons/fi';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
@@ -218,7 +220,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
             const data_pass = JSON.stringify({ "data": data, "key": key });
 
             const response = await axios.post(
-                `https://api.w1chat.com/message/chat-list`,
+                `${API_BASE_URL}/message/chat-list`,
                 data_pass,
                 {
                     headers: {
@@ -269,7 +271,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                     case_open_count: caseOpenCount,
                     wamid: apiChat.last_message.wamid,
                     create_date: apiChat.last_message.create_date,
-                    timestamp: apiChat.last_message.create_date ? new Date(apiChat.last_message.create_date).getTime() : Date.now(),
+                    timestamp: apiChat.last_message.create_date ? toServerTimestamp(apiChat.last_message.create_date) : Date.now(),
                     type: apiChat.last_message.type,
                     message_type: apiChat.last_message.message_type,
                     message: apiChat.last_message.message,
@@ -305,7 +307,8 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
 
     const formatDate = (dateString) => {
         if (!dateString) return '';
-        const date = new Date(dateString);
+        const date = parseServerDate(dateString);
+        if (!date) return '';
         return date.toLocaleDateString('en-GB');
     };
 
@@ -404,7 +407,8 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         if (!dateStringOrEpoch) return '';
         const date = typeof dateStringOrEpoch === 'number'
             ? new Date(dateStringOrEpoch)
-            : new Date(dateStringOrEpoch);
+            : parseServerDate(dateStringOrEpoch);
+        if (!date) return '';
         const now = new Date();
         const diffInHours = (now - date) / (1000 * 60 * 60);
 
@@ -444,8 +448,8 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
 
         // Sort by most recent (by timestamp/create_date)
         const sorted = filtered.sort((a, b) => {
-            const timeA = a.timestamp || (a.create_date ? new Date(a.create_date).getTime() : 0);
-            const timeB = b.timestamp || (b.create_date ? new Date(b.create_date).getTime() : 0);
+            const timeA = a.timestamp || toServerTimestamp(a.create_date) || 0;
+            const timeB = b.timestamp || toServerTimestamp(b.create_date) || 0;
             return timeB - timeA; // Most recent first
         });
 

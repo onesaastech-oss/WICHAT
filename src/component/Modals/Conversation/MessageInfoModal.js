@@ -1,13 +1,15 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiUser } from 'react-icons/fi';
+import { parseServerDate } from '../../../utils/dateTime';
 
 const MessageInfoModal = ({ isOpen, onClose, message, activeChat }) => {
     if (!isOpen || !message) return null;
 
     const formatDateTime = (timestamp) => {
         if (!timestamp) return 'Unknown';
-        const date = new Date(timestamp);
+        const date = parseServerDate(timestamp);
+        if (!date) return 'Unknown';
         return date.toLocaleString('en-US', {
             year: 'numeric',
             month: 'long',

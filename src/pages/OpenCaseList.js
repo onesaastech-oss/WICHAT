@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { API_BASE_URL } from '../config/api';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -6,6 +7,7 @@ import { Header, Sidebar } from '../component/Menu';
 import { Encrypt } from './encryption/payload-encryption';
 import Pagination from '../component/Pagination';
 import { FiAlertCircle, FiHash, FiPhone, FiFileText, FiUser, FiSearch, FiEye, FiEdit2, FiX, FiPlus, FiClock, FiCalendar } from 'react-icons/fi';
+import { parseServerDate } from '../utils/dateTime';
 
 function OpenCaseList() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -65,8 +67,8 @@ function OpenCaseList() {
 
     const formatShortDateTime = (value) => {
         if (!value) return '-';
-        const d = new Date(value);
-        if (Number.isNaN(d.getTime())) return '-';
+        const d = parseServerDate(value);
+        if (!d) return '-';
         return d.toLocaleString(undefined, {
             year: 'numeric',
             month: 'short',
@@ -78,8 +80,8 @@ function OpenCaseList() {
 
     const formatOpenSince = (value) => {
         if (!value) return '-';
-        const created = new Date(value);
-        if (Number.isNaN(created.getTime())) return '-';
+        const created = parseServerDate(value);
+        if (!created) return '-';
         const diffMs = Date.now() - created.getTime();
         if (diffMs < 0) return '0m';
         const minutes = Math.floor(diffMs / (1000 * 60));
@@ -128,7 +130,7 @@ function OpenCaseList() {
 
             const { data, key } = Encrypt(payload);
             const response = await axios.post(
-                'https://api.w1chat.com/message/open-case-list',
+                `${API_BASE_URL}/message/open-case-list`,
                 JSON.stringify({ data, key }),
                 {
                     headers: {
@@ -210,7 +212,7 @@ function OpenCaseList() {
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
             const response = await axios.post(
-                'https://api.w1chat.com/contact/contact-list',
+                `${API_BASE_URL}/contact/contact-list`,
                 data_pass,
                 {
                     headers: {
@@ -294,7 +296,7 @@ function OpenCaseList() {
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
             const response = await axios.post(
-                'https://api.w1chat.com/message/case-create',
+                `${API_BASE_URL}/message/case-create`,
                 data_pass,
                 {
                     headers: {
@@ -364,7 +366,7 @@ function OpenCaseList() {
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
             const response = await axios.post(
-                'https://api.w1chat.com/message/case-list',
+                `${API_BASE_URL}/message/case-list`,
                 data_pass,
                 {
                     headers: {
@@ -464,7 +466,7 @@ function OpenCaseList() {
             const { data, key } = Encrypt(payload);
             const data_pass = JSON.stringify({ data, key });
             const response = await axios.post(
-                'https://api.w1chat.com/message/case-edit',
+                `${API_BASE_URL}/message/case-edit`,
                 data_pass,
                 {
                     headers: {
@@ -623,7 +625,7 @@ function OpenCaseList() {
                                     ) : (
                                         casesByNumber.map((item, index) => {
                                             const sortedCases = Array.isArray(item.cases) && item.cases.length > 0
-                                                ? [...item.cases].sort((a, b) => new Date(b.modify_date || b.create_date) - new Date(a.modify_date || a.create_date))
+                                                ? [...item.cases].sort((a, b) => parseServerDate(b.modify_date || b.create_date) - parseServerDate(a.modify_date || a.create_date))
                                                 : [];
                                             const contactName = (item?.contact?.name || '').toString().trim();
                                             const numberValue = (item?.number || '').toString().trim();
@@ -735,7 +737,7 @@ function OpenCaseList() {
                             ) : (
                                 casesByNumber.map((item, index) => {
                                     const sortedCases = Array.isArray(item.cases) && item.cases.length > 0
-                                        ? [...item.cases].sort((a, b) => new Date(b.modify_date || b.create_date) - new Date(a.modify_date || a.create_date))
+                                        ? [...item.cases].sort((a, b) => parseServerDate(b.modify_date || b.create_date) - parseServerDate(a.modify_date || a.create_date))
                                         : [];
                                     const contactName = (item?.contact?.name || '').toString().trim();
                                     const numberValue = (item?.number || '').toString().trim();
@@ -897,9 +899,8 @@ function OpenCaseList() {
                                                             key={c.id}
                                                             type="button"
                                                             onClick={() => setCaseCreateSelectedContact(c)}
-                                                            className={`w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
-                                                                active ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
-                                                            }`}
+                                                            className={`w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${active ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
+                                                                }`}
                                                         >
                                                             <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                                                                 {c?.name || c?.number || '-'}
@@ -991,11 +992,10 @@ function OpenCaseList() {
                                             <button
                                                 type="button"
                                                 onClick={() => setCaseCreateStatus('open')}
-                                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                                                    caseCreateStatus === 'open'
+                                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${caseCreateStatus === 'open'
                                                         ? 'bg-amber-500 text-white shadow-sm'
                                                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                                                }`}
+                                                    }`}
                                                 disabled={caseCreateLoading}
                                             >
                                                 Open
@@ -1003,11 +1003,10 @@ function OpenCaseList() {
                                             <button
                                                 type="button"
                                                 onClick={() => setCaseCreateStatus('closed')}
-                                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                                                    caseCreateStatus === 'closed'
+                                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${caseCreateStatus === 'closed'
                                                         ? 'bg-green-500 text-white shadow-sm'
                                                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                                                }`}
+                                                    }`}
                                                 disabled={caseCreateLoading}
                                             >
                                                 Closed
@@ -1156,10 +1155,7 @@ function OpenCaseList() {
                                                     caseList.map((row, index) => {
                                                         const createDate = row.created_at ?? row.create_date ?? row.created_date ?? row.createdAt;
                                                         const createDateStr = createDate
-                                                            ? (typeof createDate === 'string'
-                                                                ? new Date(createDate)
-                                                                : new Date(createDate)
-                                                            ).toLocaleDateString(undefined, {
+                                                            ? parseServerDate(createDate)?.toLocaleDateString(undefined, {
                                                                 year: 'numeric',
                                                                 month: 'short',
                                                                 day: 'numeric',
@@ -1184,7 +1180,7 @@ function OpenCaseList() {
                                                                         className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${row.status === true || row.status === '1'
                                                                             ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'
                                                                             : 'bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-200'
-                                                                        }`}
+                                                                            }`}
                                                                     >
                                                                         {row.status === true || row.status === '1' ? 'Open' : 'Closed'}
                                                                     </span>

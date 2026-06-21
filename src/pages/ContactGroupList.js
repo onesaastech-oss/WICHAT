@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { Header, Sidebar } from '../component/Menu';
 import Pagination from '../component/Pagination';
 import { useSelector } from 'react-redux';
@@ -20,7 +21,6 @@ import {
   FiMessageCircle
 } from 'react-icons/fi';
 
-const API_BASE_URL = 'https://api.w1chat.com';
 
 function ContactGroupList() {
   const permissions = useSelector((state) => state.project.permissions);
@@ -64,9 +64,8 @@ function ContactGroupList() {
           if (disabled) return;
           onChange?.(!checked);
         }}
-        className={`h-5 w-5 rounded border flex items-center justify-center transition-colors ${
-          disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
-        } ${checked ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300 hover:border-indigo-400'}`}
+        className={`h-5 w-5 rounded border flex items-center justify-center transition-colors ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+          } ${checked ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300 hover:border-indigo-400'}`}
       >
         {checked ? (
           <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
@@ -286,7 +285,7 @@ function ContactGroupList() {
         const data_pass = JSON.stringify({ data, key });
 
         const response = await axios.post(
-          'https://api.w1chat.com/contact/contact-list',
+          `${API_BASE_URL}/contact/contact-list`,
           data_pass,
           {
             headers: {
@@ -485,7 +484,7 @@ function ContactGroupList() {
         const data_pass = JSON.stringify({ data, key });
 
         const response = await axios.post(
-          'https://api.w1chat.com/contact/group-contact-list',
+          `${API_BASE_URL}/contact/group-contact-list`,
           data_pass,
           {
             headers: {
@@ -613,9 +612,9 @@ function ContactGroupList() {
       } else {
         toast.error(
           response?.data?.error ||
-            response?.data?.message ||
-            response?.data?.msg ||
-            'Failed to add contact to group'
+          response?.data?.message ||
+          response?.data?.msg ||
+          'Failed to add contact to group'
         );
       }
     } catch (error) {

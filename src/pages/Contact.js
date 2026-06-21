@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { Header, Sidebar } from '../component/Menu';
 import Tooltip from '../component/Tooltip';
 import Pagination from '../component/Pagination';
@@ -180,17 +181,17 @@ function Contact() {
 
   // Load auth tokens from session
   useEffect(() => {
-      try {
-        const sessionData = localStorage.getItem('userData');
-        if (sessionData) {
-          const parsed = JSON.parse(sessionData);
-          if (parsed && typeof parsed === 'object') {
-            setTokens(parsed);
-          }
+    try {
+      const sessionData = localStorage.getItem('userData');
+      if (sessionData) {
+        const parsed = JSON.parse(sessionData);
+        if (parsed && typeof parsed === 'object') {
+          setTokens(parsed);
         }
-      } catch (e) {
-      console.error('Failed to load session data:', e);
       }
+    } catch (e) {
+      console.error('Failed to load session data:', e);
+    }
   }, []);
 
   // Legacy paginated mode - fetch from API directly
@@ -214,7 +215,7 @@ function Contact() {
         const data_pass = JSON.stringify({ data, key });
 
         const response = await axios.post(
-          'https://api.w1chat.com/contact/contact-list',
+          `${API_BASE_URL}/contact/contact-list`,
           data_pass,
           {
             headers: {
@@ -253,15 +254,15 @@ function Contact() {
           }
         } else {
           console.warn('⚠️ API returned error:', response?.data?.message);
-            setContacts([]);
-            setTotalPages(1);
-            setTotalRecords(0);
+          setContacts([]);
+          setTotalPages(1);
+          setTotalRecords(0);
         }
       } catch (error) {
         console.error('❌ Error loading contacts:', error);
-            setContacts([]);
-            setTotalPages(1);
-            setTotalRecords(0);
+        setContacts([]);
+        setTotalPages(1);
+        setTotalRecords(0);
       } finally {
         setLoading(false);
         setSelectedContacts([]);
@@ -298,7 +299,7 @@ function Contact() {
         const data_pass = JSON.stringify({ data, key });
 
         const response = await axios.post(
-          'https://api.w1chat.com/contact/contact-list',
+          `${API_BASE_URL}/contact/contact-list`,
           data_pass,
           {
             headers: {
@@ -346,13 +347,13 @@ function Contact() {
 
           // Update favorites
           if (append) {
-          setFavoriteContacts((prev) => {
-            const next = new Set(prev);
-            for (const row of mapped) {
-              if (row?.id && row.is_favorite) next.add(row.id);
-            }
-            return next;
-          });
+            setFavoriteContacts((prev) => {
+              const next = new Set(prev);
+              for (const row of mapped) {
+                if (row?.id && row.is_favorite) next.add(row.id);
+              }
+              return next;
+            });
           } else {
             setFavoriteContacts(new Set(mapped.filter(c => c.is_favorite).map(c => c.id)));
           }
@@ -394,7 +395,7 @@ function Contact() {
           setCurrentPage(meta?.page_no ?? requestedPageNo);
           setTotalRecords(meta?.total_records ?? response?.data?.total_records ?? (fallbackTotalRecords || 0));
           setTotalPages(totalPagesFallback);
-          
+
           // Update cursor IDs for bidirectional pagination
           if (responseFirstId) {
             setFirstId(responseFirstId);
@@ -402,7 +403,7 @@ function Contact() {
           if (responseLastId) {
             setLastId(responseLastId);
           }
-          
+
           // Update scrollbar position for page-based loads - skip if user is dragging
           scrollWindowStartIndexRef.current = Math.max(0, (requestedPageNo - 1) * pageSize);
           if (!isDraggingRef.current && !append) {
@@ -500,7 +501,7 @@ function Contact() {
         const data_pass = JSON.stringify({ data, key });
 
         const response = await axios.post(
-          'https://api.w1chat.com/contact/contact-list',
+          `${API_BASE_URL}/contact/contact-list`,
           data_pass,
           {
             headers: {
@@ -629,7 +630,7 @@ function Contact() {
         const data_pass = JSON.stringify({ data, key });
 
         const response = await axios.post(
-          'https://api.w1chat.com/contact/contact-list',
+          `${API_BASE_URL}/contact/contact-list`,
           data_pass,
           {
             headers: {
@@ -840,7 +841,7 @@ function Contact() {
       const data_pass = JSON.stringify({ data, key });
 
       const response = await axios.post(
-        'https://api.w1chat.com/contact/create-contact',
+        `${API_BASE_URL}/contact/create-contact`,
         data_pass,
         {
           headers: {
@@ -915,7 +916,7 @@ function Contact() {
       const data_pass = JSON.stringify({ data, key });
 
       const response = await axios.post(
-        'https://api.w1chat.com/contact/update-contact',
+        `${API_BASE_URL}/contact/update-contact`,
         data_pass,
         {
           headers: {
@@ -989,16 +990,16 @@ function Contact() {
     }
 
     // Find optional column indices
-    const emailIndex = importExcelHeaders.findIndex(h => 
+    const emailIndex = importExcelHeaders.findIndex(h =>
       h.toLowerCase().includes('email') || h.toLowerCase().includes('e-mail')
     );
-    const firmNameIndex = importExcelHeaders.findIndex(h => 
+    const firmNameIndex = importExcelHeaders.findIndex(h =>
       h.toLowerCase().includes('firm') || h.toLowerCase().includes('company') || h.toLowerCase().includes('organization')
     );
-    const websiteIndex = importExcelHeaders.findIndex(h => 
+    const websiteIndex = importExcelHeaders.findIndex(h =>
       h.toLowerCase().includes('website') || h.toLowerCase().includes('url') || h.toLowerCase().includes('web')
     );
-    const remarkIndex = importExcelHeaders.findIndex(h => 
+    const remarkIndex = importExcelHeaders.findIndex(h =>
       h.toLowerCase().includes('remark') || h.toLowerCase().includes('note') || h.toLowerCase().includes('comment')
     );
 
@@ -1033,7 +1034,7 @@ function Contact() {
       const data_pass = JSON.stringify({ data, key });
 
       const response = await axios.post(
-        'https://api.w1chat.com/contact/import-contacts',
+        `${API_BASE_URL}/contact/import-contacts`,
         data_pass,
         {
           headers: {
@@ -1056,15 +1057,15 @@ function Contact() {
 
         // Refresh contacts list
         setCurrentPage(1);
-          setReloadTick((t) => t + 1);
+        setReloadTick((t) => t + 1);
 
         // Show success message with import statistics
         const importData = response?.data?.data || {};
         const successMsg = response?.data?.msg || 'Contacts imported successfully';
-        const statsMsg = importData.total 
+        const statsMsg = importData.total
           ? `${successMsg}\n\nTotal: ${importData.total}\nSuccess: ${importData.success}\nFailed: ${importData.failed}\nDuplicates: ${importData.duplicates}${importData.error_file ? `\n\nError file: ${importData.error_file}` : ''}`
           : successMsg;
-        
+
         setSuccessMessage(statsMsg);
         setShowSuccessModal(true);
       } else {
@@ -1100,7 +1101,7 @@ function Contact() {
       const data_pass = JSON.stringify({ data, key });
 
       const response = await axios.post(
-        'https://api.w1chat.com/contact/mark-as-favorite',
+        `${API_BASE_URL}/contact/mark-as-favorite`,
         data_pass,
         {
           headers: {
@@ -1115,7 +1116,7 @@ function Contact() {
         // Update local favorite state
         const newFavorites = new Set(favoriteContacts);
         const isFavorite = response?.data?.is_favorite || action === 'add';
-        
+
         if (isFavorite) {
           newFavorites.add(contact.id);
           toast.success(`${contact.name} added to favorites`);
@@ -1163,7 +1164,7 @@ function Contact() {
       const data_pass = JSON.stringify({ data, key });
 
       const response = await axios.post(
-        'https://api.w1chat.com/contact/delete-contact',
+        `${API_BASE_URL}/contact/delete-contact`,
         data_pass,
         {
           headers: {
@@ -1176,7 +1177,7 @@ function Contact() {
 
       if (!response?.data?.error) {
         // Refresh contacts list
-          setReloadTick((t) => t + 1);
+        setReloadTick((t) => t + 1);
 
         // Update selected contacts
         setSelectedContacts(prev => prev.filter(id => id !== contactToDelete.id));
@@ -1243,7 +1244,7 @@ function Contact() {
       const data_pass = JSON.stringify({ data, key });
 
       const response = await axios.post(
-        'https://api.w1chat.com/contact/delete-contact',
+        `${API_BASE_URL}/contact/delete-contact`,
         data_pass,
         {
           headers: {
@@ -1321,7 +1322,7 @@ function Contact() {
       const data_pass = JSON.stringify({ data, key });
 
       const response = await axios.post(
-        'https://api.w1chat.com/contact/export-contacts',
+        `${API_BASE_URL}/contact/export-contacts`,
         data_pass,
         {
           headers: {
@@ -1401,7 +1402,7 @@ function Contact() {
         const data_pass = JSON.stringify({ data, key });
 
         const response = await axios.post(
-          'https://api.w1chat.com/contact/contact-list',
+          `${API_BASE_URL}/contact/contact-list`,
           data_pass,
           {
             headers: {
@@ -1544,7 +1545,7 @@ function Contact() {
       if (!contactsHasUserScrolledRef.current) return;
 
       const { scrollTop, scrollHeight, clientHeight } = el;
-      
+
       // Mobile-like scrollbar position (0-100%) mapped to GLOBAL list size
       const total = contactsMeta?.total_records || 0;
       if (total > 1) {
@@ -1612,7 +1613,7 @@ function Contact() {
         const data_pass = JSON.stringify({ data, key });
 
         const response = await axios.post(
-          'https://api.w1chat.com/contact/contact-list',
+          `${API_BASE_URL}/contact/contact-list`,
           data_pass,
           {
             headers: {
@@ -1680,7 +1681,7 @@ function Contact() {
           if (!isDraggingRef.current) {
             setScrollbarPosition(position);
           }
-          
+
           // Update cursor IDs for bidirectional pagination
           if (responseFirstId) {
             setFirstId(responseFirstId);
@@ -1729,7 +1730,7 @@ function Contact() {
     ? Math.max(28, Math.round(scrollbarMetrics.trackHeight * thumbFraction))
     : 28;
   const maxThumbTop = Math.max(0, (scrollbarMetrics.trackHeight || 0) - thumbHeight);
-  
+
   // Use ref position during drag to avoid stale closure issues
   const currentPosition = isDragging ? dragPositionRef.current : scrollbarPosition;
   const thumbTop = maxThumbTop > 0 ? (maxThumbTop * (currentPosition / 100)) : 0;
@@ -1762,19 +1763,19 @@ function Contact() {
     e.preventDefault();
     e.stopPropagation();
     if (contactsLoadingRef.current) return;
-    
+
     // Set dragging state
     setIsDragging(true);
     isDraggingRef.current = true;
     dragPositionRef.current = scrollbarPosition;
-    
+
     // Store initial Y for delta calculation
     thumbDragRef.current = {
       pointerId: e.pointerId,
       startY: e.clientY,
       startPosition: scrollbarPosition
     };
-    
+
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch (_) {
@@ -1784,41 +1785,41 @@ function Contact() {
 
   const handleThumbPointerMove = (e) => {
     if (!isDraggingRef.current || !thumbDragRef.current) return;
-    
+
     const trackEl = scrollbarTrackRef.current;
     if (!trackEl) return;
-    
+
     const { startY, startPosition } = thumbDragRef.current;
     const trackHeight = trackEl.getBoundingClientRect().height;
     if (trackHeight <= 0) return;
-    
+
     // Calculate delta as percentage of track height
     const dy = e.clientY - startY;
     const deltaPercent = (dy / trackHeight) * 100;
-    
+
     // Calculate new position
     const newPos = Math.max(0, Math.min(100, startPosition + deltaPercent));
-    
+
     // Update ref for immediate visual feedback (no re-render delay)
     dragPositionRef.current = newPos;
-    
+
     // Also update state to trigger re-render for visual update
     setScrollbarPosition(newPos);
   };
 
   const handleThumbPointerUp = async (e) => {
     if (!isDraggingRef.current) return;
-    
+
     const finalPosition = dragPositionRef.current;
-    
+
     // Clear drag state
     setIsDragging(false);
     isDraggingRef.current = false;
     thumbDragRef.current = null;
-    
+
     // Sync final position to state
     setScrollbarPosition(finalPosition);
-    
+
     // Fetch data for the final position
     await handleScrollbarDrag(finalPosition);
   };
@@ -2022,11 +2023,10 @@ function Contact() {
                             <button
                               onClick={() => { if (!permissions || permissions.delete_contact) handleOpenBulkDeleteAllContacts(); }}
                               disabled={permissions && permissions.delete_contact === false}
-                              className={`inline-flex items-center px-3 py-2 rounded-md text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                                permissions && permissions.delete_contact === false
+                              className={`inline-flex items-center px-3 py-2 rounded-md text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 ${permissions && permissions.delete_contact === false
                                   ? 'bg-red-300 cursor-not-allowed opacity-60'
                                   : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
-                              }`}
+                                }`}
                             >
                               <FiTrash2 className="mr-2 h-4 w-4" />
                               Delete ALL contacts
@@ -2049,209 +2049,209 @@ function Contact() {
                         }}
                         onScroll={handleContactsScroll}
                       >
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50 sticky top-0 z-10">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              <input
-                                type="checkbox"
-                                checked={isAllSelected}
-                                onChange={handleSelectAll}
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                              />
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              S.No.
-                            </th>
-                          <th 
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
-                            onClick={() => handleSort('name')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>Name</span>
-                              {sortColumn === 'name' ? (
-                                sortDirection === 'asc' ? (
-                                  <FiChevronUp className="h-4 w-4 text-gray-700" />
-                                ) : (
-                                  <FiChevronDown className="h-4 w-4 text-gray-700" />
-                                )
-                              ) : (
-                                <div className="flex flex-col -space-y-1">
-                                  <FiChevronUp className="h-3 w-3 text-gray-400" />
-                                  <FiChevronDown className="h-3 w-3 text-gray-400" />
-                                </div>
-                              )}
-                            </div>
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Mobile
-                          </th>
-                          <th 
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
-                            onClick={() => handleSort('email')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>Email</span>
-                              {sortColumn === 'email' ? (
-                                sortDirection === 'asc' ? (
-                                  <FiChevronUp className="h-4 w-4 text-gray-700" />
-                                ) : (
-                                  <FiChevronDown className="h-4 w-4 text-gray-700" />
-                                )
-                              ) : (
-                                <div className="flex flex-col -space-y-1">
-                                  <FiChevronUp className="h-3 w-3 text-gray-400" />
-                                  <FiChevronDown className="h-3 w-3 text-gray-400" />
-                                </div>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
-                            onClick={() => handleSort('firm_name')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>Company</span>
-                              {sortColumn === 'firm_name' ? (
-                                sortDirection === 'asc' ? (
-                                  <FiChevronUp className="h-4 w-4 text-gray-700" />
-                                ) : (
-                                  <FiChevronDown className="h-4 w-4 text-gray-700" />
-                                )
-                              ) : (
-                                <div className="flex flex-col -space-y-1">
-                                  <FiChevronUp className="h-3 w-3 text-gray-400" />
-                                  <FiChevronDown className="h-3 w-3 text-gray-400" />
-                                </div>
-                              )}
-                            </div>
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Actions
-                          </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {sortedContacts.length === 0 && !contactsLoading ? (
-                          <tr>
-                            <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
-                              {showFavoritesOnly
-                                ? 'No favorite contacts found. Mark some contacts as favorites to see them here.'
-                                : 'No contacts found. Create your first contact to get started.'
-                              }
-                            </td>
-                          </tr>
-                        ) : (
-                          sortedContacts.map((contact, idx) => (
-                            <tr key={contact.id} className="hover:bg-gray-50">
-                              <td className="px-6 py-4 whitespace-nowrap">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50 sticky top-0 z-10">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 <input
                                   type="checkbox"
-                                  checked={selectedContacts.includes(contact.id)}
-                                  onChange={() => handleSelectContact(contact.id)}
+                                  checked={isAllSelected}
+                                  onChange={handleSelectAll}
                                   className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                                 />
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {scrollWindowStartIndexRef.current + idx + 1}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center">
-                                  <div className="flex-shrink-0 h-10 w-10">
-                                    <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                                      <FiUser className="h-5 w-5 text-indigo-600" />
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                S.No.
+                              </th>
+                              <th
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                                onClick={() => handleSort('name')}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>Name</span>
+                                  {sortColumn === 'name' ? (
+                                    sortDirection === 'asc' ? (
+                                      <FiChevronUp className="h-4 w-4 text-gray-700" />
+                                    ) : (
+                                      <FiChevronDown className="h-4 w-4 text-gray-700" />
+                                    )
+                                  ) : (
+                                    <div className="flex flex-col -space-y-1">
+                                      <FiChevronUp className="h-3 w-3 text-gray-400" />
+                                      <FiChevronDown className="h-3 w-3 text-gray-400" />
                                     </div>
-                                  </div>
-                                  <div className="ml-4 cursor-pointer text-indigo-600">
-                                    <div className="text-sm font-medium  " onClick={()=>{
-                                      navigate(`/live-chat/${contact.mobile}`);
-                                    }}>
-                                      {contact.name}
-                                    </div>
-                                  </div>
+                                  )}
                                 </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {contact.mobile}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {contact.email || '-'}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {contact.firm_name || '-'}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <div className="flex justify-center items-center space-x-2">
-                                  <Tooltip
-                                    content="Not authorized"
-                                    disabled={permissions && permissions.edit_contact === false}
-                                    position="top"
-                                  >
-                                    <button
-                                      onClick={() => { if (!permissions || permissions.edit_contact) handleOpenEditModal(contact); }}
-                                      disabled={permissions && permissions.edit_contact === false}
-                                      className={`text-indigo-600 hover:text-indigo-900 ${permissions && permissions.edit_contact === false ? 'opacity-50 cursor-not-allowed hover:text-indigo-600' : ''}`}
-                                      title={permissions && permissions.edit_contact === false ? '' : 'Edit contact'}
-                                    >
-                                      <FiEdit className="h-4 w-4" />
-                                    </button>
-                                  </Tooltip>
-
-                                  <button
-                                    onClick={() => handleToggleFavorite(contact)}
-                                    className="ml-2 p-1 rounded-full hover:bg-gray-100 transition-colors"
-                                    title={favoriteContacts.has(contact.id) ? 'Remove from favorites' : 'Add to favorites'}
-                                  >
-                                    <FiStar
-                                      className={`h-4 w-4 ${favoriteContacts.has(contact.id)
-                                        ? 'text-yellow-400 fill-current'
-                                        : 'text-gray-300 hover:text-yellow-400'
-                                        }`}
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Mobile
+                              </th>
+                              <th
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                                onClick={() => handleSort('email')}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>Email</span>
+                                  {sortColumn === 'email' ? (
+                                    sortDirection === 'asc' ? (
+                                      <FiChevronUp className="h-4 w-4 text-gray-700" />
+                                    ) : (
+                                      <FiChevronDown className="h-4 w-4 text-gray-700" />
+                                    )
+                                  ) : (
+                                    <div className="flex flex-col -space-y-1">
+                                      <FiChevronUp className="h-3 w-3 text-gray-400" />
+                                      <FiChevronDown className="h-3 w-3 text-gray-400" />
+                                    </div>
+                                  )}
+                                </div>
+                              </th>
+                              <th
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                                onClick={() => handleSort('firm_name')}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>Company</span>
+                                  {sortColumn === 'firm_name' ? (
+                                    sortDirection === 'asc' ? (
+                                      <FiChevronUp className="h-4 w-4 text-gray-700" />
+                                    ) : (
+                                      <FiChevronDown className="h-4 w-4 text-gray-700" />
+                                    )
+                                  ) : (
+                                    <div className="flex flex-col -space-y-1">
+                                      <FiChevronUp className="h-3 w-3 text-gray-400" />
+                                      <FiChevronDown className="h-3 w-3 text-gray-400" />
+                                    </div>
+                                  )}
+                                </div>
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Actions
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {sortedContacts.length === 0 && !contactsLoading ? (
+                              <tr>
+                                <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                                  {showFavoritesOnly
+                                    ? 'No favorite contacts found. Mark some contacts as favorites to see them here.'
+                                    : 'No contacts found. Create your first contact to get started.'
+                                  }
+                                </td>
+                              </tr>
+                            ) : (
+                              sortedContacts.map((contact, idx) => (
+                                <tr key={contact.id} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedContacts.includes(contact.id)}
+                                      onChange={() => handleSelectContact(contact.id)}
+                                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                                     />
-                                  </button>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {scrollWindowStartIndexRef.current + idx + 1}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center">
+                                      <div className="flex-shrink-0 h-10 w-10">
+                                        <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                                          <FiUser className="h-5 w-5 text-indigo-600" />
+                                        </div>
+                                      </div>
+                                      <div className="ml-4 cursor-pointer text-indigo-600">
+                                        <div className="text-sm font-medium  " onClick={() => {
+                                          navigate(`/live-chat/${contact.mobile}`);
+                                        }}>
+                                          {contact.name}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {contact.mobile}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {contact.email || '-'}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {contact.firm_name || '-'}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <div className="flex justify-center items-center space-x-2">
+                                      <Tooltip
+                                        content="Not authorized"
+                                        disabled={permissions && permissions.edit_contact === false}
+                                        position="top"
+                                      >
+                                        <button
+                                          onClick={() => { if (!permissions || permissions.edit_contact) handleOpenEditModal(contact); }}
+                                          disabled={permissions && permissions.edit_contact === false}
+                                          className={`text-indigo-600 hover:text-indigo-900 ${permissions && permissions.edit_contact === false ? 'opacity-50 cursor-not-allowed hover:text-indigo-600' : ''}`}
+                                          title={permissions && permissions.edit_contact === false ? '' : 'Edit contact'}
+                                        >
+                                          <FiEdit className="h-4 w-4" />
+                                        </button>
+                                      </Tooltip>
 
-                                  <Tooltip
-                                    content="Not authorized"
-                                    disabled={permissions && permissions.delete_contact === false}
-                                    position="top"
-                                  >
-                                    <button 
-                                      className={`text-red-600 hover:text-red-900 ${permissions && permissions.delete_contact === false ? 'opacity-50 cursor-not-allowed hover:text-red-600' : ''}`}
-                                      title={permissions && permissions.delete_contact === false ? '' : 'Delete contact'}
-                                      disabled={permissions && permissions.delete_contact === false}
-                                      onClick={() => handleDeleteContact(contact)}
-                                      style={{ display: permissions && permissions.delete_contact === false ? 'inline-block' : (!permissions || permissions.delete_contact) ? 'inline-block' : 'none' }}
-                                    >
-                                      <FiTrash2 className="h-4 w-4" />
-                                    </button>
-                                  </Tooltip>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                          {(USE_INFINITE_CONTACTS_LIST && contactsLoading && sortedContacts.length > 0) && (
-                            <tr>
-                              <td colSpan="7" className="px-6 py-3 text-center text-xs text-gray-500">
-                                <span className="inline-flex items-center">
-                                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600 mr-2"></span>
-                                  Loading more…
-                                </span>
-                              </td>
-                            </tr>
-                          )}
+                                      <button
+                                        onClick={() => handleToggleFavorite(contact)}
+                                        className="ml-2 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                                        title={favoriteContacts.has(contact.id) ? 'Remove from favorites' : 'Add to favorites'}
+                                      >
+                                        <FiStar
+                                          className={`h-4 w-4 ${favoriteContacts.has(contact.id)
+                                            ? 'text-yellow-400 fill-current'
+                                            : 'text-gray-300 hover:text-yellow-400'
+                                            }`}
+                                        />
+                                      </button>
 
-                          {(USE_INFINITE_CONTACTS_LIST && !contactsLoading && !contactsMeta.has_more && sortedContacts.length > 0) && (
-                            <tr>
-                              <td colSpan="7" className="px-6 py-3 text-center text-xs text-gray-400">
-                                End of contacts (Page {currentDisplayPage} of {contactsMeta?.total_pages || 1})
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
+                                      <Tooltip
+                                        content="Not authorized"
+                                        disabled={permissions && permissions.delete_contact === false}
+                                        position="top"
+                                      >
+                                        <button
+                                          className={`text-red-600 hover:text-red-900 ${permissions && permissions.delete_contact === false ? 'opacity-50 cursor-not-allowed hover:text-red-600' : ''}`}
+                                          title={permissions && permissions.delete_contact === false ? '' : 'Delete contact'}
+                                          disabled={permissions && permissions.delete_contact === false}
+                                          onClick={() => handleDeleteContact(contact)}
+                                          style={{ display: permissions && permissions.delete_contact === false ? 'inline-block' : (!permissions || permissions.delete_contact) ? 'inline-block' : 'none' }}
+                                        >
+                                          <FiTrash2 className="h-4 w-4" />
+                                        </button>
+                                      </Tooltip>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                            {(USE_INFINITE_CONTACTS_LIST && contactsLoading && sortedContacts.length > 0) && (
+                              <tr>
+                                <td colSpan="7" className="px-6 py-3 text-center text-xs text-gray-500">
+                                  <span className="inline-flex items-center">
+                                    <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600 mr-2"></span>
+                                    Loading more…
+                                  </span>
+                                </td>
+                              </tr>
+                            )}
+
+                            {(USE_INFINITE_CONTACTS_LIST && !contactsLoading && !contactsMeta.has_more && sortedContacts.length > 0) && (
+                              <tr>
+                                <td colSpan="7" className="px-6 py-3 text-center text-xs text-gray-400">
+                                  End of contacts (Page {currentDisplayPage} of {contactsMeta?.total_pages || 1})
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
                       </div>
-                      
+
                       {/* Scrollbar */}
                       {USE_INFINITE_CONTACTS_LIST && contactsMeta.total_records > 0 && (
                         <div className="w-10 flex flex-col items-center bg-gray-50 border-l border-gray-200 py-2">
@@ -2367,11 +2367,10 @@ function Contact() {
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <button
                   onClick={() => setImportAudienceType('excel')}
-                  className={`p-4 rounded-xl border-2 transition-all ${
-                    importAudienceType === 'excel'
+                  className={`p-4 rounded-xl border-2 transition-all ${importAudienceType === 'excel'
                       ? 'border-indigo-500 bg-indigo-50 shadow-md'
                       : 'border-gray-200 hover:border-indigo-300'
-                  }`}
+                    }`}
                 >
                   <FiFileText className={`w-6 h-6 mb-2 mx-auto ${importAudienceType === 'excel' ? 'text-indigo-600' : 'text-gray-400'}`} />
                   <div className="font-semibold text-gray-800">Upload Excel</div>
@@ -2380,11 +2379,10 @@ function Contact() {
 
                 <button
                   onClick={() => setImportAudienceType('sheet')}
-                  className={`p-4 rounded-xl border-2 transition-all ${
-                    importAudienceType === 'sheet'
+                  className={`p-4 rounded-xl border-2 transition-all ${importAudienceType === 'sheet'
                       ? 'border-indigo-500 bg-indigo-50 shadow-md'
                       : 'border-gray-200 hover:border-indigo-300'
-                  }`}
+                    }`}
                 >
                   <FiGlobe className={`w-6 h-6 mb-2 mx-auto ${importAudienceType === 'sheet' ? 'text-indigo-600' : 'text-gray-400'}`} />
                   <div className="font-semibold text-gray-800">Google Sheet</div>
@@ -2398,7 +2396,7 @@ function Contact() {
                   <ExcelUpload
                     excelMapping={importExcelMapping}
                     setExcelMapping={setImportExcelMapping}
-                    onContactsExtracted={() => {}}
+                    onContactsExtracted={() => { }}
                     onHeadersExtracted={(headers) => {
                       setImportExcelHeaders(headers);
                     }}
@@ -2418,7 +2416,7 @@ function Contact() {
                     setSheetLink={setImportSheetLink}
                     excelMapping={importExcelMapping}
                     setExcelMapping={setImportExcelMapping}
-                    onContactsExtracted={() => {}}
+                    onContactsExtracted={() => { }}
                     onHeadersExtracted={(headers) => {
                       setImportExcelHeaders(headers);
                     }}
@@ -2483,7 +2481,7 @@ function Contact() {
                   <FiDownload className="h-7 w-7 text-indigo-600" />
                 </div>
               </div>
-              
+
               {/* Content */}
               <div className="text-center">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Export Contacts</h3>
@@ -2557,9 +2555,8 @@ function Contact() {
                       setBulkDeletePhrase(e.target.value);
                       if (bulkDeleteError) setBulkDeleteError('');
                     }}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      bulkDeleteError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500'
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${bulkDeleteError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500'
+                      }`}
                     placeholder="all-delete"
                     autoFocus
                   />
@@ -2611,7 +2608,7 @@ function Contact() {
                   <FiTrash2 className="h-7 w-7 text-red-600" />
                 </div>
               </div>
-              
+
               {/* Content */}
               <div className="text-center">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Contact</h3>

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { Header, Sidebar } from '../component/Menu';
 import { Encrypt } from './encryption/payload-encryption';
 import axios from 'axios';
@@ -129,7 +130,7 @@ function TemplateAdd() {
     );
 
     // Check if all variables have sample values
-    const allVariablesHaveSamples = bodyVariables.length === 0 || 
+    const allVariablesHaveSamples = bodyVariables.length === 0 ||
       bodyVariables.every(v => v.sample && v.sample.trim() !== '');
 
     return basicFieldsValid && allVariablesHaveSamples;
@@ -169,7 +170,7 @@ function TemplateAdd() {
 
         // Upload file to API
         const response = await axios.post(
-          'https://api.w1chat.com/upload/upload-media',
+          `${API_BASE_URL}/upload/upload-media`,
           formData,
           {
             headers: {
@@ -226,11 +227,11 @@ function TemplateAdd() {
     const regex = /\{\{(\d+)\}\}/g;
     const existingVars = new Set();
     let match;
-    
+
     while ((match = regex.exec(formData.components.body.text)) !== null) {
       existingVars.add(parseInt(match[1]));
     }
-    
+
     // Next number is always count + 1 (sequential)
     return existingVars.size + 1;
   };
@@ -245,7 +246,7 @@ function TemplateAdd() {
     const foundVariables = [];
     const variableMap = new Map();
     let match;
-    
+
     while ((match = variableRegex.exec(text)) !== null) {
       const varNum = parseInt(match[1]);
       if (!variableMap.has(varNum)) {
@@ -277,7 +278,7 @@ function TemplateAdd() {
 
     if (needsRenumbering && foundVariables.length > 0) {
       const sortedOldNums = [...foundVariables].sort((a, b) => b - a);
-      
+
       sortedOldNums.forEach(oldNum => {
         const newNum = oldToNewMap.get(oldNum);
         if (oldNum !== newNum) {
@@ -287,9 +288,9 @@ function TemplateAdd() {
           );
         }
       });
-      
+
       finalText = finalText.replace(/\{\{TEMP_(\d+)\}\}/g, '{{$1}}');
-      
+
       // Calculate cursor offset from renumbering
       cursorOffset = finalText.length - text.length;
     }
@@ -330,7 +331,7 @@ function TemplateAdd() {
 
       // Create new variables array
       const newVars = [];
-      
+
       sortedFinalVars.forEach((newVarNum, index) => {
         // Find the OLD variable number that became this new number
         let oldVarNum = null;
@@ -370,17 +371,17 @@ function TemplateAdd() {
     const text = formData.components.body.text;
     const cursorPos = textarea.selectionStart;
     const selectionEnd = textarea.selectionEnd;
-    
+
     // Only handle backspace and delete keys when no selection
     if ((e.key === 'Backspace' || e.key === 'Delete') && cursorPos === selectionEnd) {
       // Find all variables and their positions
       const varRegex = /\{\{(\d+)\}\}/g;
       let match;
-      
+
       while ((match = varRegex.exec(text)) !== null) {
         const varStart = match.index;
         const varEnd = varStart + match[0].length;
-        
+
         // Check if cursor is inside or at the edge of a variable
         if (e.key === 'Backspace') {
           // Backspace: check if cursor is inside or right after variable
@@ -426,7 +427,7 @@ function TemplateAdd() {
     const variableRegex = /\{\{(\d+)\}\}/g;
     const existingVars = new Set();
     let match;
-    
+
     while ((match = variableRegex.exec(currentText)) !== null) {
       existingVars.add(parseInt(match[1]));
     }
@@ -461,10 +462,10 @@ function TemplateAdd() {
     if (varIndex === -1) return;
 
     const varNumber = varIndex + 1;
-    
+
     // Remove all instances of this variable from body text
     const newBodyText = formData.components.body.text.replace(new RegExp(`\\{\\{${varNumber}\\}\\}`, 'g'), '');
-    
+
     // handleBodyTextChange will automatically renumber and sync the variables
     handleBodyTextChange(newBodyText);
   };
@@ -754,7 +755,7 @@ function TemplateAdd() {
 
       // Submit to the API endpoint using axios (matching working API pattern)
       const response = await axios.post(
-        'https://api.w1chat.com/template/create-template',
+        `${API_BASE_URL}/template/create-template`,
         data_pass,
         {
           headers: {
@@ -1146,11 +1147,10 @@ function TemplateAdd() {
                           <input
                             type="text"
                             placeholder={`Sample value for {{${index + 1}}}`}
-                            className={`w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${
-                              variable.sample && variable.sample.trim() !== '' 
-                                ? 'border-green-400 bg-green-50' 
+                            className={`w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${variable.sample && variable.sample.trim() !== ''
+                                ? 'border-green-400 bg-green-50'
                                 : 'border-gray-300 bg-white'
-                            }`}
+                              }`}
                             value={variable.sample}
                             onChange={e => updateBodyVariable(variable.id, e.target.value)}
                             required
@@ -1332,7 +1332,7 @@ function TemplateAdd() {
                   {!isFormValid() && (
                     <p className="mt-2 text-sm text-red-600 text-center">
                       Please fill in all mandatory fields: Template Name, Category, Language, Body Content
-                      {bodyVariables.length > 0 && bodyVariables.some(v => !v.sample || v.sample.trim() === '') && 
+                      {bodyVariables.length > 0 && bodyVariables.some(v => !v.sample || v.sample.trim() === '') &&
                         ', and all variable sample values'}
                     </p>
                   )}

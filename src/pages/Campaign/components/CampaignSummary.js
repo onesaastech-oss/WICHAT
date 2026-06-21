@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../../../config/api';
 import axios from 'axios';
 import { Encrypt } from '../../encryption/payload-encryption';
 import { Send, ChevronRight, Calendar, Clock } from 'lucide-react';
@@ -60,7 +61,7 @@ export default function CampaignSummary({
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
-  const campaignCreateUrl = 'https://api.w1chat.com/campaign/create';
+  const campaignCreateUrl = `${API_BASE_URL}/campaign/create`;
 
   /**
    * Build complete component array for campaign API (header + body).

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { useNavigate } from 'react-router-dom';
 import { Header, Sidebar } from '../component/Menu';
 import {
@@ -151,7 +152,7 @@ function Dashboard() {
                 const data_pass = JSON.stringify({ data, key });
 
                 const response = await axios.post(
-                    'https://api.w1chat.com/project/dashboard',
+                    `${API_BASE_URL}/project/dashboard`,
                     data_pass,
                     {
                         headers: {

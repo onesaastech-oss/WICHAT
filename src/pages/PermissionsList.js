@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { Header, Sidebar } from '../component/Menu';
 import { Encrypt } from './encryption/payload-encryption';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import moment from 'moment/moment';
+import { parseServerDate } from '../utils/dateTime';
 import {
     FiEdit,
     FiSettings,
@@ -110,7 +112,7 @@ function PermissionsList() {
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/permission/list',
+                `${API_BASE_URL}/permission/list`,
                 data_pass,
                 {
                     headers: {
@@ -178,7 +180,7 @@ function PermissionsList() {
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/permission/create',
+                `${API_BASE_URL}/permission/create`,
                 data_pass,
                 {
                     headers: {
@@ -245,7 +247,7 @@ function PermissionsList() {
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/permission/edit',
+                `${API_BASE_URL}/permission/edit`,
                 data_pass,
                 {
                     headers: {
@@ -365,7 +367,7 @@ function PermissionsList() {
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/permission/set-access',
+                `${API_BASE_URL}/permission/set-access`,
                 data_pass,
                 {
                     headers: {
@@ -445,18 +447,16 @@ function PermissionsList() {
                 type="button"
                 disabled={disabled}
                 onClick={handleClick}
-                className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-all ease-in-out duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transform hover:scale-105 ${
-                    checked 
-                        ? 'bg-gradient-to-r from-indigo-500 to-indigo-600' 
+                className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-all ease-in-out duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transform hover:scale-105 ${checked
+                        ? 'bg-gradient-to-r from-indigo-500 to-indigo-600'
                         : 'bg-gradient-to-r from-gray-200 to-gray-300'
-                }`}
+                    }`}
                 role="switch"
                 aria-checked={checked}
             >
                 <span
-                    className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-lg transform ring-0 transition-all ease-in-out duration-300 ${
-                        checked ? 'translate-x-5' : 'translate-x-0'
-                    }`}
+                    className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-lg transform ring-0 transition-all ease-in-out duration-300 ${checked ? 'translate-x-5' : 'translate-x-0'
+                        }`}
                 />
             </button>
         );
@@ -464,94 +464,94 @@ function PermissionsList() {
 
     // Permission List Component - Now supports cardless mode for modal usage
     // Permission List Component - Supports both card and cardless (modal) modes
-const PermissionList = React.memo(({ 
-    permissions, 
-    onToggle, 
-    disabled, 
-    onSelectAll, 
-    onDeselectAll,
-    cardless = false,
-    showBulkActions = true,    // NEW: control bulk actions visibility
-    scrollRef = null           // NEW: allow external ref for scroll container
-}) => {
-    if (cardless) {
-        return (
-            <>
-                {/* Bulk Actions - only if showBulkActions is true */}
-                {showBulkActions && (
-                    <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-gray-100">
-                        <div className="flex items-center space-x-2">
-                            <FiShield className="w-5 h-5 text-indigo-500" />
-                            <span className="text-sm font-semibold text-gray-800">Manage Permissions</span>
-                            <span className="ml-2 px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium border border-indigo-100">
-                                {permissions.filter(p => p.status).length} active
-                            </span>
-                        </div>
-                        <div className="flex space-x-2">
-                            <button
-                                type="button"
-                                onClick={onSelectAll}
-                                disabled={disabled}
-                                className="inline-flex items-center px-3 py-1.5 border border-indigo-200 text-xs font-medium rounded-lg text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
-                            >
-                                <FiCheckSquare className="w-3.5 h-3.5 mr-1.5" />
-                                Select All
-                            </button>
-                            <button
-                                type="button"
-                                onClick={onDeselectAll}
-                                disabled={disabled}
-                                className="inline-flex items-center px-3 py-1.5 border border-gray-200 text-xs font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
-                            >
-                                <FiSquareIcon className="w-3.5 h-3.5 mr-1.5" />
-                                Deselect All
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Permission Settings List - scrollable area */}
-                <div
-                    ref={scrollRef || scrollContainerRef}  // Use provided ref or fallback to internal
-                    className="overflow-y-auto divide-y divide-gray-50 pr-1"
-                    style={{ maxHeight: showBulkActions ? '320px' : '100%' }}  // Adjust height if needed
-                >
-                    {permissions.map((setting) => (
-                        <div 
-                            key={setting.apiKey} 
-                            className="flex items-center justify-between p-3 hover:bg-gradient-to-r hover:from-indigo-50/30 hover:to-transparent transition-all duration-200 rounded-lg"
-                        >
-                            <div className="flex items-center space-x-3">
-                                <div className={`w-2 h-2 rounded-full ${setting.status ? 'bg-green-500' : 'bg-gray-300'}`} />
-                                <span className="text-sm font-medium text-gray-700 capitalize">
-                                    {setting.permission}
+    const PermissionList = React.memo(({
+        permissions,
+        onToggle,
+        disabled,
+        onSelectAll,
+        onDeselectAll,
+        cardless = false,
+        showBulkActions = true,    // NEW: control bulk actions visibility
+        scrollRef = null           // NEW: allow external ref for scroll container
+    }) => {
+        if (cardless) {
+            return (
+                <>
+                    {/* Bulk Actions - only if showBulkActions is true */}
+                    {showBulkActions && (
+                        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-gray-100">
+                            <div className="flex items-center space-x-2">
+                                <FiShield className="w-5 h-5 text-indigo-500" />
+                                <span className="text-sm font-semibold text-gray-800">Manage Permissions</span>
+                                <span className="ml-2 px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium border border-indigo-100">
+                                    {permissions.filter(p => p.status).length} active
                                 </span>
-                                {setting.status && (
-                                    <span className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded-md text-[10px] font-medium border border-green-100">
-                                        enabled
-                                    </span>
-                                )}
                             </div>
-                            <PermissionToggle
-                                permission={setting.permission}
-                                checked={setting.status}
-                                onChange={onToggle}
-                                disabled={disabled}
-                            />
+                            <div className="flex space-x-2">
+                                <button
+                                    type="button"
+                                    onClick={onSelectAll}
+                                    disabled={disabled}
+                                    className="inline-flex items-center px-3 py-1.5 border border-indigo-200 text-xs font-medium rounded-lg text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+                                >
+                                    <FiCheckSquare className="w-3.5 h-3.5 mr-1.5" />
+                                    Select All
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={onDeselectAll}
+                                    disabled={disabled}
+                                    className="inline-flex items-center px-3 py-1.5 border border-gray-200 text-xs font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+                                >
+                                    <FiSquareIcon className="w-3.5 h-3.5 mr-1.5" />
+                                    Deselect All
+                                </button>
+                            </div>
                         </div>
-                    ))}
-                </div>
-            </>
-        );
-    }
+                    )}
 
-    // Original card version (unchanged)
-    return (
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
-            {/* ... original card version content ... */}
-        </div>
-    );
-});
+                    {/* Permission Settings List - scrollable area */}
+                    <div
+                        ref={scrollRef || scrollContainerRef}  // Use provided ref or fallback to internal
+                        className="overflow-y-auto divide-y divide-gray-50 pr-1"
+                        style={{ maxHeight: showBulkActions ? '320px' : '100%' }}  // Adjust height if needed
+                    >
+                        {permissions.map((setting) => (
+                            <div
+                                key={setting.apiKey}
+                                className="flex items-center justify-between p-3 hover:bg-gradient-to-r hover:from-indigo-50/30 hover:to-transparent transition-all duration-200 rounded-lg"
+                            >
+                                <div className="flex items-center space-x-3">
+                                    <div className={`w-2 h-2 rounded-full ${setting.status ? 'bg-green-500' : 'bg-gray-300'}`} />
+                                    <span className="text-sm font-medium text-gray-700 capitalize">
+                                        {setting.permission}
+                                    </span>
+                                    {setting.status && (
+                                        <span className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded-md text-[10px] font-medium border border-green-100">
+                                            enabled
+                                        </span>
+                                    )}
+                                </div>
+                                <PermissionToggle
+                                    permission={setting.permission}
+                                    checked={setting.status}
+                                    onChange={onToggle}
+                                    disabled={disabled}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </>
+            );
+        }
+
+        // Original card version (unchanged)
+        return (
+            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+                {/* ... original card version content ... */}
+            </div>
+        );
+    });
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50">
@@ -569,9 +569,8 @@ const PermissionList = React.memo(({
             />
 
             {/* Main content */}
-            <div className={`pt-16 transition-all duration-300 ease-in-out ${
-                isMinimized ? 'md:pl-20' : 'md:pl-72'
-            }`}>
+            <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
+                }`}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-8">
                     {/* Header with title and create button - Professional styling */}
                     <div className="md:flex md:items-center md:justify-between mb-8">
@@ -640,8 +639,8 @@ const PermissionList = React.memo(({
                                     ) : (
                                         // Show actual data
                                         permissions.map((permission, index) => (
-                                            <tr 
-                                                key={permission.permission_id} 
+                                            <tr
+                                                key={permission.permission_id}
                                                 className="hover:bg-gradient-to-r hover:from-indigo-50/30 hover:to-transparent transition-all duration-200 group"
                                             >
                                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -690,11 +689,11 @@ const PermissionList = React.memo(({
                                                     <div className="text-sm">
                                                         <div className="flex items-center text-gray-700">
                                                             <FiCalendar className="w-3.5 h-3.5 text-indigo-400 mr-1.5" />
-                                                            {moment(permission?.modify_date, "YYYY-MM-DD H:i:s").format("DD/MM/YYYY")}
+                                                            {moment(parseServerDate(permission?.modify_date)).format("DD/MM/YYYY")}
                                                         </div>
                                                         <div className="flex items-center text-xs text-gray-500 mt-1">
                                                             <FiClock className="w-3 h-3 text-gray-400 mr-1.5" />
-                                                            {moment(permission?.modify_date).format("hh:mm:ss A")}
+                                                            {moment(parseServerDate(permission?.modify_date)).format("hh:mm:ss A")}
                                                         </div>
                                                     </div>
                                                 </td>
@@ -760,7 +759,7 @@ const PermissionList = React.memo(({
                         <div className="inline-block align-bottom bg-white rounded-2xl px-6 pt-6 pb-6 text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-8 relative">
                             {/* Gradient header bar */}
                             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500"></div>
-                            
+
                             <div className="absolute top-0 right-0 pt-5 pr-5">
                                 <button
                                     type="button"
@@ -883,7 +882,7 @@ const PermissionList = React.memo(({
                         <div className="inline-block align-bottom bg-white rounded-2xl px-6 pt-6 pb-6 text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-8 relative">
                             {/* Gradient header bar - now indigo/purple */}
                             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500"></div>
-                            
+
                             <div className="absolute top-0 right-0 pt-5 pr-5">
                                 <button
                                     type="button"
@@ -993,133 +992,133 @@ const PermissionList = React.memo(({
                 </div>
             )}
 
-           {/* Settings Modal - Scrollable body, sticky bulk actions, fixed footer */}
-{isSettingsModalOpen && (
-    <div className="fixed z-50 inset-0 overflow-y-auto">
-        <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-                <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
-            </div>
+            {/* Settings Modal - Scrollable body, sticky bulk actions, fixed footer */}
+            {isSettingsModalOpen && (
+                <div className="fixed z-50 inset-0 overflow-y-auto">
+                    <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                        <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+                            <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
+                        </div>
 
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                        <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
 
-            {/* Modal container - flex column layout */}
-            <div className="inline-flex flex-col align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full relative"
-                 style={{ maxHeight: '80vh' }}>
-                
-                {/* Gradient header bar */}
-                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 z-10"></div>
-                
-                {/* Fixed Header Section */}
-                <div className="flex-shrink-0 px-6 pt-6 pb-4 sm:px-8 sm:pt-8 sm:pb-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                            <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg">
-                                <FiSettings className="w-5 h-5 text-white" />
+                        {/* Modal container - flex column layout */}
+                        <div className="inline-flex flex-col align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full relative"
+                            style={{ maxHeight: '80vh' }}>
+
+                            {/* Gradient header bar */}
+                            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 z-10"></div>
+
+                            {/* Fixed Header Section */}
+                            <div className="flex-shrink-0 px-6 pt-6 pb-4 sm:px-8 sm:pt-8 sm:pb-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg">
+                                            <FiSettings className="w-5 h-5 text-white" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-bold text-gray-900">
+                                                Permission Settings
+                                            </h3>
+                                            <p className="text-sm text-gray-500">
+                                                Configure permissions for <span className="font-semibold text-indigo-600">{selectedPermission?.name}</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={formLoading}
+                                        onClick={closeSettingsModal}
+                                        className="bg-gray-50 hover:bg-gray-100 rounded-xl p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-all duration-200"
+                                    >
+                                        <span className="sr-only">Close</span>
+                                        <FiX className="h-5 w-5" />
+                                    </button>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-gray-900">
-                                    Permission Settings
-                                </h3>
-                                <p className="text-sm text-gray-500">
-                                    Configure permissions for <span className="font-semibold text-indigo-600">{selectedPermission?.name}</span>
-                                </p>
+
+                            {/* Sticky Bulk Actions Bar (outside scrollable area) */}
+                            <div className="flex-shrink-0 px-6 sm:px-8 pb-2">
+                                <div className="flex flex-wrap items-center justify-between gap-3 py-3 border-y border-gray-100 bg-white">
+                                    <div className="flex items-center space-x-2">
+                                        <FiShield className="w-5 h-5 text-indigo-500" />
+                                        <span className="text-sm font-semibold text-gray-800">Manage Permissions</span>
+                                        <span className="ml-2 px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium border border-indigo-100">
+                                            {permissionSettings.filter(p => p.status).length} active
+                                        </span>
+                                    </div>
+                                    <div className="flex space-x-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleSelectAll}
+                                            disabled={formLoading}
+                                            className="inline-flex items-center px-3 py-1.5 border border-indigo-200 text-xs font-medium rounded-lg text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+                                        >
+                                            <FiCheckSquare className="w-3.5 h-3.5 mr-1.5" />
+                                            Select All
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleDeselectAll}
+                                            disabled={formLoading}
+                                            className="inline-flex items-center px-3 py-1.5 border border-gray-200 text-xs font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+                                        >
+                                            <FiSquareIcon className="w-3.5 h-3.5 mr-1.5" />
+                                            Deselect All
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Scrollable Body Section - only the permission list */}
+                            <div className="flex-grow overflow-y-auto px-6 sm:px-8 py-2">
+                                <PermissionList
+                                    permissions={permissionSettings}
+                                    onToggle={handleSettingToggle}
+                                    disabled={formLoading}
+                                    onSelectAll={handleSelectAll}      // still passed, but not used internally
+                                    onDeselectAll={handleDeselectAll}  // still passed, but not used internally
+                                    cardless={true}
+                                    showBulkActions={false}           // HIDE internal bulk actions
+                                    scrollRef={scrollContainerRef}    // PASS the ref for scroll position
+                                />
+                            </div>
+
+                            {/* Fixed Footer Section */}
+                            <div className="flex-shrink-0 px-6 py-5 sm:px-8 sm:py-6 bg-gray-50 border-t border-gray-100">
+                                <div className="sm:flex sm:flex-row-reverse sm:gap-3">
+                                    <button
+                                        type="button"
+                                        disabled={formLoading}
+                                        onClick={handleSaveSettings}
+                                        className="w-full inline-flex justify-center items-center px-4 py-2.5 border border-transparent shadow-lg text-sm font-medium rounded-xl text-white bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-[1.02] sm:w-auto sm:ml-3"
+                                    >
+                                        {formLoading ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                                                Saving...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <FiSave className="w-4 h-4 mr-2" />
+                                                Save Permission Settings
+                                            </>
+                                        )}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={formLoading}
+                                        onClick={closeSettingsModal}
+                                        className="mt-3 sm:mt-0 w-full inline-flex justify-center items-center px-4 py-2.5 border border-gray-200 shadow-sm text-sm font-medium rounded-xl text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 sm:w-auto"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <button
-                            type="button"
-                            disabled={formLoading}
-                            onClick={closeSettingsModal}
-                            className="bg-gray-50 hover:bg-gray-100 rounded-xl p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-all duration-200"
-                        >
-                            <span className="sr-only">Close</span>
-                            <FiX className="h-5 w-5" />
-                        </button>
                     </div>
                 </div>
-
-                {/* Sticky Bulk Actions Bar (outside scrollable area) */}
-                <div className="flex-shrink-0 px-6 sm:px-8 pb-2">
-                    <div className="flex flex-wrap items-center justify-between gap-3 py-3 border-y border-gray-100 bg-white">
-                        <div className="flex items-center space-x-2">
-                            <FiShield className="w-5 h-5 text-indigo-500" />
-                            <span className="text-sm font-semibold text-gray-800">Manage Permissions</span>
-                            <span className="ml-2 px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium border border-indigo-100">
-                                {permissionSettings.filter(p => p.status).length} active
-                            </span>
-                        </div>
-                        <div className="flex space-x-2">
-                            <button
-                                type="button"
-                                onClick={handleSelectAll}
-                                disabled={formLoading}
-                                className="inline-flex items-center px-3 py-1.5 border border-indigo-200 text-xs font-medium rounded-lg text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
-                            >
-                                <FiCheckSquare className="w-3.5 h-3.5 mr-1.5" />
-                                Select All
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleDeselectAll}
-                                disabled={formLoading}
-                                className="inline-flex items-center px-3 py-1.5 border border-gray-200 text-xs font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
-                            >
-                                <FiSquareIcon className="w-3.5 h-3.5 mr-1.5" />
-                                Deselect All
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Scrollable Body Section - only the permission list */}
-                <div className="flex-grow overflow-y-auto px-6 sm:px-8 py-2">
-                    <PermissionList
-                        permissions={permissionSettings}
-                        onToggle={handleSettingToggle}
-                        disabled={formLoading}
-                        onSelectAll={handleSelectAll}      // still passed, but not used internally
-                        onDeselectAll={handleDeselectAll}  // still passed, but not used internally
-                        cardless={true}
-                        showBulkActions={false}           // HIDE internal bulk actions
-                        scrollRef={scrollContainerRef}    // PASS the ref for scroll position
-                    />
-                </div>
-
-                {/* Fixed Footer Section */}
-                <div className="flex-shrink-0 px-6 py-5 sm:px-8 sm:py-6 bg-gray-50 border-t border-gray-100">
-                    <div className="sm:flex sm:flex-row-reverse sm:gap-3">
-                        <button
-                            type="button"
-                            disabled={formLoading}
-                            onClick={handleSaveSettings}
-                            className="w-full inline-flex justify-center items-center px-4 py-2.5 border border-transparent shadow-lg text-sm font-medium rounded-xl text-white bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-[1.02] sm:w-auto sm:ml-3"
-                        >
-                            {formLoading ? (
-                                <>
-                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                                    Saving...
-                                </>
-                            ) : (
-                                <>
-                                    <FiSave className="w-4 h-4 mr-2" />
-                                    Save Permission Settings
-                                </>
-                            )}
-                        </button>
-                        <button
-                            type="button"
-                            disabled={formLoading}
-                            onClick={closeSettingsModal}
-                            className="mt-3 sm:mt-0 w-full inline-flex justify-center items-center px-4 py-2.5 border border-gray-200 shadow-sm text-sm font-medium rounded-xl text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 sm:w-auto"
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-)}
+            )}
         </div>
     );
 }

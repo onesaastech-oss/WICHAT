@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { API_BASE_URL } from '../../../../config/api';
 import { Check, Loader2, Search, User } from 'lucide-react';
 import axios from 'axios';
 import { Encrypt } from '../../../encryption/payload-encryption';
@@ -100,7 +101,7 @@ export default function ContactsSelector({
         const data_pass = JSON.stringify({ data, key });
 
         const response = await axios.post(
-          'https://api.w1chat.com/contact/contact-list',
+          `${API_BASE_URL}/contact/contact-list`,
           data_pass,
           {
             headers: {
@@ -233,18 +234,16 @@ export default function ContactsSelector({
             <div
               key={contactId}
               onClick={() => handleToggleContact(contactId)}
-              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                isSelected
+              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${isSelected
                   ? 'border-indigo-500 bg-indigo-50 shadow-sm'
                   : 'border-gray-200 hover:border-indigo-300'
-              }`}
+                }`}
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      isSelected ? 'bg-indigo-500' : 'bg-gray-200'
-                    }`}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-indigo-500' : 'bg-gray-200'
+                      }`}
                   >
                     {isSelected ? (
                       <Check className="w-5 h-5 text-white" />

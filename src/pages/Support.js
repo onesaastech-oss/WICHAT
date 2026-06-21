@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { Header, Sidebar } from '../component/Menu';
 import axios from 'axios';
 import {
@@ -44,8 +45,8 @@ const Support = () => {
             try {
                 setLoading(true);
                 setError(null);
-                const response = await axios.get('https://api.w1chat.com/company/support');
-                
+                const response = await axios.get(`${API_BASE_URL}/company/support`);
+
                 if (response?.data?.error === false && response?.data?.data) {
                     setSupportData(response.data.data);
                 } else {
@@ -242,8 +243,8 @@ const SupportCard = ({ title, icon, iconBg, iconColor, items, type, onCopy, copi
             {/* Card Body */}
             <div className="p-6 space-y-4">
                 {items.map((item, index) => {
-                    const displayValue = type === 'phone' || type === 'whatsapp' 
-                        ? formatPhoneNumber(item.number) 
+                    const displayValue = type === 'phone' || type === 'whatsapp'
+                        ? formatPhoneNumber(item.number)
                         : item.email;
                     const itemKey = `${type}-${index}`;
                     const isCopied = copiedItem === itemKey;
@@ -286,13 +287,12 @@ const SupportCard = ({ title, icon, iconBg, iconColor, items, type, onCopy, copi
                                                 onActionClick(item.email);
                                             }
                                         }}
-                                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
-                                            type === 'phone'
+                                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${type === 'phone'
                                                 ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
                                                 : type === 'whatsapp'
-                                                ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
-                                                : 'bg-purple-600 text-white hover:bg-purple-700 shadow-md hover:shadow-lg'
-                                        }`}
+                                                    ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
+                                                    : 'bg-purple-600 text-white hover:bg-purple-700 shadow-md hover:shadow-lg'
+                                            }`}
                                     >
                                         {type === 'phone' ? 'Call' : type === 'whatsapp' ? 'Chat' : 'Email'}
                                     </button>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { API_BASE_URL } from '../../config/api';
 import { Header, Sidebar } from '../../component/Menu';
 import { useNavigate } from 'react-router-dom';
 import Pagination from '../../component/Pagination';
@@ -18,12 +19,12 @@ import {
     FiAlertCircle
 } from 'react-icons/fi';
 import moment from 'moment';
+import { parseServerDate } from '../../utils/dateTime';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Encrypt } from '../encryption/payload-encryption';
 
-const API_BASE_URL = 'https://api.w1chat.com';
 
 const CampaignList = () => {
     const navigate = useNavigate();
@@ -114,7 +115,7 @@ const CampaignList = () => {
             const data_pass = JSON.stringify({ data, key });
 
             const response = await axios.post(
-                'https://api.w1chat.com/campaign/list',
+                `${API_BASE_URL}/campaign/list`,
                 data_pass,
                 {
                     headers: {
@@ -557,7 +558,7 @@ const CampaignList = () => {
                                                         {getStatusBadge(campaign.status)}
                                                         {campaign.status === 'scheduled' && campaign.scheduledDate && (
                                                             <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                                {moment(campaign.scheduledDate).format('MMM DD, HH:mm')}
+                                                                {moment(parseServerDate(campaign.scheduledDate)).format('MMM DD, HH:mm')}
                                                             </span>
                                                         )}
                                                     </div>
@@ -565,7 +566,7 @@ const CampaignList = () => {
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                                     <div className="flex items-center">
                                                         <FiCalendar className="mr-1" size={14} />
-                                                        {moment(campaign.createdDate).format('MMM DD, YYYY')}
+                                                        {moment(parseServerDate(campaign.createdDate)).format('MMM DD, YYYY')}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

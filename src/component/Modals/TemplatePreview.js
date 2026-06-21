@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../config/api';
 import { FiX, FiSend, FiFileText, FiChevronDown } from 'react-icons/fi';
 import { BsCheckAll } from 'react-icons/bs';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -244,7 +245,7 @@ const TemplatePreview = ({
         try {
             const form = new FormData();
             form.append('file', file);
-            const res = await axios.post('https://api.w1chat.com/upload/upload-media', form, {
+            const res = await axios.post(`${API_BASE_URL}/upload/upload-media`, form, {
                 headers: { 'Content-Type': 'multipart/form-data', 'token': tokens.token, 'username': tokens.username }
             });
             if (res?.data?.link) setHeaderMediaUrl(res.data.link);
@@ -296,7 +297,7 @@ const TemplatePreview = ({
                 onClose();
                 onCloseAll?.();
             } else {
-                const response = await axios.post('https://api.w1chat.com/message/send-template',
+                const response = await axios.post(`${API_BASE_URL}/message/send-template`,
                     JSON.stringify({ data, key }),
                     { headers: { 'token': tokens.token, 'username': tokens.username, 'Content-Type': 'application/json' } }
                 );

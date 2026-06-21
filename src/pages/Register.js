@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom'
 import { Encrypt } from './encryption/payload-encryption';
@@ -152,7 +153,7 @@ const Register = () => {
       let config = {
         method: 'post',
         maxBodyLength: Infinity,
-        url: 'https://api.w1chat.com/account/google-register', // You'll need to create this endpoint
+        url: `${API_BASE_URL}/account/google-register`, // You'll need to create this endpoint
         headers: {
           'Content-Type': 'application/json'
         },
@@ -219,7 +220,7 @@ const Register = () => {
       let config = {
         method: 'post',
         maxBodyLength: Infinity,
-        url: 'https://api.w1chat.com/account/register', // Updated endpoint for regular registration
+        url: `${API_BASE_URL}/account/register`, // Updated endpoint for regular registration
         headers: {
           'Content-Type': 'application/json'
         },

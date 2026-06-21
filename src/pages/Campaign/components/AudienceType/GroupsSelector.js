@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../../../config/api';
 import { Users, Check, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import { Encrypt } from '../../../encryption/payload-encryption';
@@ -76,7 +77,7 @@ export default function GroupsSelector({ selectedGroups, setSelectedGroups }) {
           const data_pass = JSON.stringify({ data, key });
 
           const response = await axios.post(
-            'https://api.w1chat.com/contact/group-list',
+            `${API_BASE_URL}/contact/group-list`,
             data_pass,
             {
               headers: {
@@ -171,11 +172,10 @@ export default function GroupsSelector({ selectedGroups, setSelectedGroups }) {
         <div
           key={group.id}
           onClick={() => handleToggleGroup(group.id)}
-          className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-            selectedGroups.includes(group.id)
+          className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${selectedGroups.includes(group.id)
               ? 'border-indigo-500 bg-indigo-50'
               : 'border-gray-200 hover:border-indigo-300'
-          }`}
+            }`}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

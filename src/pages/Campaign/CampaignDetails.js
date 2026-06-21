@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { API_BASE_URL } from '../../config/api';
 import { Header, Sidebar } from '../../component/Menu';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -22,13 +23,13 @@ import {
   FiZap
 } from 'react-icons/fi';
 import moment from 'moment';
+import { parseServerDate } from '../../utils/dateTime';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Encrypt } from '../encryption/payload-encryption';
 import DateTimePicker from './components/DateTimePicker';
 
-const API_BASE_URL = 'https://api.w1chat.com';
 
 const loadTokensFromStorage = () => {
   if (typeof window === 'undefined') return null;
@@ -635,9 +636,9 @@ const CampaignDetails = () => {
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Created Date</p>
                   <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
-                    {campaignDetails?.create_date ? moment(campaignDetails.create_date).format('MMM DD, YYYY') : 'N/A'}
+                    {campaignDetails?.create_date ? moment(parseServerDate(campaignDetails.create_date)).format('MMM DD, YYYY') : 'N/A'}
                     <span className="block text-xs text-gray-500 font-normal">
-                      {campaignDetails?.create_date ? moment(campaignDetails.create_date).format('hh:mm A') : ''}
+                      {campaignDetails?.create_date ? moment(parseServerDate(campaignDetails.create_date)).format('hh:mm A') : ''}
                     </span>
                   </p>
                 </div>
@@ -798,8 +799,8 @@ const CampaignDetails = () => {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                               <div className="flex flex-col">
-                                <span>{moment(recipient.date).format('MMM DD, YYYY')}</span>
-                                <span className="text-xs text-gray-400">{moment(recipient.date).format('hh:mm A')}</span>
+                                <span>{moment(parseServerDate(recipient.date)).format('MMM DD, YYYY')}</span>
+                                <span className="text-xs text-gray-400">{moment(parseServerDate(recipient.date)).format('hh:mm A')}</span>
                               </div>
                             </td>
                             {showFailedReasonColumn && (
@@ -978,57 +979,57 @@ const CampaignDetails = () => {
                 transition={{ duration: 0.2, ease: 'easeOut' }}
                 className="relative w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
               >
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-red-600" />
-              <div className="p-6">
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                    <FiTrash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-red-600" />
+                <div className="p-6">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                      <FiTrash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Delete Campaign</h3>
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        Are you sure you want to delete this campaign? This action cannot be undone.
+                      </p>
+                      {campaignDetails?.name && (
+                        <div className="mt-3 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {campaignDetails.name}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Delete Campaign</h3>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                      Are you sure you want to delete this campaign? This action cannot be undone.
-                    </p>
-                    {campaignDetails?.name && (
-                      <div className="mt-3 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {campaignDetails.name}
-                        </p>
-                      </div>
-                    )}
+                  {deleteError && (
+                    <div className="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                      <p className="text-sm text-red-800 dark:text-red-200">{deleteError}</p>
+                    </div>
+                  )}
+                  <div className="mt-6 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={closeDeleteModal}
+                      disabled={deleteLoading}
+                      className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeleteConfirm}
+                      disabled={deleteLoading}
+                      className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                    >
+                      {deleteLoading ? (
+                        <FiLoader className="animate-spin" size={18} />
+                      ) : (
+                        <>
+                          <FiTrash2 size={16} />
+                          Delete
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
-                {deleteError && (
-                  <div className="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                    <p className="text-sm text-red-800 dark:text-red-200">{deleteError}</p>
-                  </div>
-                )}
-                <div className="mt-6 flex gap-3">
-                  <button
-                    type="button"
-                    onClick={closeDeleteModal}
-                    disabled={deleteLoading}
-                    className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDeleteConfirm}
-                    disabled={deleteLoading}
-                    className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
-                  >
-                    {deleteLoading ? (
-                      <FiLoader className="animate-spin" size={18} />
-                    ) : (
-                      <>
-                        <FiTrash2 size={16} />
-                        Delete
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
               </motion.div>
             </div>
           </div>

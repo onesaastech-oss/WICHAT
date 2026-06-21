@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { Header, Sidebar } from '../component/Menu';
-import { 
-  FiDownload, FiFileText, FiCalendar, FiDollarSign, 
-  FiRefreshCw, FiX, FiUser, FiCreditCard, FiHash, 
-  FiMail, FiPhone, FiCalendar as FiCalendarIcon, 
-  FiMessageSquare, FiCopy 
+import {
+  FiDownload, FiFileText, FiCalendar, FiDollarSign,
+  FiRefreshCw, FiX, FiUser, FiCreditCard, FiHash,
+  FiMail, FiPhone, FiCalendar as FiCalendarIcon,
+  FiMessageSquare, FiCopy
 } from 'react-icons/fi';
 import moment from 'moment';
+import { parseServerDate } from '../utils/dateTime';
+
+const formatMoment = (value, format) => {
+  const date = parseServerDate(value);
+  return date ? moment(date).format(format) : 'N/A';
+};
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import axios from 'axios';
@@ -113,7 +120,7 @@ const Transactions = () => {
       const data_pass = JSON.stringify({ data, key });
 
       const response = await axios.post(
-        'https://api.w1chat.com/payment/transaction-history',
+        `${API_BASE_URL}/payment/transaction-history`,
         data_pass,
         {
           headers: {
@@ -258,7 +265,7 @@ const Transactions = () => {
 
     const overviewRows = [
       ['Transaction ID:', transaction.id || 'N/A'],
-      ['Date:', moment(transaction.date).format('MMMM DD, YYYY HH:mm')],
+      ['Date:', formatMoment(transaction.date, 'MMMM DD, YYYY HH:mm')],
       ['Type:', transaction.type],
       ['Transaction Type:', getTransactionTypeDisplay(transaction.description)]
     ];
@@ -303,7 +310,7 @@ const Transactions = () => {
         ['Template Name:', md.template_name || 'N/A'],
         ['Language:', md.language_code || 'N/A'],
         ['Category:', md.category || 'N/A'],
-        ['Message Date:', md.create_date ? moment(md.create_date).format('MMMM DD, YYYY HH:mm') : 'N/A']
+        ['Message Date:', md.create_date ? formatMoment(md.create_date, 'MMMM DD, YYYY HH:mm') : 'N/A']
       ];
 
       autoTable(doc, {
@@ -342,7 +349,7 @@ const Transactions = () => {
         ['Name:', pd.name || 'N/A'],
         ['Email:', pd.email || 'N/A'],
         ['Mobile:', pd.mobile || 'N/A'],
-        ['Payment Date:', pd.create_date ? moment(pd.create_date).format('MMMM DD, YYYY HH:mm') : 'N/A']
+        ['Payment Date:', pd.create_date ? formatMoment(pd.create_date, 'MMMM DD, YYYY HH:mm') : 'N/A']
       ];
 
       autoTable(doc, {
@@ -479,13 +486,13 @@ const Transactions = () => {
   const handleResetFilters = () => {
     const resetFromDate = moment().subtract(30, 'days').format('YYYY-MM-DD');
     const resetToDate = moment().format('YYYY-MM-DD');
-    
+
     setFromDate(resetFromDate);
     setToDate(resetToDate);
     setTransactionType('all');
     setEntryType('all');
     setSelectedProjects([]);
-    
+
     // Fetch with reset filters
     setCurrentPage(1);
     fetchTransactions(1, pageSize, {
@@ -526,9 +533,8 @@ const Transactions = () => {
             <tr key={rowIndex} className="hover:bg-gray-50">
               {Array.from({ length: 8 }).map((_, colIndex) => (
                 <td key={colIndex} className="px-6 py-4 whitespace-nowrap">
-                  <div className={`h-4 bg-gray-100 rounded animate-pulse ${
-                    colIndex === 5 ? 'w-3/4' : 'w-full'
-                  }`}></div>
+                  <div className={`h-4 bg-gray-100 rounded animate-pulse ${colIndex === 5 ? 'w-3/4' : 'w-full'
+                    }`}></div>
                 </td>
               ))}
             </tr>
@@ -610,7 +616,7 @@ const Transactions = () => {
 
             {/* Body – clean, vertical layout with receipt color accents */}
             <div className="px-6 py-5 max-h-[70vh] overflow-y-auto bg-white">
-              
+
               {/* ----- BASIC INFO – LINE BY LINE (like receipt overview) ----- */}
               <div className="mb-6">
                 <h4 className="text-md font-semibold text-indigo-600 mb-3 flex items-center gap-2 border-b border-indigo-200 pb-2">
@@ -634,23 +640,21 @@ const Transactions = () => {
                   </div>
                   <div className="flex flex-col sm:flex-row sm:items-start">
                     <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Date & Time:</span>
-                    <span className="text-sm text-gray-900">{moment(selectedTransaction.date).format('MMMM DD, YYYY hh:mm A')}</span>
+                    <span className="text-sm text-gray-900">{formatMoment(selectedTransaction.date, 'MMMM DD, YYYY hh:mm A')}</span>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:items-start">
                     <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Type:</span>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      selectedTransaction.type === 'Credit' 
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${selectedTransaction.type === 'Credit'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                         : 'bg-rose-100 text-rose-800 border border-rose-200'
-                    }`}>
+                      }`}>
                       {selectedTransaction.type}
                     </span>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:items-start">
                     <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Amount:</span>
-                    <span className={`text-sm font-semibold ${
-                      selectedTransaction.type === 'Credit' ? 'text-emerald-600' : 'text-rose-600'
-                    }`}>
+                    <span className={`text-sm font-semibold ${selectedTransaction.type === 'Credit' ? 'text-emerald-600' : 'text-rose-600'
+                      }`}>
                       {selectedTransaction.type === 'Credit' ? '+' : '-'}₹{selectedTransaction.amount.toFixed(2)}
                     </span>
                   </div>
@@ -720,7 +724,7 @@ const Transactions = () => {
                     <div className="flex flex-col sm:flex-row sm:items-start">
                       <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Payment Date:</span>
                       <span className="text-sm text-gray-900">
-                        {payment_details.create_date ? moment(payment_details.create_date).format('MMMM DD, YYYY hh:mm A') : 'N/A'}
+                        {payment_details.create_date ? formatMoment(payment_details.create_date, 'MMMM DD, YYYY hh:mm A') : 'N/A'}
                       </span>
                     </div>
                   </div>
@@ -762,7 +766,7 @@ const Transactions = () => {
                     <div className="flex flex-col sm:flex-row sm:items-start">
                       <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Message Date:</span>
                       <span className="text-sm text-gray-900">
-                        {message_details.create_date ? moment(message_details.create_date).format('MMMM DD, YYYY hh:mm A') : 'N/A'}
+                        {message_details.create_date ? formatMoment(message_details.create_date, 'MMMM DD, YYYY hh:mm A') : 'N/A'}
                       </span>
                     </div>
                   </div>
@@ -903,13 +907,13 @@ const Transactions = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Unified Date Range Picker */}
                 {/* Unified Date Range Picker */}
-<DateRangePicker
-  startDate={fromDate}
-  endDate={toDate}
-  onStartDateChange={setFromDate}
-  onEndDateChange={setToDate}
-  maxDate={moment().format('YYYY-MM-DD')}
-/>
+                <DateRangePicker
+                  startDate={fromDate}
+                  endDate={toDate}
+                  onStartDateChange={setFromDate}
+                  onEndDateChange={setToDate}
+                  maxDate={moment().format('YYYY-MM-DD')}
+                />
 
                 {/* Transaction Type Dropdown - with Project Create */}
                 <div>
@@ -1116,13 +1120,13 @@ const Transactions = () => {
                             <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100 text-center align-middle">
                               <div className="space-y-1">
                                 <div className="text-sm font-medium text-gray-900">
-                                  {moment(transaction.date).format('MMM DD, YYYY')}
+                                  {formatMoment(transaction.date, 'MMM DD, YYYY')}
                                 </div>
                                 <div className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-md inline-flex items-center justify-center gap-1">
                                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                   </svg>
-                                  {moment(transaction.date).format('hh:mm A')}
+                                  {formatMoment(transaction.date, 'hh:mm A')}
                                 </div>
                               </div>
                             </td>
@@ -1211,9 +1215,9 @@ const Transactions = () => {
                           </span>
                         </div>
                         <p className="text-sm text-gray-700 mb-2">{getTransactionTypeDisplay(transaction.description)}</p>
-                        
+
                         <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-3">
-                          <span>{moment(transaction.date).format('MMM DD, YYYY hh:mm A')}</span>
+                          <span>{formatMoment(transaction.date, 'MMM DD, YYYY hh:mm A')}</span>
                           <span>•</span>
                           <span className={getTypeColor(transaction.type)}>{transaction.type}</span>
                         </div>

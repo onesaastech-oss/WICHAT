@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { Header, Sidebar } from '../component/Menu';
 import Tooltip from '../component/Tooltip';
 import Pagination from '../component/Pagination'; // Import Pagination component
@@ -78,7 +79,7 @@ function Template() {
 
       const { data, key } = Encrypt(payload);
       const response = await axios.post(
-        'https://api.w1chat.com/template/template-list',
+        `${API_BASE_URL}/template/template-list`,
         JSON.stringify({ data, key }),
         {
           headers: {
@@ -197,7 +198,7 @@ function Template() {
 
       const { data, key } = Encrypt(payload);
       const response = await axios.post(
-        'https://api.w1chat.com/template/template-delete',
+        `${API_BASE_URL}/template/template-delete`,
         JSON.stringify({ data, key }),
         {
           headers: {

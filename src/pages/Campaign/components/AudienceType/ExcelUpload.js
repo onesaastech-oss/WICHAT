@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
+import { API_BASE_URL } from '../../../../config/api';
 import { Upload, Phone, User, CheckCircle, AlertCircle, FileText, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import axios from 'axios';
 import { parseExcelFile, extractContacts } from '../../utils/excelParser';
 
-export default function ExcelUpload({ 
-  excelMapping, 
+export default function ExcelUpload({
+  excelMapping,
   setExcelMapping,
   onContactsExtracted,
   onHeadersExtracted,
@@ -34,9 +35,9 @@ export default function ExcelUpload({
     try {
       const form = new FormData();
       form.append('file', fileToUpload);
-      
+
       const response = await axios.post(
-        'https://api.w1chat.com/upload/upload-media',
+        `${API_BASE_URL}/upload/upload-media`,
         form,
         {
           headers: {
@@ -50,12 +51,12 @@ export default function ExcelUpload({
       if (response?.data && !response.data.error && response.data.link) {
         const fileUrl = response.data.link;
         setUploadedFileUrl(fileUrl);
-        
+
         // Notify parent component about the uploaded URL
         if (onFileUploaded) {
           onFileUploaded(fileUrl);
         }
-        
+
         return fileUrl;
       } else {
         throw new Error(response?.data?.message || 'Failed to upload file');
@@ -70,7 +71,7 @@ export default function ExcelUpload({
 
   const handleFileSelect = async (e) => {
     const selectedFile = e.target.files?.[0] || e.dataTransfer?.files?.[0];
-    
+
     if (!selectedFile) return;
 
     // Validate file type
@@ -79,10 +80,10 @@ export default function ExcelUpload({
       'application/vnd.ms-excel', // .xls
       'text/csv' // .csv
     ];
-    
+
     const validExtensions = ['.xlsx', '.xls', '.csv'];
     const fileExtension = selectedFile.name.substring(selectedFile.name.lastIndexOf('.')).toLowerCase();
-    
+
     if (!validTypes.includes(selectedFile.type) && !validExtensions.includes(fileExtension)) {
       setError('Please upload a valid Excel file (.xlsx, .xls, or .csv)');
       return;
@@ -98,19 +99,19 @@ export default function ExcelUpload({
     try {
       // First, parse the file locally to extract headers and data
       const { headers: fileHeaders, data } = await parseExcelFile(selectedFile);
-      
+
       if (fileHeaders.length === 0) {
         throw new Error('No headers found in the Excel file');
       }
 
       setHeaders(fileHeaders);
       setExcelData(data);
-      
+
       // Notify parent component about data
       if (onDataExtracted) {
         onDataExtracted(data);
       }
-      
+
       // Then upload the file to the server
       try {
         await uploadFileToServer(selectedFile);
@@ -119,12 +120,12 @@ export default function ExcelUpload({
         setError(`File parsed but upload failed: ${uploadErr.message}`);
         // Still allow user to proceed with local data, but warn about upload failure
       }
-      
+
       // Notify parent component about headers
       if (onHeadersExtracted) {
         onHeadersExtracted(fileHeaders);
       }
-      
+
       // Reset mapping if headers changed
       if (!fileHeaders.includes(excelMapping.phone) || !fileHeaders.includes(excelMapping.name)) {
         setExcelMapping({ phone: '', name: '' });
@@ -144,10 +145,10 @@ export default function ExcelUpload({
   const handleColumnMappingChange = (field, value) => {
     const newMapping = { ...excelMapping, [field]: value };
     setExcelMapping(newMapping);
-    
+
     // Reset to first page when mapping changes
     setCurrentPage(1);
-    
+
     // Extract contacts when both columns are selected
     if (newMapping.phone && newMapping.name && excelData.length > 0) {
       const contacts = extractContacts(excelData, newMapping.phone, newMapping.name);
@@ -182,13 +183,12 @@ export default function ExcelUpload({
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onClick={() => fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
-          isLoading
+        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${isLoading
             ? 'border-indigo-400 bg-indigo-50'
             : file
-            ? 'border-green-400 bg-green-50'
-            : 'border-gray-300 hover:border-indigo-400'
-        }`}
+              ? 'border-green-400 bg-green-50'
+              : 'border-gray-300 hover:border-indigo-400'
+          }`}
       >
         <input
           ref={fileInputRef}
@@ -197,7 +197,7 @@ export default function ExcelUpload({
           onChange={handleFileSelect}
           className="hidden"
         />
-        
+
         {(isLoading || isUploading) ? (
           <>
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-3"></div>
@@ -284,28 +284,28 @@ export default function ExcelUpload({
 
       {(() => {
         if (!excelMapping.phone || !excelMapping.name || excelData.length === 0) return null;
-        
+
         const contacts = extractContacts(excelData, excelMapping.phone, excelMapping.name);
         if (contacts.length === 0) return null;
-        
+
         // Calculate pagination
         const totalPages = Math.ceil(contacts.length / itemsPerPage);
         const startIndex = (currentPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
         const currentContacts = contacts.slice(startIndex, endIndex);
-        
+
         const handlePreviousPage = () => {
           if (currentPage > 1) {
             setCurrentPage(currentPage - 1);
           }
         };
-        
+
         const handleNextPage = () => {
           if (currentPage < totalPages) {
             setCurrentPage(currentPage + 1);
           }
         };
-        
+
         return (
           <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
@@ -317,7 +317,7 @@ export default function ExcelUpload({
               </div>
 
             </div>
-            
+
             {/* Table */}
             <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
               <div className="overflow-x-auto">
@@ -360,7 +360,7 @@ export default function ExcelUpload({
                   </tbody>
                 </table>
               </div>
-              
+
               {/* Pagination */}
               {totalPages > 1 && (
                 <div className="bg-gray-50 px-4 py-3 flex items-center justify-between border-t border-gray-200">
@@ -368,22 +368,20 @@ export default function ExcelUpload({
                     <button
                       onClick={handlePreviousPage}
                       disabled={currentPage === 1}
-                      className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
-                        currentPage === 1
+                      className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${currentPage === 1
                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                           : 'bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
+                        }`}
                     >
                       Previous
                     </button>
                     <button
                       onClick={handleNextPage}
                       disabled={currentPage === totalPages}
-                      className={`ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
-                        currentPage === totalPages
+                      className={`ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${currentPage === totalPages
                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                           : 'bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
+                        }`}
                     >
                       Next
                     </button>
@@ -401,11 +399,10 @@ export default function ExcelUpload({
                         <button
                           onClick={handlePreviousPage}
                           disabled={currentPage === 1}
-                          className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 text-sm font-medium ${
-                            currentPage === 1
+                          className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 text-sm font-medium ${currentPage === 1
                               ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                               : 'bg-white text-gray-500 hover:bg-gray-50'
-                          }`}
+                            }`}
                         >
                           <ChevronLeft className="h-5 w-5" />
                         </button>
@@ -419,11 +416,10 @@ export default function ExcelUpload({
                               <button
                                 key={page}
                                 onClick={() => setCurrentPage(page)}
-                                className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                                  currentPage === page
+                                className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${currentPage === page
                                     ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
                                     : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                                }`}
+                                  }`}
                               >
                                 {page}
                               </button>
@@ -443,11 +439,10 @@ export default function ExcelUpload({
                         <button
                           onClick={handleNextPage}
                           disabled={currentPage === totalPages}
-                          className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 text-sm font-medium ${
-                            currentPage === totalPages
+                          className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 text-sm font-medium ${currentPage === totalPages
                               ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                               : 'bg-white text-gray-500 hover:bg-gray-50'
-                          }`}
+                            }`}
                         >
                           <ChevronRight className="h-5 w-5" />
                         </button>

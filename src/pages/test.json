@@ -247,7 +247,7 @@
                         "format": "IMAGE",
                         "example": {
                             "header_handle": [
-                                "https://api.w1chat.com/upload/325yy88r0sqp8p2ggi6wj2ktp3xt5u1761716795593.jpeg"
+                                "https://server.onechatting.com/upload/325yy88r0sqp8p2ggi6wj2ktp3xt5u1761716795593.jpeg"
                             ]
                         }
                     },
@@ -277,7 +277,7 @@
                         {
                             "type": "image",
                             "image": {
-                                "link": "https://api.w1chat.com/upload/325yy88r0sqp8p2ggi6wj2ktp3xt5u1761716795593.jpeg"
+                                "link": "https://server.onechatting.com/upload/325yy88r0sqp8p2ggi6wj2ktp3xt5u1761716795593.jpeg"
                             }
                         }
                     ]
@@ -337,7 +337,7 @@
                         "format": "IMAGE",
                         "example": {
                             "header_handle": [
-                                "https://api.w1chat.com/upload/zm6pea2qbuj45011oeoxjgfyw2yuo51761752949267.jpg"
+                                "https://server.onechatting.com/upload/zm6pea2qbuj45011oeoxjgfyw2yuo51761752949267.jpg"
                             ]
                         }
                     },
@@ -376,7 +376,7 @@
                         {
                             "type": "image",
                             "image": {
-                                "link": "https://api.w1chat.com/upload/zm6pea2qbuj45011oeoxjgfyw2yuo51761752949267.jpg"
+                                "link": "https://server.onechatting.com/upload/zm6pea2qbuj45011oeoxjgfyw2yuo51761752949267.jpg"
                             }
                         }
                     ]
@@ -425,7 +425,7 @@
                         "format": "IMAGE",
                         "example": {
                             "header_handle": [
-                                "https://api.w1chat.com/upload/zm6pea2qbuj45011oeoxjgfyw2yuo51761752949267.jpg"
+                                "https://server.onechatting.com/upload/zm6pea2qbuj45011oeoxjgfyw2yuo51761752949267.jpg"
                             ]
                         }
                     },
@@ -690,7 +690,7 @@
                 "email": "souravadhikary1916@gmail.com",
                 "status": true
             },
-            "media_url": "https://api.w1chat.com/chat-media//917364076458/audio/a8lo3dsfjujuhmw1763368265299.mp3",
+            "media_url": "https://server.onechatting.com/chat-media//917364076458/audio/a8lo3dsfjujuhmw1763368265299.mp3",
             "media_name": "audio",
             "is_voice": false
         },
@@ -714,7 +714,7 @@
                 "email": "souravadhikary1916@gmail.com",
                 "status": true
             },
-            "media_url": "https://api.w1chat.com/chat-media//917364076458/audio/9ultz827vmxgb6g1763368247088.opus",
+            "media_url": "https://server.onechatting.com/chat-media//917364076458/audio/9ultz827vmxgb6g1763368247088.opus",
             "media_name": "audio",
             "is_voice": true
         }

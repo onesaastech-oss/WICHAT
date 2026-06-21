@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Header, Sidebar } from '../component/Menu';
 import { getProjectMetaDetails, updateWabaProfileDetails, submitWabaId } from '../api/auth';
@@ -225,7 +226,7 @@ const ProjectDetails = () => {
             formData.append('file', file);
 
             const uploadResponse = await axios.post(
-                'https://api.w1chat.com/upload/upload-media',
+                `${API_BASE_URL}/upload/upload-media`,
                 formData,
                 {
                     headers: {

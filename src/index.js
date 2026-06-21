@@ -37,6 +37,7 @@ import WalletRecharge from './pages/WalletRecharge.js';
 import PaymentStatus from './pages/PaymentStatus.js';
 import ProjectDetails from './pages/ProjectDetails';
 import ProjectConfig from './pages/ProjectConfig';
+import DeveloperAccess from './pages/DeveloperAccess';
 import Support from './pages/Support';
 import ProtectedRoute from './component/ProtectedRoute';
 const GOOGLE_CLIENT_ID = "124604231994-dtnflivbu049428d1cg9ngfuhgq38efs.apps.googleusercontent.com";
@@ -175,6 +176,11 @@ root.render(
           <Route path="/project-config" element={
             <ProtectedRoute requiresProject={true}>
               <ProjectConfig />
+            </ProtectedRoute>
+          } />
+          <Route path="/developer-access" element={
+            <ProtectedRoute requiresProject={true}>
+              <DeveloperAccess />
             </ProtectedRoute>
           } />
           {/* Regular protected routes */}

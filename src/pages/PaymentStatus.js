@@ -22,6 +22,7 @@ import { checkPaymentStatus } from '../api/auth';
 import { fetchProjectInfo } from '../store/projectSlice';
 import { useDispatch } from 'react-redux';
 import moment from 'moment';
+import { parseServerDate } from '../utils/dateTime';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -224,7 +225,8 @@ const PaymentStatus = () => {
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     try {
-      return moment(dateString).format('DD MMM YYYY, hh:mm A');
+      const date = parseServerDate(dateString);
+      return date ? moment(date).format('DD MMM YYYY, hh:mm A') : dateString;
     } catch {
       return dateString;
     }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { Header, Sidebar } from '../component/Menu';
 import Pagination from '../component/Pagination';
 import { useNavigate } from 'react-router-dom';
@@ -123,7 +124,7 @@ function ContactGroup() {
         const data_pass = JSON.stringify({ data, key });
 
         const response = await axios.post(
-          'https://api.w1chat.com/contact/group-list',
+          `${API_BASE_URL}/contact/group-list`,
           data_pass,
           {
             headers: {
@@ -255,7 +256,7 @@ function ContactGroup() {
       const data_pass = JSON.stringify({ data, key });
 
       const response = await axios.post(
-        'https://api.w1chat.com/contact/create-group',
+        `${API_BASE_URL}/contact/create-group`,
         data_pass,
         {
           headers: {
@@ -334,7 +335,7 @@ function ContactGroup() {
       const data_pass = JSON.stringify({ data, key });
 
       const response = await axios.post(
-        'https://api.w1chat.com/contact/edit-group',
+        `${API_BASE_URL}/contact/edit-group`,
         data_pass,
         {
           headers: {
@@ -392,7 +393,7 @@ function ContactGroup() {
       const data_pass = JSON.stringify({ data, key });
 
       const response = await axios.post(
-        'https://api.w1chat.com/contact/delete-group',
+        `${API_BASE_URL}/contact/delete-group`,
         data_pass,
         {
           headers: {

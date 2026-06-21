@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Encrypt } from './encryption/payload-encryption';
@@ -232,7 +233,7 @@ const Login = () => {
       let config = {
         method: 'post',
         maxBodyLength: Infinity,
-        url: 'https://api.w1chat.com/account/google-login', // You'll need to create this endpoint
+        url: `${API_BASE_URL}/account/google-login`, // You'll need to create this endpoint
         headers: {
           'Content-Type': 'application/json'
         },
