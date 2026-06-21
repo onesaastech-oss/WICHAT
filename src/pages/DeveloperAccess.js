@@ -23,7 +23,7 @@ import toast from 'react-hot-toast';
 
 const DEVELOPER_API_DOCS_URL = 'https://docs.onechatting.com';
 
-const getAuthHeaders = (projectId) => {
+const getAuthHeaders = () => {
     const userDataRaw = localStorage.getItem('userData');
     let token = '';
     let username = '';
@@ -36,7 +36,6 @@ const getAuthHeaders = (projectId) => {
     return {
         token,
         username,
-        project_id: projectId,
         'Content-Type': 'application/json',
     };
 };
@@ -368,7 +367,7 @@ function DeveloperAccess() {
             return;
         }
 
-        const headers = getAuthHeaders(id);
+        const headers = getAuthHeaders();
         if (!headers.token || !headers.username) {
             setLoading(false);
             toast.error('Session expired. Please log in again.');
@@ -377,7 +376,11 @@ function DeveloperAccess() {
 
         setLoading(true);
         try {
-            const response = await axios.get(`${API_BASE_URL}/developer/access-info`, { headers });
+            const response = await axios.post(
+                `${API_BASE_URL}/developer/access-info`,
+                { project_id: id },
+                { headers }
+            );
             if (response?.data?.error) {
                 toast.error(typeof response.data.error === 'string' ? response.data.error : 'Failed to load developer access');
                 return;
@@ -404,7 +407,7 @@ function DeveloperAccess() {
     const handleAccessChange = async (checked) => {
         if (!projectId) return;
 
-        const headers = getAuthHeaders(projectId);
+        const headers = getAuthHeaders();
         if (!headers.token || !headers.username) {
             toast.error('Session expired. Please log in again.');
             return;
@@ -414,7 +417,7 @@ function DeveloperAccess() {
         try {
             const response = await axios.post(
                 `${API_BASE_URL}/developer/update-developer-access`,
-                { status: checked },
+                { status: checked, project_id: projectId },
                 { headers }
             );
 
@@ -451,7 +454,7 @@ function DeveloperAccess() {
     const handleRegenerateProjectToken = async () => {
         if (!projectId) return;
 
-        const headers = getAuthHeaders(projectId);
+        const headers = getAuthHeaders();
         if (!headers.token || !headers.username) {
             toast.error('Session expired. Please log in again.');
             return;
@@ -461,7 +464,7 @@ function DeveloperAccess() {
         try {
             const response = await axios.put(
                 `${API_BASE_URL}/developer/update-developer-access`,
-                {},
+                { project_id: projectId },
                 { headers }
             );
 
@@ -494,7 +497,7 @@ function DeveloperAccess() {
     const handleRegenerateUserToken = async (uniqueId) => {
         if (!projectId || !uniqueId) return;
 
-        const headers = getAuthHeaders(projectId);
+        const headers = getAuthHeaders();
         if (!headers.token || !headers.username) {
             toast.error('Session expired. Please log in again.');
             return;
@@ -504,7 +507,7 @@ function DeveloperAccess() {
         try {
             const response = await axios.put(
                 `${API_BASE_URL}/developer/update-agent-developer-token`,
-                { unique_id: uniqueId },
+                { unique_id: uniqueId, project_id: projectId },
                 { headers }
             );
 

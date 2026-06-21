@@ -40,7 +40,7 @@ import ProjectConfig from './pages/ProjectConfig';
 import DeveloperAccess from './pages/DeveloperAccess';
 import Support from './pages/Support';
 import ProtectedRoute from './component/ProtectedRoute';
-const GOOGLE_CLIENT_ID = "1099166791217-g80a33inruv32pnme931g7l6mqldah0k.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
 
 
 
