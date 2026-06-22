@@ -50,6 +50,7 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { Encrypt } from './encryption/payload-encryption';
+import { uploadFile } from '../utils/uploadFile';
 import { dbHelper, contactDbHelper } from './db';
 import ContactFormModal from '../component/Modals/ContactFormModal';
 import ChatTemplateModal from '../component/Modals/ChatTemplateModal';
@@ -67,6 +68,7 @@ import LocationPreview from '../component/Conversation/LocationPreview';
 import ContactPreview from '../component/Conversation/ContactPreview';
 import { SearchChatModal } from '../component/Modals/Conversation/SearchChatModal';
 import TemplateMessageRenderer from '../component/Conversation/TemplateMessageRender';
+import { buildTemplateDisplayMessage } from '../utils/templateMessageDisplay';
 import Pagination from '../component/Pagination';
 
 const escapeRegExp = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -125,8 +127,13 @@ const getSearchableTextFromMessage = (msg) => {
             return templateBody;
         }
 
-        const templateComponents = msg.template?.template_data?.components;
+        const templateComponents = msg.template?.components || msg.template?.template_data?.components;
         if (Array.isArray(templateComponents)) {
+            const displayText = buildTemplateDisplayMessage(msg.template, msg.component);
+            if (displayText) {
+                return displayText;
+            }
+
             const bodyComponent = templateComponents.find((component) => component.type === 'BODY');
             if (bodyComponent?.text) {
                 return bodyComponent.text;
@@ -460,24 +467,8 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
 
                                                         // Template message
                                                         if (replyMsg.is_template && replyMsg.template) {
-                                                            const bodyComponent = replyMsg.template.components?.find(c => c.type === 'BODY');
-                                                            if (bodyComponent?.text) {
-                                                                let text = bodyComponent.text;
-                                                                if (replyMsg.component) {
-                                                                    let componentData = replyMsg.component;
-                                                                    if (typeof componentData === 'string') {
-                                                                        try {
-                                                                            componentData = JSON.parse(componentData);
-                                                                        } catch (e) {
-                                                                        }
-                                                                    }
-                                                                    const bodyParam = componentData?.find?.(c => c.type === 'body');
-                                                                    if (bodyParam?.parameters) {
-                                                                        bodyParam.parameters.forEach((param, idx) => {
-                                                                            text = text.replace(`{{${idx + 1}}}`, param.text || '');
-                                                                        });
-                                                                    }
-                                                                }
+                                                            const text = buildTemplateDisplayMessage(replyMsg.template, replyMsg.component);
+                                                            if (text) {
                                                                 return <span>{text}</span>;
                                                             }
                                                             return <span>Template message</span>;
@@ -1988,22 +1979,28 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                 const isTemplate = Boolean(apiMessage?.is_template || apiMessage?.message_type === 'template');
                 let resolvedMessage = (apiMessage.message ?? '');
                 if (isTemplate && (!resolvedMessage || resolvedMessage.length === 0)) {
-                    // Prefer template.body if present
-                    let bodyText = '';
-                    if (apiMessage.template?.components) {
-                        const bodyComp = apiMessage.template.components.find(c => c.type === 'BODY');
-                        bodyText = bodyComp?.text || '';
-                    } else if (apiMessage.template?.body) {
-                        bodyText = apiMessage.template.body;
+                    resolvedMessage = buildTemplateDisplayMessage(
+                        apiMessage.template,
+                        normalizedComponent
+                    ) || '';
+
+                    if (!resolvedMessage) {
+                        let bodyText = '';
+                        if (apiMessage.template?.components) {
+                            const bodyComp = apiMessage.template.components.find(c => c.type === 'BODY');
+                            bodyText = bodyComp?.text || '';
+                        } else if (apiMessage.template?.body) {
+                            bodyText = apiMessage.template.body;
+                        }
+                        const params = (normalizedComponent || [])
+                            .find(c => c?.type?.toLowerCase() === 'body')
+                            ?.parameters || [];
+                        const matches = bodyText.match(/\{\{\d+\}\}/g) || [];
+                        resolvedMessage = matches.reduce((acc, ph, idx) => {
+                            const val = params[idx]?.text || `Variable ${idx + 1}`;
+                            return acc.replace(ph, val);
+                        }, bodyText) || '';
                     }
-                    const params = (normalizedComponent || [])
-                        .find(c => c?.type?.toLowerCase() === 'body')
-                        ?.parameters || [];
-                    const matches = bodyText.match(/\{\{\d+\}\}/g) || [];
-                    resolvedMessage = matches.reduce((acc, ph, idx) => {
-                        const val = params[idx]?.text || `Variable ${idx + 1}`;
-                        return acc.replace(ph, val);
-                    }, bodyText) || '';
                 }
 
                 // Extract header media URL from component parameters for templates
@@ -2705,34 +2702,11 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         if (!item?.file || !tokens?.token || !tokens?.username) return;
         const fallbackFileName = item.file?.name || item.displayName || `attachment_${Date.now()}`;
         try {
-            const formData = new FormData();
-            formData.append('file', item.file, fallbackFileName);
-            formData.append('project_id', tokens.selected_project_id || '');
+            const { link: fileUrl } = await uploadFile(item.file, { filename: fallbackFileName });
 
-            const uploadResponse = await axios.post(
-                `${API_BASE_URL}/upload/upload-media`,
-                formData,
-                {
-                    headers: {
-                        'token': tokens.token,
-                        'username': tokens.username,
-                        'Content-Type': 'multipart/form-data'
-                    }
-                }
-            );
-
-            const fileUrl = uploadResponse?.data?.link
-                || uploadResponse?.data?.data?.file_url
-                || uploadResponse?.data?.data?.fileUrl;
-
-            if (uploadResponse?.data && !uploadResponse.data.error && fileUrl) {
-                setFilesInModal((prev) => prev.map((it) => it.id === item.id ? { ...it, uploadStatus: 'success', uploadedUrl: fileUrl, uploadError: undefined } : it));
-            } else {
-                const errMsg = uploadResponse?.data?.message || uploadResponse?.data?.error || 'Upload failed';
-                setFilesInModal((prev) => prev.map((it) => it.id === item.id ? { ...it, uploadStatus: 'error', uploadError: typeof errMsg === 'string' ? errMsg : 'Upload failed' } : it));
-            }
+            setFilesInModal((prev) => prev.map((it) => it.id === item.id ? { ...it, uploadStatus: 'success', uploadedUrl: fileUrl, uploadError: undefined } : it));
         } catch (error) {
-            const errMsg = error.response?.data?.message || error.response?.data?.error || error.message || 'Upload failed';
+            const errMsg = error.response?.data?.message || error.message || 'Upload failed';
             setFilesInModal((prev) => prev.map((it) => it.id === item.id ? { ...it, uploadStatus: 'error', uploadError: typeof errMsg === 'string' ? errMsg : 'Upload failed' } : it));
         }
     };
@@ -2756,34 +2730,17 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
         const fallbackFileName = fileItem.file?.name || fileItem.displayName || `attachment_${Date.now()}`;
 
         try {
-            const formData = new FormData();
-            formData.append('file', fileItem.file, fallbackFileName);
-            formData.append('project_id', tokens.selected_project_id || '');
+            const { link: fileUrl } = await uploadFile(fileItem.file, {
+                filename: fallbackFileName,
+                onUploadProgress: (progressEvent) => {
+                    const progress = Math.round(
+                        (progressEvent.loaded * 100) / progressEvent.total
+                    );
+                    setUploadProgress(progress);
+                },
+            });
 
-            const uploadResponse = await axios.post(
-                `${API_BASE_URL}/upload/upload-media`,
-                formData,
-                {
-                    headers: {
-                        'token': tokens.token,
-                        'username': tokens.username,
-                        'Content-Type': 'multipart/form-data'
-                    },
-                    onUploadProgress: (progressEvent) => {
-                        const progress = Math.round(
-                            (progressEvent.loaded * 100) / progressEvent.total
-                        );
-                        setUploadProgress(progress);
-                    }
-                }
-            );
-
-            const fileUrl = uploadResponse?.data?.link
-                || uploadResponse?.data?.data?.file_url
-                || uploadResponse?.data?.data?.fileUrl;
-
-            if (uploadResponse.data && !uploadResponse.data.error && fileUrl) {
-                const fileType = fileItem.type;
+            const fileType = fileItem.type;
                 const fileName = fileItem.file?.name || fileItem.displayName || fallbackFileName;
                 const displayName = fileType === 'document' ? (fileItem.documentName ?? fileName) : fileName;
 
@@ -2902,9 +2859,6 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                         onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
                     }
                 }
-            } else {
-                throw new Error(uploadResponse?.data?.message || 'Failed to upload file');
-            }
         } catch (error) {
             const errMsg = error.response?.data?.error || error.response?.data?.msg || error.message || 'Failed to send message';
             toast.error(typeof errMsg === 'string' ? errMsg : 'Failed to send message');
@@ -3107,6 +3061,31 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
             // Resolve message body text for local echo
             let messageBody = previewText;
+            const isAuthTemplate = String(template.category || template.template_data?.category || '').toUpperCase() === 'AUTHENTICATION';
+
+            if (!messageBody && isAuthTemplate) {
+                const bodyComp = template.template_data?.components?.find((c) => c.type === 'BODY');
+                const params = formattedComponents.find((c) => (c.type || '').toLowerCase() === 'body')?.parameters || [];
+
+                if (bodyComp?.text) {
+                    let text = bodyComp.text;
+                    const matches = text.match(/\{\{\d+\}\}/g) || [];
+                    messageBody = matches.reduce((acc, ph, idx) => {
+                        const val = params[idx]?.text || '';
+                        return acc.replace(ph, val);
+                    }, text);
+                } else {
+                    const bodyParam = params[0]?.text;
+                    if (bodyParam) {
+                        const hasSecurity = Boolean(bodyComp?.add_security_recommendation);
+                        messageBody = `${bodyParam} is your verification code.`;
+                        if (hasSecurity) {
+                            messageBody += ' For your security, do not share this code.';
+                        }
+                    }
+                }
+            }
+
             if (!messageBody) {
                 let content = '';
                 if (template.template_data?.body) {
@@ -3198,7 +3177,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     message_id: serverMessageId || tempMessageId,
                     wamid: serverWamid,
                     id: serverId || tempMessage.id,
-                    status: 'sent'
+                    status: 'sent',
+                    message: response?.data?.message || tempMessage.message,
+                    template: response?.data?.template || tempMessage.template,
+                    component: response?.data?.component || tempMessage.component,
                 };
 
                 if (dbAvailable) {
@@ -3783,24 +3765,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
                                         // Template message
                                         if (replyMsg.is_template && replyMsg.template) {
-                                            const bodyComponent = replyMsg.template.components?.find(c => c.type === 'BODY');
-                                            if (bodyComponent?.text) {
-                                                let text = bodyComponent.text;
-                                                if (replyMsg.component) {
-                                                    let componentData = replyMsg.component;
-                                                    if (typeof componentData === 'string') {
-                                                        try {
-                                                            componentData = JSON.parse(componentData);
-                                                        } catch (e) {
-                                                        }
-                                                    }
-                                                    const bodyParam = componentData?.find?.(c => c.type === 'body');
-                                                    if (bodyParam?.parameters) {
-                                                        bodyParam.parameters.forEach((param, idx) => {
-                                                            text = text.replace(`{{${idx + 1}}}`, param.text || '');
-                                                        });
-                                                    }
-                                                }
+                                            const text = buildTemplateDisplayMessage(replyMsg.template, replyMsg.component);
+                                            if (text) {
                                                 return <span>{text}</span>;
                                             }
                                             return <span>Template message</span>;

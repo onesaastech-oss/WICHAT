@@ -6,7 +6,8 @@ import {
   FiMenu, FiBriefcase, FiChevronDown, FiCreditCard,
   FiPlus, FiBell, FiUser, FiSettings, FiHelpCircle,
   FiLogOut, FiPieChart, FiMessageSquare, FiUsers,
-  FiMail, FiZap, FiCpu, FiLock, FiChevronRight, FiX
+  FiMail, FiZap, FiCpu, FiLock, FiChevronRight, FiX,
+  FiMaximize2, FiMinimize2
 } from 'react-icons/fi';
 
 // Adjust these import paths if necessary
@@ -199,16 +200,41 @@ const NavItem = React.memo(({ item, isMobile, isMinimized, isHovered, currentPat
 
 NavItem.displayName = 'NavItem';
 
+const getFullscreenElement = () =>
+  document.fullscreenElement
+  || document.webkitFullscreenElement
+  || document.mozFullScreenElement
+  || document.msFullscreenElement
+  || null;
+
+const requestBrowserFullscreen = () => {
+  const el = document.documentElement;
+  if (el.requestFullscreen) return el.requestFullscreen();
+  if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen();
+  if (el.mozRequestFullScreen) return el.mozRequestFullScreen();
+  if (el.msRequestFullscreen) return el.msRequestFullscreen();
+  return Promise.reject(new Error('Fullscreen API is not supported'));
+};
+
+const exitBrowserFullscreen = () => {
+  if (document.exitFullscreen) return document.exitFullscreen();
+  if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
+  if (document.mozCancelFullScreen) return document.mozCancelFullScreen();
+  if (document.msExitFullscreen) return document.msExitFullscreen();
+  return Promise.reject(new Error('Fullscreen API is not supported'));
+};
+
 // ==========================================
 // 4. Header Component
 // ==========================================
-export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized }) => {
+export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized, isFullScreen = false }) => {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [switchProjectModalOpen, setSwitchProjectModalOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [selectedProjectName, setSelectedProjectName] = useState(null);
   const [userProfile, setUserProfile] = useState({ name: '', email: '' });
   const [walletBalance, setWalletBalance] = useState(0);
+  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
   const profileDropdownRef = React.useRef(null);
 
   const dispatch = useDispatch();
@@ -236,6 +262,36 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
 
   const toggleSidebar = () => {
     if (setIsMinimized) setIsMinimized(!isMinimized);
+  };
+
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      setIsBrowserFullscreen(Boolean(getFullscreenElement()));
+    };
+
+    document.addEventListener('fullscreenchange', syncFullscreenState);
+    document.addEventListener('webkitfullscreenchange', syncFullscreenState);
+    document.addEventListener('mozfullscreenchange', syncFullscreenState);
+    document.addEventListener('MSFullscreenChange', syncFullscreenState);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreenState);
+      document.removeEventListener('webkitfullscreenchange', syncFullscreenState);
+      document.removeEventListener('mozfullscreenchange', syncFullscreenState);
+      document.removeEventListener('MSFullscreenChange', syncFullscreenState);
+    };
+  }, []);
+
+  const toggleBrowserFullscreen = async () => {
+    try {
+      if (getFullscreenElement()) {
+        await exitBrowserFullscreen();
+      } else {
+        await requestBrowserFullscreen();
+      }
+    } catch (error) {
+      console.error('Failed to toggle browser fullscreen:', error);
+    }
   };
 
   const handleLogout = () => {
@@ -379,7 +435,9 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
 
   return (
     <>
-      <header className="fixed top-0 inset-x-0 z-50 h-16 border-b border-indigo-100 bg-white/90 backdrop-blur-md transition-all duration-200">
+      <header className={`fixed top-0 inset-x-0 z-50 h-16 border-b border-indigo-100 bg-white/90 backdrop-blur-md transition-all duration-300 ease-in-out ${
+        isFullScreen ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
+      }`}>
         <div className="flex h-full items-center justify-between px-4 sm:px-6">
           {/* Left */}
           <div className="flex items-center gap-4">
@@ -396,6 +454,16 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
 
           {/* Right */}
           <div className="flex items-center gap-3 md:gap-5">
+            <button
+              type="button"
+              onClick={toggleBrowserFullscreen}
+              className="hidden md:flex items-center justify-center h-9 w-9 rounded-lg border border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all duration-200"
+              title={isBrowserFullscreen ? 'Exit full screen (Esc)' : 'Full screen'}
+              aria-label={isBrowserFullscreen ? 'Exit full screen' : 'Enter full screen'}
+            >
+              {isBrowserFullscreen ? <FiMinimize2 size={18} /> : <FiMaximize2 size={18} />}
+            </button>
+
             <button
               onClick={() => setSwitchProjectModalOpen(true)}
               className="hidden md:flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all duration-200 group"
@@ -485,7 +553,7 @@ const notifyUnreadCountListeners = (count) => {
 // ==========================================
 // 5. Sidebar Component
 // ==========================================
-export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized, totalUnreadCount: propUnreadCount }) => {
+export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized, totalUnreadCount: propUnreadCount, isFullScreen = false }) => {
   const [openSubmenus, setOpenSubmenus] = useState({});
   const [hoveredMenu, setHoveredMenu] = useState(null);
   const [isHovered, setIsHovered] = useState(false);
@@ -614,7 +682,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
   return (
     <>
       <AnimatePresence>
-        {mobileMenuOpen && (
+        {mobileMenuOpen && !isFullScreen && (
           <>
             <motion.div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm md:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMobileMenuOpen(false)} />
             <motion.div className="fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-2xl md:hidden flex flex-col" initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: "spring", damping: 30, stiffness: 300 }}>
@@ -648,8 +716,17 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
       <motion.div
         className="hidden md:flex md:flex-col md:fixed md:inset-y-0 bg-white border-r border-indigo-100 z-40 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.05)]"
         initial={false}
-        animate={{ width: (isMinimized && !isHovered) ? 80 : 260 }}
-        style={{ top: '64px', height: 'calc(100vh - 64px)' }}
+        animate={{
+          width: (isMinimized && !isHovered) ? 80 : 260,
+          x: isFullScreen ? -280 : 0,
+          opacity: isFullScreen ? 0 : 1,
+        }}
+        transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+        style={{
+          top: isFullScreen ? 0 : '64px',
+          height: isFullScreen ? '100vh' : 'calc(100vh - 64px)',
+          pointerEvents: isFullScreen ? 'none' : 'auto',
+        }}
         onMouseEnter={() => handleSidebarHover(true)}
         onMouseLeave={() => handleSidebarHover(false)}
       >

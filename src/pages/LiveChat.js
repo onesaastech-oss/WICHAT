@@ -8,6 +8,7 @@ import { socketManager } from './socket';
 import { FiArrowLeft, FiSun, FiMoon, FiLock } from 'react-icons/fi';
 import logo from '../logo.svg';
 import { Header, Sidebar } from '../component/Menu';
+
 function LiveChat() {
     const navigate = useNavigate();
     const location = useLocation();
@@ -25,6 +26,7 @@ function LiveChat() {
     const isBackNavigationRef = useRef(false);
 
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [isFullScreen, setIsFullScreen] = useState(false);
     const [isMinimized, setIsMinimized] = useState(() => {
         const saved = localStorage.getItem('sidebarMinimized');
         return saved ? JSON.parse(saved) : false;
@@ -33,6 +35,26 @@ function LiveChat() {
     useEffect(() => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
     }, [isMinimized]);
+
+    useEffect(() => {
+        if (isFullScreen) {
+            setMobileMenuOpen(false);
+        }
+    }, [isFullScreen]);
+
+    useEffect(() => {
+        const handleEscape = (event) => {
+            if (event.key === 'Escape' && isFullScreen) {
+                setIsFullScreen(false);
+            }
+        };
+        window.addEventListener('keydown', handleEscape);
+        return () => window.removeEventListener('keydown', handleEscape);
+    }, [isFullScreen]);
+
+    const handleToggleFullScreen = () => {
+        setIsFullScreen((prev) => !prev);
+    };
 
     // Initialize app
     useEffect(() => {
@@ -376,16 +398,31 @@ function LiveChat() {
                 setMobileMenuOpen={setMobileMenuOpen}
                 isMinimized={isMinimized}
                 setIsMinimized={setIsMinimized}
+                isFullScreen={isFullScreen}
             />
             <Sidebar
                 mobileMenuOpen={mobileMenuOpen}
                 setMobileMenuOpen={setMobileMenuOpen}
                 isMinimized={isMinimized}
                 setIsMinimized={setIsMinimized}
+                isFullScreen={isFullScreen}
             />
 
-            <div className={`pt-16 flex flex-1 overflow-hidden transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
-                }`}>
+            <motion.div
+                className="flex flex-1 overflow-hidden w-full"
+                initial={false}
+                animate={{
+                    paddingTop: isFullScreen ? 0 : 64,
+                }}
+                transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+            >
+                <motion.div
+                    layout
+                    className={`flex flex-1 overflow-hidden w-full transition-[padding] duration-300 ease-in-out ${
+                        isFullScreen ? 'md:pl-0' : (isMinimized ? 'md:pl-20' : 'md:pl-72')
+                    }`}
+                    transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+                >
 
                 {/* Header */}
                 {/* <motion.div
@@ -437,6 +474,8 @@ function LiveChat() {
                                 dbAvailable={dbAvailable}
                                 socket_chats={chats}
                                 onRepairChats={handleRepairChats}
+                                isFullScreen={isFullScreen}
+                                onToggleFullScreen={handleToggleFullScreen}
                             />
                         </motion.div>
                     </AnimatePresence>
@@ -515,7 +554,8 @@ function LiveChat() {
                         )}
                     </AnimatePresence>
                 </div>
-            </div>
+                </motion.div>
+            </motion.div>
         </motion.div>
     );
 }

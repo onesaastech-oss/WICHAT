@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { API_BASE_URL } from '../config/api';
 import { useNavigate } from 'react-router-dom';
 import { toServerTimestamp, parseServerDate } from '../utils/dateTime';
-import { FiSearch, FiStar, FiImage, FiVideo, FiFile, FiMusic, FiUser, FiCheck, FiClock, FiAlertCircle, FiMoreVertical, FiMessageCircle, FiRefreshCw, FiDelete, FiTrash2, FiChevronLeft, FiChevronRight, FiX, FiBriefcase } from 'react-icons/fi';
+import { FiSearch, FiStar, FiImage, FiVideo, FiFile, FiMusic, FiUser, FiCheck, FiClock, FiAlertCircle, FiMoreVertical, FiMessageCircle, FiRefreshCw, FiDelete, FiTrash2, FiChevronLeft, FiChevronRight, FiX, FiBriefcase, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import { dbHelper } from './db';
@@ -26,7 +26,7 @@ const COUNTRY_CODES = [
     { code: '60', country: 'Malaysia', dial: '+60' },
 ];
 
-function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, socket_chats = [], onRepairChats }) {
+function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, socket_chats = [], onRepairChats, isFullScreen = false, onToggleFullScreen }) {
     const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('All');
@@ -534,6 +534,23 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                                 >
                                     <FiRefreshCw className="w-4 h-4" />
                                     Repair Chats
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowSettingsMenu(false); onToggleFullScreen?.(); }}
+                                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                >
+                                    {isFullScreen ? (
+                                        <>
+                                            <FiMinimize2 className="w-4 h-4" />
+                                            Exit Full Screen
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FiMaximize2 className="w-4 h-4" />
+                                            Full Screen
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         )}

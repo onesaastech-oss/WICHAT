@@ -5,6 +5,7 @@ import { Header, Sidebar } from '../component/Menu';
 import { getProjectMetaDetails, updateWabaProfileDetails, submitWabaId } from '../api/auth';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { uploadFile } from '../utils/uploadFile';
 import {
     FiArrowLeft, FiSave, FiX, FiEdit2, FiGlobe, FiInfo,
     FiCheckCircle, FiAlertCircle, FiTrash2, FiPlus, FiCamera, FiExternalLink, FiRefreshCw
@@ -221,30 +222,7 @@ const ProjectDetails = () => {
                 throw new Error('Session expired');
             }
 
-            // Upload file first
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const uploadResponse = await axios.post(
-                `${API_BASE_URL}/upload/upload-media`,
-                formData,
-                {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                        'token': token,
-                        'username': username
-                    }
-                }
-            );
-
-            if (uploadResponse?.data?.error) {
-                throw new Error(uploadResponse.data.msg || 'Failed to upload image');
-            }
-
-            const imageUrl = uploadResponse?.data?.link;
-            if (!imageUrl) {
-                throw new Error('No image URL returned from upload');
-            }
+            const { link: imageUrl } = await uploadFile(file);
 
             // Update form with new image URL
             setEditForm(prev => ({

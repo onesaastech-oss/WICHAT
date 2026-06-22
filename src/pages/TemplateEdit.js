@@ -24,6 +24,7 @@ import {
   FiAlertCircle
 } from 'react-icons/fi';
 import WhatsAppPreview from '../component/TemplateAdd/WhatsAppPreview';
+import { uploadFile } from '../utils/uploadFile';
 
 function TemplateEdit() {
   const { templateId } = useParams();
@@ -403,40 +404,20 @@ function TemplateEdit() {
 
       setIsUploading(true);
       try {
-        // Create FormData for file upload
-        const formData = new FormData();
-        formData.append('file', file);
+        const { link } = await uploadFile(file);
 
-        // Upload file to API
-        const response = await axios.post(
-          `${API_BASE_URL}/upload/upload-media`,
-          formData,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-              'token': tokens?.token || '',
-              'username': tokens?.username || ''
-            }
-          }
-        );
-
-        if (response.data && !response.data.error && response.data.link) {
-          // Update form data with the uploaded file URL
-          setFormData(prev => ({
-            ...prev,
-            components: {
-              ...prev.components,
-              header: {
-                ...prev.components.header,
-                example: {
-                  header_handle: [response.data.link]
-                }
+        setFormData(prev => ({
+          ...prev,
+          components: {
+            ...prev.components,
+            header: {
+              ...prev.components.header,
+              example: {
+                header_handle: [link]
               }
             }
-          }));
-        } else {
-          throw new Error('Upload failed: Invalid response from server');
-        }
+          }
+        }));
       } catch (error) {
         console.error('Error uploading file:', error);
         alert(`Failed to upload file: ${error.message}`);

@@ -3,6 +3,7 @@ import { API_BASE_URL } from '../../../config/api';
 import axios from 'axios';
 import { Check, Hash, ChevronDown, FileText, Upload } from 'lucide-react';
 import ChatTemplateModal from '../../../component/Modals/ChatTemplateModal';
+import { uploadFile } from '../../../utils/uploadFile';
 
 export default function TemplateSelector({
   selectedTemplate,
@@ -101,15 +102,11 @@ export default function TemplateSelector({
   }, [selectedTemplate?.id, requiresHeaderMedia, headerComponent]);
 
   const uploadHeaderMedia = async (file) => {
-    if (!file || !effectiveTokens?.token) return;
+    if (!file) return;
     setIsUploadingHeader(true);
     try {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await axios.post(`${API_BASE_URL}/upload/upload-media`, form, {
-        headers: { 'Content-Type': 'multipart/form-data', token: effectiveTokens.token, username: effectiveTokens.username }
-      });
-      if (res?.data?.link) setHeaderMediaUrl(res.data.link);
+      const { link } = await uploadFile(file);
+      setHeaderMediaUrl(link);
     } catch (e) {
       console.error('Header media upload failed:', e);
       alert('Upload failed. Please try again.');

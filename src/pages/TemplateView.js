@@ -43,6 +43,7 @@ function TemplateView() {
     });
     const [bodyVariables, setBodyVariables] = useState([]);
     const [headerVariable, setHeaderVariable] = useState(null);
+    const [authConfig, setAuthConfig] = useState(null);
 
     const [isMinimized, setIsMinimized] = useState(() => {
         const saved = localStorage.getItem('sidebarMinimized');
@@ -79,8 +80,8 @@ function TemplateView() {
     // Categories
     const categories = [
         { code: 'MARKETING', name: 'Marketing' },
-        { code: 'TRANSACTIONAL', name: 'Transactional' },
         { code: 'UTILITY', name: 'Utility' },
+        { code: 'AUTHENTICATION', name: 'Authentication' },
     ];
 
     // Header formats
@@ -250,13 +251,12 @@ function TemplateView() {
                         example: component.example || { body_text: [] }
                     };
 
-                    // Extract body variables
                     if (component.text) {
                         const variableMatches = component.text.match(/\{\{(\d+)\}\}/g);
                         if (variableMatches) {
+                            const uniqueNums = [...new Set(variableMatches.map((m) => parseInt(m.replace(/\D/g, ''), 10)))].sort((a, b) => a - b);
                             const samples = component.example?.body_text?.[0] || [];
-                            variableMatches.forEach((match, index) => {
-                                const varNum = parseInt(match.replace(/[{}]/g, ''));
+                            uniqueNums.forEach((varNum, index) => {
                                 newBodyVariables.push({
                                     id: Date.now() + index,
                                     name: `var${varNum}`,
@@ -278,7 +278,12 @@ function TemplateView() {
                     newFormData.components.buttons = {
                         type: 'BUTTONS',
                         buttons: component.buttons?.map(btn => {
-                            // Handle OTP copy code button
+                            if (btn.type === 'OTP' || (btn.type === 'otp' && btn.otp_type)) {
+                                return {
+                                    type: 'COPY_CODE',
+                                    text: btn.text || '',
+                                };
+                            }
                             if (btn.type === 'otp' && btn.otp_type === 'copy_code') {
                                 return {
                                     type: 'COPY_CODE',
@@ -324,6 +329,24 @@ function TemplateView() {
         setFormData(newFormData);
         setBodyVariables(newBodyVariables);
         setHeaderVariable(newHeaderVariable);
+
+        if (newFormData.category === 'AUTHENTICATION') {
+            const bodyComp = components.find((c) => c.type === 'BODY');
+            const footerComp = components.find((c) => c.type === 'FOOTER');
+            const otpBtn = components
+                .find((c) => c.type === 'BUTTONS')
+                ?.buttons?.find((b) => b.type === 'OTP' || b.type === 'otp' || b.otp_type);
+
+            setAuthConfig({
+                addSecurityRecommendation: Boolean(bodyComp?.add_security_recommendation),
+                includeCodeExpiration: footerComp?.code_expiration_minutes != null,
+                codeExpirationMinutes: footerComp?.code_expiration_minutes || 10,
+                otpType: String(otpBtn?.otp_type || 'COPY_CODE').toUpperCase(),
+                otpButtonText: otpBtn?.text || 'Copy code',
+            });
+        } else {
+            setAuthConfig(null);
+        }
     };
 
     if (loading) {
@@ -467,11 +490,21 @@ function TemplateView() {
                                 {/* Body Content */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Body Content
+                                        {formData.category === 'AUTHENTICATION' ? 'Verification Message' : 'Body Content'}
                                     </label>
+                                    {formData.components.body.text ? (
                                     <div className="p-4 bg-gray-50 rounded-md border border-gray-200 whitespace-pre-wrap">
                                         {formData.components.body.text}
                                     </div>
+                                    ) : formData.category === 'AUTHENTICATION' ? (
+                                    <div className="p-4 bg-indigo-50 rounded-md border border-indigo-200 text-sm text-indigo-800">
+                                        Legacy Meta default OTP format
+                                        {authConfig?.addSecurityRecommendation && ' (with security recommendation)'}
+                                        {authConfig?.includeCodeExpiration && ` · expires in ${authConfig.codeExpirationMinutes} min`}
+                                    </div>
+                                    ) : (
+                                    <p className="text-sm text-gray-500 italic">No body content</p>
+                                    )}
 
                                     {/* Body Variables */}
                                     {bodyVariables.length > 0 && (
@@ -551,6 +584,7 @@ function TemplateView() {
                                     <WhatsAppPreview
                                         formData={formData}
                                         bodyVariables={bodyVariables}
+                                        authConfig={authConfig}
                                         darkMode={false}
                                     />
                                 </div>

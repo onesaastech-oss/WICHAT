@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../../config/api';
-import { FiX, FiSend, FiFileText, FiChevronDown } from 'react-icons/fi';
+import { FiX, FiSend, FiFileText, FiChevronDown, FiRefreshCw } from 'react-icons/fi';
 import { BsCheckAll } from 'react-icons/bs';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { Encrypt } from '../../pages/encryption/payload-encryption';
+import { uploadFile } from '../../utils/uploadFile';
 
 const TemplatePreview = ({
     isOpen,
@@ -19,6 +20,7 @@ const TemplatePreview = ({
     onCloseAll
 }) => {
     const [variableValues, setVariableValues] = useState({});
+    const [otpCode, setOtpCode] = useState('');
     const [sendingTemplate, setSendingTemplate] = useState(false);
     const [headerMediaUrl, setHeaderMediaUrl] = useState('');
     const [isUploading, setIsUploading] = useState(false);
@@ -129,16 +131,43 @@ const TemplatePreview = ({
 
         const variableMatches = content.match(/\{\{\d+\}\}/g);
         if (variableMatches) {
-            variables = variableMatches.map((match) => {
-                const num = match.match(/\d+/)[0];
-                return { placeholder: match, number: parseInt(num) };
-            });
+            const seen = new Set();
+            variables = variableMatches
+                .map((match) => {
+                    const num = parseInt(match.match(/\d+/)[0], 10);
+                    return { placeholder: match, number: num };
+                })
+                .filter((v) => {
+                    if (seen.has(v.number)) return false;
+                    seen.add(v.number);
+                    return true;
+                })
+                .sort((a, b) => a.number - b.number);
         }
 
         return { content, variables, footerText, buttons, components };
     };
 
     const { content, variables, footerText, buttons, components } = parseTemplateContent(selectedTemplate);
+    const templateCategory = (
+        selectedTemplate?.category ||
+        selectedTemplate?.template_data?.category ||
+        selectedTemplate?.template?.category ||
+        ''
+    ).toUpperCase();
+    const isAuthentication = templateCategory === 'AUTHENTICATION';
+
+    const bodyComponent = components?.find((c) => c.type === 'BODY');
+    const footerComponent = components?.find((c) => c.type === 'FOOTER');
+    const authHasSecurityRecommendation = Boolean(bodyComponent?.add_security_recommendation);
+    const authExpirationMinutes = footerComponent?.code_expiration_minutes;
+    const otpButton = buttons?.find(
+        (b) => b.type === 'OTP' || b.type === 'otp' || b.otp_type
+    );
+    const otpButtonLabel = otpButton?.text?.trim() || 'Copy code';
+    const otpButtonType = String(otpButton?.otp_type || 'COPY_CODE').toUpperCase();
+    const authUsesCustomBody = isAuthentication && Boolean(content?.trim());
+
     const headerComponent = components?.find((c) => c.type === 'HEADER');
     const headerFormat = headerComponent?.format || 'NONE';
     const requiresHeaderMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
@@ -151,6 +180,79 @@ const TemplatePreview = ({
             setHeaderMediaUrl('');
         }
     }, [selectedTemplate?.id, requiresHeaderMedia, headerComponent]);
+
+    useEffect(() => {
+        setVariableValues({});
+        setOtpCode('');
+        setOpenDropdowns({});
+    }, [selectedTemplate?.id]);
+
+    const generateOtpCode = () => {
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        setOtpCode(code);
+    };
+
+    const buildAuthPreviewText = (code) => {
+        const safeCode = code || '123456';
+        let text = `*${safeCode}* is your verification code.`;
+        if (authHasSecurityRecommendation) {
+            text += ' For your security, do not share this code.';
+        }
+        return text;
+    };
+
+    const buildAuthFooterText = () => {
+        if (footerText) return footerText;
+        if (authExpirationMinutes != null) {
+            const minutes = Number(authExpirationMinutes);
+            if (Number.isFinite(minutes) && minutes >= 1) {
+                return `This code expires in ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+            }
+        }
+        return '';
+    };
+
+    const buildAuthSendComponents = (codeOrValues) => {
+        if (authUsesCustomBody) {
+            const bodyParams = variables.map((v) => ({
+                type: 'text',
+                text: variableValues[v.number] || '',
+            }));
+            const formattedComponents = [
+                { type: 'body', parameters: bodyParams },
+            ];
+
+            if (otpButtonType === 'COPY_CODE') {
+                const otpValue = variableValues[1] || variableValues[variables[0]?.number] || '';
+                formattedComponents.push({
+                    type: 'button',
+                    sub_type: 'url',
+                    index: '0',
+                    parameters: [{ type: 'text', text: otpValue }],
+                });
+            }
+            return formattedComponents;
+        }
+
+        const code = codeOrValues;
+        const formattedComponents = [
+            {
+                type: 'body',
+                parameters: [{ type: 'text', text: code }],
+            },
+        ];
+
+        if (otpButtonType === 'COPY_CODE') {
+            formattedComponents.push({
+                type: 'button',
+                sub_type: 'url',
+                index: '0',
+                parameters: [{ type: 'text', text: code }],
+            });
+        }
+
+        return formattedComponents;
+    };
 
     // Close dropdowns on outside click
     useEffect(() => {
@@ -231,6 +333,10 @@ const TemplatePreview = ({
     };
 
     const renderPreviewContent = () => {
+        if (isAuthentication && !authUsesCustomBody) {
+            return parseWhatsAppFormatting(buildAuthPreviewText(otpCode));
+        }
+
         let previewContent = content;
         variables.forEach(variable => {
             const value = variableValues[variable.number] || `{{${variable.number}}}`;
@@ -240,15 +346,11 @@ const TemplatePreview = ({
     };
 
     const uploadHeaderMedia = async (file) => {
-        if (!file || !tokens?.token) return;
+        if (!file) return;
         setIsUploading(true);
         try {
-            const form = new FormData();
-            form.append('file', file);
-            const res = await axios.post(`${API_BASE_URL}/upload/upload-media`, form, {
-                headers: { 'Content-Type': 'multipart/form-data', 'token': tokens.token, 'username': tokens.username }
-            });
-            if (res?.data?.link) setHeaderMediaUrl(res.data.link);
+            const { link } = await uploadFile(file);
+            setHeaderMediaUrl(link);
         } catch (e) {
             alert('Upload failed');
         } finally {
@@ -257,29 +359,51 @@ const TemplatePreview = ({
     };
 
     const sendTemplate = async () => {
-        if (variables.length > 0) {
+        if (isAuthentication && !authUsesCustomBody) {
+            const code = (otpCode || '').trim();
+            if (!code) {
+                alert('Please enter the OTP code');
+                return;
+            }
+            if (!/^\d{4,8}$/.test(code)) {
+                alert('OTP code must be 4–8 digits');
+                return;
+            }
+        } else if (variables.length > 0) {
             const missing = variables.some(v => !((variableValues[v.number] || '').trim()));
-            if (missing) { alert('Please fill variables'); return; }
+            if (missing) { alert('Please fill all message variables'); return; }
         }
-        if (requiresHeaderMedia && !headerMediaUrl) { alert('Header media required'); return; }
+        if (!isAuthentication && requiresHeaderMedia && !headerMediaUrl) { alert('Header media required'); return; }
 
         setSendingTemplate(true);
         try {
-            const formattedComponents = [];
+            let formattedComponents;
 
-            if (requiresHeaderMedia) {
-                const mediaType = headerFormat.toLowerCase();
-                const mediaParam = { type: mediaType, [mediaType]: { link: headerMediaUrl } };
-                formattedComponents.push({ type: 'header', parameters: [mediaParam] });
+            if (isAuthentication) {
+                formattedComponents = buildAuthSendComponents(
+                    authUsesCustomBody ? variableValues : (otpCode || '').trim()
+                );
+            } else {
+                formattedComponents = [];
+
+                if (requiresHeaderMedia) {
+                    const mediaType = headerFormat.toLowerCase();
+                    const mediaParam = { type: mediaType, [mediaType]: { link: headerMediaUrl } };
+                    formattedComponents.push({ type: 'header', parameters: [mediaParam] });
+                }
+
+                const bodyParams = [];
+                variables.forEach(v => {
+                    bodyParams.push({ type: "text", text: variableValues[v.number] || "" });
+                });
+                if (bodyParams.length > 0) {
+                    formattedComponents.push({ type: "body", parameters: bodyParams });
+                }
             }
 
-            const bodyParams = [];
-            variables.forEach(v => {
-                bodyParams.push({ type: "text", text: variableValues[v.number] || "" });
-            });
-            if (bodyParams.length > 0) {
-                formattedComponents.push({ type: "body", parameters: bodyParams });
-            }
+            const previewText = isAuthentication && !authUsesCustomBody
+                ? buildAuthPreviewText((otpCode || '').trim())
+                : renderPreviewContent();
 
             const payload = {
                 project_id: tokens.selected_project_id || tokens.projects?.[0]?.project_id,
@@ -293,7 +417,7 @@ const TemplatePreview = ({
             const { data, key } = Encrypt(payload);
 
             if (onSendTemplate) {
-                await onSendTemplate(selectedTemplate, formattedComponents, renderPreviewContent());
+                await onSendTemplate(selectedTemplate, formattedComponents, previewText);
                 onClose();
                 onCloseAll?.();
             } else {
@@ -302,7 +426,7 @@ const TemplatePreview = ({
                     { headers: { 'token': tokens.token, 'username': tokens.username, 'Content-Type': 'application/json' } }
                 );
                 if (!response.data.error) {
-                    onUseTemplate && onUseTemplate(renderPreviewContent());
+                    onUseTemplate && onUseTemplate(previewText);
                     onClose();
                     onCloseAll?.();
                 } else {
@@ -316,7 +440,16 @@ const TemplatePreview = ({
         }
     };
 
-    const isSendDisabled = sendingTemplate || (variables.length > 0 && variables.some(v => !variableValues[v.number]));
+    const isSendDisabled = sendingTemplate || (
+        isAuthentication && !authUsesCustomBody
+            ? !/^\d{4,8}$/.test((otpCode || '').trim())
+            : (variables.length > 0 && variables.some(v => !((variableValues[v.number] || '').trim())))
+    );
+
+    const previewFooterText = isAuthentication && !authUsesCustomBody ? buildAuthFooterText() : footerText;
+    const previewButtons = isAuthentication && otpButton
+        ? [{ type: 'OTP', text: otpButtonLabel }]
+        : buttons;
 
     return (
         <AnimatePresence>
@@ -349,7 +482,7 @@ const TemplatePreview = ({
                                 </div>
 
                                 {/* Header Media Input */}
-                                {requiresHeaderMedia && (
+                                {!isAuthentication && requiresHeaderMedia && (
                                     <div className="space-y-2">
                                         <label className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                                             Header Media ({headerFormat})
@@ -374,8 +507,99 @@ const TemplatePreview = ({
                                     </div>
                                 )}
 
+                                {/* OTP / variable inputs for authentication templates */}
+                                {isAuthentication && !authUsesCustomBody && (
+                                    <div className="space-y-3">
+                                        <h3 className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                            Verification Code (OTP)
+                                        </h3>
+                                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                            Enter the one-time code to send. Meta will deliver it in the standard authentication message format.
+                                        </p>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                pattern="[0-9]*"
+                                                maxLength={8}
+                                                value={otpCode}
+                                                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                                                placeholder="e.g. 123456"
+                                                className={`flex-1 px-3 py-2.5 rounded-md border text-sm focus:border-[#00a884] outline-none ${darkMode
+                                                    ? 'bg-[#2a3942] border-gray-600 text-white placeholder-gray-500'
+                                                    : 'bg-white border-gray-300 text-gray-900'
+                                                    }`}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={generateOtpCode}
+                                                className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border transition-colors ${darkMode
+                                                    ? 'border-gray-600 text-gray-300 hover:bg-gray-700'
+                                                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                    }`}
+                                                title="Generate random 6-digit code"
+                                            >
+                                                <FiRefreshCw className="w-4 h-4" />
+                                                Generate
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {isAuthentication && authUsesCustomBody && variables.length > 0 && (
+                                    <div className="space-y-4">
+                                        <h3 className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                            Message Variables
+                                        </h3>
+                                        {variables.map((variable) => {
+                                            const isOtpVar = variable.number === 1;
+                                            return (
+                                                <div key={variable.number} className="variable-dropdown relative">
+                                                    <label className={`text-xs mb-1 block ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                                        {`{{${variable.number}}}`}
+                                                        {isOtpVar && (
+                                                            <span className="ml-2 text-violet-600 font-medium">OTP code</span>
+                                                        )}
+                                                    </label>
+                                                    <div className="flex gap-2">
+                                                        <input
+                                                            type={isOtpVar ? 'text' : 'text'}
+                                                            inputMode={isOtpVar ? 'numeric' : 'text'}
+                                                            value={variableValues[variable.number] || ''}
+                                                            onChange={(e) => {
+                                                                const val = isOtpVar
+                                                                    ? e.target.value.replace(/\D/g, '').slice(0, 8)
+                                                                    : e.target.value;
+                                                                handleVariableChange(variable.number, val);
+                                                            }}
+                                                            placeholder={isOtpVar ? 'e.g. 123456' : `Value for {{${variable.number}}}`}
+                                                            className={`flex-1 px-3 py-2.5 rounded-md border text-sm focus:border-[#00a884] outline-none ${darkMode
+                                                                ? 'bg-[#2a3942] border-gray-600 text-white placeholder-gray-500'
+                                                                : 'bg-white border-gray-300 text-gray-900'
+                                                                }`}
+                                                        />
+                                                        {isOtpVar && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const code = String(Math.floor(100000 + Math.random() * 900000));
+                                                                    handleVariableChange(1, code);
+                                                                }}
+                                                                className={`px-3 py-2 rounded-md text-sm border ${darkMode ? 'border-gray-600 text-gray-300' : 'border-gray-300 text-gray-700'}`}
+                                                                title="Generate OTP"
+                                                            >
+                                                                <FiRefreshCw className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
                                 {/* Variable Inputs */}
-                                {variables.length > 0 && (
+                                {!isAuthentication && variables.length > 0 && (
                                     <div className="space-y-4">
                                         <h3 className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                                             Body Variables
@@ -564,17 +788,17 @@ const TemplatePreview = ({
                                             </div>
 
                                             {/* Footer Text */}
-                                            {footerText && (
+                                            {previewFooterText && (
                                                 <div className={`text-[13px] mt-1 opacity-60 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                                                    {footerText}
+                                                    {previewFooterText}
                                                 </div>
                                             )}
                                         </div>
 
                                         {/* 3. BUTTONS (FULL WIDTH - Outside padding wrapper) */}
-                                        {buttons && buttons.length > 0 && (
+                                        {previewButtons && previewButtons.length > 0 && (
                                             <div className={`w-full flex flex-col rounded-b-lg overflow-hidden border-t ${darkMode ? 'border-white/10 bg-[#202c33]/30' : 'border-[#0000000d] bg-[#f0f2f5]/30'}`}>
-                                                {buttons.map((btn, idx) => (
+                                                {previewButtons.map((btn, idx) => (
                                                     <button
                                                         key={idx}
                                                         type="button"
@@ -589,6 +813,7 @@ const TemplatePreview = ({
                                                     >
                                                         {btn.type === 'URL' && <span className="text-xs">↗</span>}
                                                         {btn.type === 'PHONE_NUMBER' && <span className="text-xs">📞</span>}
+                                                        {(btn.type === 'OTP' || btn.type === 'otp') && <span className="text-xs">📋</span>}
                                                         {btn.text}
                                                     </button>
                                                 ))}

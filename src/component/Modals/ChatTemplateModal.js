@@ -194,6 +194,13 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
     // Handle template selection
     const handleTemplateSelect = (template) => {
         console.log('Template selected:', template);
+        const isAuth = String(template.category || '').toUpperCase() === 'AUTHENTICATION';
+
+        if (isAuth && onTemplatePreview) {
+            onTemplatePreview(template);
+            return;
+        }
+
         if (onSendTemplate) {
             // Let Conversation own the send + optimistic UI. Build components similarly.
             const formattedComponents = [];

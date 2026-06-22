@@ -24,6 +24,7 @@ import { BsCheckAll } from 'react-icons/bs';
 const EnhancedWhatsAppPreview = ({ 
   formData, 
   bodyVariables, 
+  authConfig = null,
   darkMode = false 
 }) => {
   const getFileNameFromUrl = (url) => {
@@ -69,6 +70,24 @@ const EnhancedWhatsAppPreview = ({
   const headerMediaUrl = formData.components.header.example?.header_handle?.[0] || '';
   const buttons = formData.components.buttons.buttons || [];
   const footerText = formData.components.footer.text;
+  const isAuthentication = formData.category === 'AUTHENTICATION';
+
+  const authPreviewBody = () => {
+    const sampleCode = '123456';
+    let text = `<strong>${sampleCode}</strong> is your verification code.`;
+    if (authConfig?.addSecurityRecommendation) {
+      text += ' For your security, do not share this code.';
+    }
+    return text;
+  };
+
+  const authPreviewFooter = () => {
+    if (!authConfig?.includeCodeExpiration) return '';
+    const minutes = authConfig.codeExpirationMinutes || 10;
+    return `This code expires in ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+  };
+
+  const authButtonLabel = authConfig?.otpButtonText?.trim() || 'Copy code';
 
   return (
     <div className={`w-full flex flex-col ${darkMode ? 'bg-[#0b141a]' : 'bg-[#efeae2]'} relative rounded-lg overflow-hidden max-h-[500px]`}>
@@ -191,9 +210,11 @@ const EnhancedWhatsAppPreview = ({
                   darkMode ? 'text-white' : 'text-[#111b21]'
                 }`}
                 dangerouslySetInnerHTML={{
-                  __html: bodyVariables.length > 0
-                    ? formatTextForPreview(generatePreviewText(formData.components.body.text, bodyVariables))
-                    : formatTextForPreview(formData.components.body.text) || "Your message will appear here..."
+                  __html: isAuthentication
+                    ? authPreviewBody()
+                    : bodyVariables.length > 0
+                      ? formatTextForPreview(generatePreviewText(formData.components.body.text, bodyVariables))
+                      : formatTextForPreview(formData.components.body.text) || "Your message will appear here..."
                 }}
               />
 
@@ -214,23 +235,31 @@ const EnhancedWhatsAppPreview = ({
               </div>
 
               {/* Footer Text */}
-              {footerText && (
+              {(isAuthentication ? authPreviewFooter() : footerText) && (
                 <div className={`text-[13px] mt-1 opacity-60 ${
                   darkMode ? 'text-gray-300' : 'text-gray-600'
                 }`}>
-                  {footerText}
+                  {isAuthentication ? authPreviewFooter() : footerText}
                 </div>
               )}
             </div>
 
             {/* Buttons */}
-            {buttons.length > 0 && (
+            {(isAuthentication || buttons.length > 0) && (
               <div className={`w-full flex flex-col rounded-b-lg overflow-hidden border-t ${
                 darkMode 
                   ? 'border-white/10 bg-[#202c33]/30' 
                   : 'border-[#0000000d] bg-[#f0f2f5]/30'
               }`}>
-                {buttons.map((btn, idx) => (
+                {isAuthentication ? (
+                  <button
+                    type="button"
+                    className="w-full py-3 px-4 text-center text-[#00a5f4] text-[15px] font-medium cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center gap-2"
+                  >
+                    <FiCopy size={14} />
+                    {authButtonLabel}
+                  </button>
+                ) : buttons.map((btn, idx) => (
                   <button
                     key={idx}
                     type="button"

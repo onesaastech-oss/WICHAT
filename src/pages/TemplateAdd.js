@@ -23,6 +23,7 @@ import {
   FiAlertCircle
 } from 'react-icons/fi';
 import WhatsAppPreview from '../component/TemplateAdd/WhatsAppPreview';
+import { uploadFile } from '../utils/uploadFile';
 
 function TemplateAdd() {
   const navigate = useNavigate();
@@ -67,7 +68,15 @@ function TemplateAdd() {
 
   const textareaRef = useRef(null);
 
+  const DEFAULT_AUTH_CONFIG = {
+    addSecurityRecommendation: true,
+    includeCodeExpiration: true,
+    codeExpirationMinutes: 10,
+    otpType: 'COPY_CODE',
+    otpButtonText: 'Copy code',
+  };
 
+  const [authConfig, setAuthConfig] = useState({ ...DEFAULT_AUTH_CONFIG });
   useEffect(() => {
     localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
   }, [isMinimized]);
@@ -90,6 +99,7 @@ function TemplateAdd() {
   const categories = [
     { code: 'MARKETING', name: 'Marketing' },
     { code: 'UTILITY', name: 'Utility' },
+    { code: 'AUTHENTICATION', name: 'Authentication' },
   ];
 
   // Header formats
@@ -112,16 +122,96 @@ function TemplateAdd() {
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    // Force template name to lowercase and replace spaces with underscores
     const processedValue = name === 'name' ? value.toLowerCase().replace(/\s+/g, '_') : value;
+
+    if (name === 'category' && processedValue === 'AUTHENTICATION') {
+      setFormData(prev => ({
+        ...prev,
+        category: processedValue,
+        components: {
+          ...prev.components,
+          header: {
+            type: 'HEADER',
+            format: 'NONE',
+            text: '',
+            example: { header_handle: [] },
+          },
+          body: {
+            type: 'BODY',
+            text: '',
+            example: { body_text: [] },
+          },
+          footer: {
+            type: 'FOOTER',
+            text: '',
+          },
+          buttons: {
+            type: 'BUTTONS',
+            buttons: [],
+          },
+        },
+      }));
+      setBodyVariables([]);
+      setAuthConfig({ ...DEFAULT_AUTH_CONFIG });
+      return;
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: processedValue
     }));
   };
 
+  const handleAuthConfigChange = (field, value) => {
+    setAuthConfig(prev => ({ ...prev, [field]: value }));
+  };
+
+  const buildAuthenticationComponents = () => {
+    const components = [];
+    const bodyComponent = { type: 'BODY' };
+    if (authConfig.addSecurityRecommendation) {
+      bodyComponent.add_security_recommendation = true;
+    }
+    components.push(bodyComponent);
+
+    if (authConfig.includeCodeExpiration) {
+      const minutes = Math.min(90, Math.max(1, Number(authConfig.codeExpirationMinutes) || 10));
+      components.push({
+        type: 'FOOTER',
+        code_expiration_minutes: minutes,
+      });
+    }
+
+    components.push({
+      type: 'BUTTONS',
+      buttons: [{
+        type: 'OTP',
+        otp_type: authConfig.otpType,
+        text: authConfig.otpButtonText.trim(),
+      }],
+    });
+
+    return components;
+  };
+
+  const isAuthentication = formData.category === 'AUTHENTICATION';
+
   // Check if all mandatory fields are filled
   const isFormValid = () => {
+    if (isAuthentication) {
+      const minutes = Number(authConfig.codeExpirationMinutes);
+      const expirationValid = !authConfig.includeCodeExpiration ||
+        (Number.isFinite(minutes) && minutes >= 1 && minutes <= 90);
+
+      return (
+        formData.name.trim() !== '' &&
+        formData.category !== '' &&
+        formData.language !== '' &&
+        authConfig.otpButtonText.trim() !== '' &&
+        expirationValid
+      );
+    }
+
     const basicFieldsValid = (
       formData.name.trim() !== '' &&
       formData.category !== '' &&
@@ -129,7 +219,6 @@ function TemplateAdd() {
       formData.components.body.text.trim() !== ''
     );
 
-    // Check if all variables have sample values
     const allVariablesHaveSamples = bodyVariables.length === 0 ||
       bodyVariables.every(v => v.sample && v.sample.trim() !== '');
 
@@ -164,40 +253,20 @@ function TemplateAdd() {
 
       setIsUploading(true);
       try {
-        // Create FormData for file upload
-        const formData = new FormData();
-        formData.append('file', file);
+        const { link } = await uploadFile(file);
 
-        // Upload file to API
-        const response = await axios.post(
-          `${API_BASE_URL}/upload/upload-media`,
-          formData,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-              'token': JSON.parse(localStorage.getItem('userData') || '{}').token || '',
-              'username': JSON.parse(localStorage.getItem('userData') || '{}').username || ''
-            }
-          }
-        );
-
-        if (response.data && !response.data.error && response.data.link) {
-          // Update form data with the uploaded file URL
-          setFormData(prev => ({
-            ...prev,
-            components: {
-              ...prev.components,
-              header: {
-                ...prev.components.header,
-                example: {
-                  header_handle: [response.data.link]
-                }
+        setFormData(prev => ({
+          ...prev,
+          components: {
+            ...prev.components,
+            header: {
+              ...prev.components.header,
+              example: {
+                header_handle: [link]
               }
             }
-          }));
-        } else {
-          throw new Error('Upload failed: Invalid response from server');
-        }
+          }
+        }));
       } catch (error) {
         console.error('Error uploading file:', error);
         alert(`Failed to upload file: ${error.message}`);
@@ -646,89 +715,87 @@ function TemplateAdd() {
     setIsSubmitting(true);
 
     try {
-      // Prepare components array
-      const components = [];
+      const components = isAuthentication
+        ? buildAuthenticationComponents()
+        : (() => {
+          const built = [];
 
-      // Add header if not NONE
-      if (formData.components.header.format !== 'NONE') {
-        const headerComponent = {
-          type: 'HEADER',
-          format: formData.components.header.format
-        };
+          if (formData.components.header.format !== 'NONE') {
+            const headerComponent = {
+              type: 'HEADER',
+              format: formData.components.header.format
+            };
 
-        if (formData.components.header.format === 'TEXT') {
-          headerComponent.text = formData.components.header.text;
-          // No variables allowed in header text for WhatsApp
-        } else {
-          headerComponent.example = formData.components.header.example;
-        }
-
-        components.push(headerComponent);
-      }
-
-      // Add body
-      if (formData.components.body.text) {
-        const bodyComponent = {
-          type: 'BODY',
-          text: formData.components.body.text
-        };
-
-        if (bodyVariables.length > 0) {
-          // All variable samples in a single nested array: [["value1", "value2", "value3"]]
-          const bodySamples = bodyVariables.map(v => v.sample || '');
-          bodyComponent.example = {
-            body_text: [bodySamples]
-          };
-        }
-
-        components.push(bodyComponent);
-      }
-
-      // Add footer if exists
-      if (formData.components.footer.text) {
-        components.push({
-          type: 'FOOTER',
-          text: formData.components.footer.text
-        });
-      }
-
-      // Add buttons if any
-      if (formData.components.buttons.buttons.length > 0) {
-        components.push({
-          type: 'BUTTONS',
-          buttons: formData.components.buttons.buttons.map(btn => {
-            if (btn.type === 'COPY_CODE') {
-              // Convert COPY_CODE to OTP format
-              return {
-                type: 'otp',
-                otp_type: 'copy_code',
-                text: btn.text
-              };
-            } else if (btn.type === 'PHONE_NUMBER') {
-              return {
-                type: btn.type,
-                text: btn.text,
-                phone_number: btn.phone_number
-              };
-            } else if (btn.type === 'URL') {
-              const buttonData = {
-                type: btn.type,
-                text: btn.text,
-                url: btn.url
-              };
-              if (btn.example && btn.example.length > 0) {
-                buttonData.example = btn.example;
-              }
-              return buttonData;
+            if (formData.components.header.format === 'TEXT') {
+              headerComponent.text = formData.components.header.text;
             } else {
-              return {
-                type: btn.type,
-                text: btn.text
+              headerComponent.example = formData.components.header.example;
+            }
+
+            built.push(headerComponent);
+          }
+
+          if (formData.components.body.text) {
+            const bodyComponent = {
+              type: 'BODY',
+              text: formData.components.body.text
+            };
+
+            if (bodyVariables.length > 0) {
+              const bodySamples = bodyVariables.map(v => v.sample || '');
+              bodyComponent.example = {
+                body_text: [bodySamples]
               };
             }
-          })
-        });
-      }
+
+            built.push(bodyComponent);
+          }
+
+          if (formData.components.footer.text) {
+            built.push({
+              type: 'FOOTER',
+              text: formData.components.footer.text
+            });
+          }
+
+          if (formData.components.buttons.buttons.length > 0) {
+            built.push({
+              type: 'BUTTONS',
+              buttons: formData.components.buttons.buttons.map(btn => {
+                if (btn.type === 'COPY_CODE') {
+                  return {
+                    type: 'OTP',
+                    otp_type: 'COPY_CODE',
+                    text: btn.text
+                  };
+                } else if (btn.type === 'PHONE_NUMBER') {
+                  return {
+                    type: btn.type,
+                    text: btn.text,
+                    phone_number: btn.phone_number
+                  };
+                } else if (btn.type === 'URL') {
+                  const buttonData = {
+                    type: btn.type,
+                    text: btn.text,
+                    url: btn.url
+                  };
+                  if (btn.example && btn.example.length > 0) {
+                    buttonData.example = btn.example;
+                  }
+                  return buttonData;
+                } else {
+                  return {
+                    type: btn.type,
+                    text: btn.text
+                  };
+                }
+              })
+            });
+          }
+
+          return built;
+        })();
 
       // Get user data from localStorage
       const userData = JSON.parse(localStorage.getItem('userData') || '{}');
@@ -806,7 +873,7 @@ function TemplateAdd() {
           }
         });
         setBodyVariables([]);
-
+        setAuthConfig({ ...DEFAULT_AUTH_CONFIG });
       } else {
         // Handle specific error messages
         const errorMsg = response?.data?.error || response?.data?.message || 'Unknown error';
@@ -956,7 +1023,90 @@ function TemplateAdd() {
                   </div>
                 </div>
 
+                {isAuthentication && (
+                  <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg space-y-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-indigo-900">Authentication Template Settings</h3>
+                      <p className="mt-1 text-xs text-indigo-700">
+                        Meta uses a fixed OTP message format. The verification code is supplied as {'{{1}}'} when you send the message.
+                      </p>
+                    </div>
+
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        checked={authConfig.addSecurityRecommendation}
+                        onChange={(e) => handleAuthConfigChange('addSecurityRecommendation', e.target.checked)}
+                      />
+                      <span className="text-sm text-gray-700">
+                        Add security recommendation
+                        <span className="block text-xs text-gray-500">Appends &quot;For your security, do not share this code.&quot;</span>
+                      </span>
+                    </label>
+
+                    <div className="space-y-2">
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          checked={authConfig.includeCodeExpiration}
+                          onChange={(e) => handleAuthConfigChange('includeCodeExpiration', e.target.checked)}
+                        />
+                        <span className="text-sm text-gray-700">Include code expiration footer</span>
+                      </label>
+                      {authConfig.includeCodeExpiration && (
+                        <div className="ml-6">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Expiration (minutes, 1–90)
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={90}
+                            value={authConfig.codeExpirationMinutes}
+                            onChange={(e) => handleAuthConfigChange('codeExpirationMinutes', e.target.value)}
+                            className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        OTP Button Type
+                      </label>
+                      <select
+                        value={authConfig.otpType}
+                        onChange={(e) => handleAuthConfigChange('otpType', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="COPY_CODE">Copy Code</option>
+                      </select>
+                      <p className="mt-1 text-xs text-gray-500">
+                        ONE_TAP and ZERO_TAP require Android app package configuration in Meta Business Manager.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Copy Code Button Label <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={authConfig.otpButtonText}
+                        onChange={(e) => handleAuthConfigChange('otpButtonText', e.target.value)}
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${authConfig.otpButtonText.trim() ? 'border-green-400' : 'border-gray-300'}`}
+                        placeholder="e.g., Copy code"
+                        maxLength={25}
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* Header Format */}
+                {!isAuthentication && (
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Header Format
@@ -977,9 +1127,10 @@ function TemplateAdd() {
                     ))}
                   </div>
                 </div>
+                )}
 
                 {/* Header Content based on format */}
-                {formData.components.header.format !== 'NONE' && (
+                {!isAuthentication && formData.components.header.format !== 'NONE' && (
                   <div className="mb-6 p-4 bg-gray-50 rounded-md">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Header Content ({formData.components.header.format})
@@ -1057,6 +1208,7 @@ function TemplateAdd() {
                 )}
 
                 {/* Body Content */}
+                {!isAuthentication && (
                 <div className="mb-6">
                   <div className="flex justify-between items-center mb-1">
                     <label className="block text-sm font-medium text-gray-700">
@@ -1148,8 +1300,8 @@ function TemplateAdd() {
                             type="text"
                             placeholder={`Sample value for {{${index + 1}}}`}
                             className={`w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${variable.sample && variable.sample.trim() !== ''
-                                ? 'border-green-400 bg-green-50'
-                                : 'border-gray-300 bg-white'
+                              ? 'border-green-400 bg-green-50'
+                              : 'border-gray-300 bg-white'
                               }`}
                             value={variable.sample}
                             onChange={e => updateBodyVariable(variable.id, e.target.value)}
@@ -1163,8 +1315,10 @@ function TemplateAdd() {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Footer */}
+                {!isAuthentication && (
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Footer Text
@@ -1181,8 +1335,10 @@ function TemplateAdd() {
                     {formData.components.footer.text.length}/60 characters
                   </p>
                 </div>
+                )}
 
                 {/* Buttons */}
+                {!isAuthentication && (
                 <div className="mb-6">
                   <div className="flex justify-between items-center mb-2">
                     <label className="block text-sm font-medium text-gray-700">
@@ -1306,6 +1462,7 @@ function TemplateAdd() {
                     ))}
                   </div>
                 </div>
+                )}
 
                 {/* Submit button */}
                 <div className="mt-8">
@@ -1331,9 +1488,14 @@ function TemplateAdd() {
                   </button>
                   {!isFormValid() && (
                     <p className="mt-2 text-sm text-red-600 text-center">
-                      Please fill in all mandatory fields: Template Name, Category, Language, Body Content
-                      {bodyVariables.length > 0 && bodyVariables.some(v => !v.sample || v.sample.trim() === '') &&
+                      {isAuthentication
+                        ? 'Please fill in Template Name, Category, Language, and Copy Code button label'
+                        : 'Please fill in all mandatory fields: Template Name, Category, Language, Body Content'}
+                      {!isAuthentication && bodyVariables.length > 0 && bodyVariables.some(v => !v.sample || v.sample.trim() === '') &&
                         ', and all variable sample values'}
+                      {isAuthentication && authConfig.includeCodeExpiration &&
+                        (Number(authConfig.codeExpirationMinutes) < 1 || Number(authConfig.codeExpirationMinutes) > 90) &&
+                        '. Code expiration must be between 1 and 90 minutes'}
                     </p>
                   )}
                 </div>
@@ -1353,7 +1515,8 @@ function TemplateAdd() {
                   <WhatsAppPreview
                     formData={formData}
                     bodyVariables={bodyVariables}
-                    darkMode={false} // or make it toggleable
+                    authConfig={authConfig}
+                    darkMode={false}
                   />
                 </div>
               </div>

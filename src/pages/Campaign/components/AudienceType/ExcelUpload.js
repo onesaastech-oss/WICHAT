@@ -3,6 +3,7 @@ import { API_BASE_URL } from '../../../../config/api';
 import { Upload, Phone, User, CheckCircle, AlertCircle, FileText, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import axios from 'axios';
 import { parseExcelFile, extractContacts } from '../../utils/excelParser';
+import { uploadFile } from '../../../../utils/uploadFile';
 
 export default function ExcelUpload({
   excelMapping,
@@ -33,34 +34,14 @@ export default function ExcelUpload({
 
     setIsUploading(true);
     try {
-      const form = new FormData();
-      form.append('file', fileToUpload);
+      const { link: fileUrl } = await uploadFile(fileToUpload);
+      setUploadedFileUrl(fileUrl);
 
-      const response = await axios.post(
-        `${API_BASE_URL}/upload/upload-media`,
-        form,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            'token': tokens.token,
-            'username': tokens.username
-          }
-        }
-      );
-
-      if (response?.data && !response.data.error && response.data.link) {
-        const fileUrl = response.data.link;
-        setUploadedFileUrl(fileUrl);
-
-        // Notify parent component about the uploaded URL
-        if (onFileUploaded) {
-          onFileUploaded(fileUrl);
-        }
-
-        return fileUrl;
-      } else {
-        throw new Error(response?.data?.message || 'Failed to upload file');
+      if (onFileUploaded) {
+        onFileUploaded(fileUrl);
       }
+
+      return fileUrl;
     } catch (err) {
       console.error('File upload failed:', err);
       throw new Error(err?.response?.data?.message || err?.message || 'Failed to upload file to server');
