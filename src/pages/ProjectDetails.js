@@ -66,6 +66,26 @@ const ProjectDetails = () => {
     const [countdownSeconds, setCountdownSeconds] = useState(0); // Countdown timer state
     const countdownIntervalRef = useRef(null); // Countdown interval reference
 
+    const waitForFbSdk = (timeoutMs = 15000) => new Promise((resolve, reject) => {
+        if (window.FB) {
+            resolve();
+            return;
+        }
+        const startedAt = Date.now();
+        const poll = () => {
+            if (window.FB) {
+                resolve();
+                return;
+            }
+            if (Date.now() - startedAt >= timeoutMs) {
+                reject(new Error('Facebook SDK failed to load. Please refresh the page and try again.'));
+                return;
+            }
+            setTimeout(poll, 100);
+        };
+        poll();
+    });
+
     // --- Editing State ---
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -382,7 +402,60 @@ const ProjectDetails = () => {
             META_GRAPH_VER
         });
 
-        // Load Facebook SDK
+        const handleMessage = (event) => {
+            try {
+                if (!event.origin || !event.origin.includes('facebook.com')) return;
+
+                let data = event.data;
+                if (typeof data === "string") {
+                    try {
+                        data = JSON.parse(data);
+                    } catch { }
+                }
+
+                if (data && data.type === 'WA_EMBEDDED_SIGNUP') {
+                    addDebugLog('WA_EMBEDDED_SIGNUP event received', data);
+
+                    // Handle different events
+                    if (data.event === 'FINISH' || data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
+                        addDebugLog('Signup completed successfully', data.data);
+                        // Store WABA ID from the event
+                        if (data.data && data.data.waba_id) {
+                            wabaIdRef.current = data.data.waba_id;
+                            addDebugLog('WABA ID stored', { waba_id: data.data.waba_id });
+                        } else {
+                            addDebugLog('WARNING: No WABA ID in FINISH event', data.data);
+                        }
+                        // The FB.login callback will handle the code exchange
+                    } else if (data.event === 'CANCEL') {
+                        addDebugLog('Signup cancelled by user');
+                        setIsLoadingSignupLink(false);
+                        setIsSyncing(false);
+                        const cancelMsg = 'WhatsApp signup was cancelled';
+                        setError(cancelMsg);
+                        setErrorModalMessage(cancelMsg);
+                        setShowErrorModal(true);
+                        toast.error(cancelMsg);
+                    } else if (data.event === 'ERROR') {
+                        addDebugLog('Signup error occurred', data);
+                        setIsLoadingSignupLink(false);
+                        setIsSyncing(false);
+                        const errorMsg = data.error_message || 'Failed to complete WhatsApp signup. Please check your Meta App configuration.';
+                        setError(errorMsg);
+                        setErrorModalMessage(errorMsg);
+                        setShowErrorModal(true);
+                        toast.error(errorMsg);
+                    } else {
+                        addDebugLog('Unknown event type', data);
+                    }
+                }
+            } catch (e) {
+                console.log("message listener error:", e);
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+
         if (!window.FB) {
             addDebugLog('Loading Facebook SDK...');
             window.fbAsyncInit = function () {
@@ -395,73 +468,22 @@ const ProjectDetails = () => {
                 addDebugLog('FB SDK initialized successfully');
             };
 
-            // Load SDK script
             const script = document.createElement('script');
             script.src = 'https://connect.facebook.net/en_US/sdk.js';
             script.async = true;
             script.defer = true;
             script.crossOrigin = 'anonymous';
+            script.onerror = () => {
+                addDebugLog('ERROR: Facebook SDK script failed to load (check Content-Security-Policy)');
+            };
             document.body.appendChild(script);
-
-            // Listen for WhatsApp Embedded Signup events
-            const handleMessage = (event) => {
-                try {
-                    if (!event.origin || !event.origin.includes('facebook.com')) return;
-
-                    let data = event.data;
-                    if (typeof data === "string") {
-                        try {
-                            data = JSON.parse(data);
-                        } catch { }
-                    }
-
-                    if (data && data.type === 'WA_EMBEDDED_SIGNUP') {
-                        addDebugLog('WA_EMBEDDED_SIGNUP event received', data);
-
-                        // Handle different events
-                        if (data.event === 'FINISH' || data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
-                            addDebugLog('Signup completed successfully', data.data);
-                            // Store WABA ID from the event
-                            if (data.data && data.data.waba_id) {
-                                wabaIdRef.current = data.data.waba_id;
-                                addDebugLog('WABA ID stored', { waba_id: data.data.waba_id });
-                            } else {
-                                addDebugLog('WARNING: No WABA ID in FINISH event', data.data);
-                            }
-                            // The FB.login callback will handle the code exchange
-                        } else if (data.event === 'CANCEL') {
-                            addDebugLog('Signup cancelled by user');
-                            setIsLoadingSignupLink(false);
-                            setIsSyncing(false);
-                            const cancelMsg = 'WhatsApp signup was cancelled';
-                            setError(cancelMsg);
-                            setErrorModalMessage(cancelMsg);
-                            setShowErrorModal(true);
-                            toast.error(cancelMsg);
-                        } else if (data.event === 'ERROR') {
-                            addDebugLog('Signup error occurred', data);
-                            setIsLoadingSignupLink(false);
-                            setIsSyncing(false);
-                            const errorMsg = data.error_message || 'Failed to complete WhatsApp signup. Please check your Meta App configuration.';
-                            setError(errorMsg);
-                            setErrorModalMessage(errorMsg);
-                            setShowErrorModal(true);
-                            toast.error(errorMsg);
-                        } else {
-                            addDebugLog('Unknown event type', data);
-                        }
-                    }
-                } catch (e) {
-                    console.log("message listener error:", e);
-                }
-            };
-
-            window.addEventListener('message', handleMessage);
-
-            return () => {
-                window.removeEventListener('message', handleMessage);
-            };
+        } else {
+            addDebugLog('FB SDK already available');
         }
+
+        return () => {
+            window.removeEventListener('message', handleMessage);
+        };
     }, []);
 
     // Handle Facebook login response (separated because FB.login callback cannot be async)
@@ -674,11 +696,10 @@ const ProjectDetails = () => {
 
             addDebugLog('Project ID found', { project_id: activeId });
 
-            // Check if FB SDK is loaded
-            if (!window.FB) {
-                addDebugLog('ERROR: FB SDK not loaded');
-                throw new Error("Facebook SDK not loaded yet. Please try again in a moment.");
-            }
+            // Wait for FB SDK (may still be loading from useEffect)
+            addDebugLog('Waiting for FB SDK...');
+            await waitForFbSdk();
+            addDebugLog('FB SDK ready');
 
             const fbLoginConfig = {
                 config_id: META_CONFIG_ID,
