@@ -129,7 +129,7 @@ export const fetchUserProfile = async () => {
 };
 
 // Update user profile
-export const updateUserProfile = async ({ name, email, country_code, mobile, gender }) => {
+export const updateUserProfile = async ({ name, country_code, mobile, gender, firm_name, business_name, business_type }) => {
   const getUserData = () => {
     try {
       const userData = localStorage.getItem('userData');
@@ -150,10 +150,12 @@ export const updateUserProfile = async ({ name, email, country_code, mobile, gen
 
   const payload = {
     name,
-    email,
     country_code,
     mobile,
-    gender
+    gender,
+    firm_name,
+    business_name,
+    business_type,
   };
 
   // Encrypt the payload
@@ -177,7 +179,17 @@ export const updateUserProfile = async ({ name, email, country_code, mobile, gen
   };
 
   const response = await axios.request(config);
-  return response.data;
+  const apiData = response.data;
+
+  if (!apiData.error && apiData.profile) {
+    const updatedUserData = {
+      ...userData,
+      profile: apiData.profile,
+    };
+    localStorage.setItem('userData', JSON.stringify(updatedUserData));
+  }
+
+  return apiData;
 };
 
 // Create payment order (wallet topup – no project_id)

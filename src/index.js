@@ -2,7 +2,7 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import Error_404 from './pages/error/Error_404';
 import Dashboard from './pages/Dashboard';
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from './pages/Login';
 import Register from './pages/Register';
 import LiveChat from './pages/LiveChat';
@@ -14,7 +14,7 @@ import Contact from './pages/Contact';
 import ContactGroup from './pages/ContactGroup';
 import ContactGroupList from './pages/ContactGroupList';
 import AgentManagement from './pages/AgentManagement';
-import MyPlan from './pages/MyPlan';
+import MySubscription from './pages/MySubscription';
 import Blank from './pages/Blank';
 import PermissionsList from './pages/PermissionsList';
 import { GoogleOAuthProvider } from '@react-oauth/google';
@@ -30,7 +30,6 @@ import AutoReply from './pages/Automation/AutoReply';
 import Flow from './pages/Automation/Flow';
 import OpenCaseList from './pages/OpenCaseList';
 import MyProfile from './pages/MyProfile.js';
-import ChangePassword from './pages/ChangePassword.js';
 import ResetPassword from './pages/ResetPassword.js';
 import PasswordResetForm from './pages/PasswordResetForm.js';
 import WalletRecharge from './pages/WalletRecharge.js';
@@ -184,7 +183,8 @@ root.render(
             </ProtectedRoute>
           } />
           {/* Regular protected routes */}
-          <Route path="/my-plan" element={<MyPlan />} />
+          <Route path="/my-subscription" element={<MySubscription />} />
+          <Route path="/my-plan" element={<Navigate to="/my-subscription" replace />} />
           <Route path="/blank" element={<Blank />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/project-details/:projectId?" element={<ProjectDetails />} />
@@ -195,7 +195,7 @@ root.render(
           <Route path="/reset-password/:token" element={<PasswordResetForm />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/my-profile" element={<MyProfile />} />
-          <Route path="/change-password" element={<ChangePassword />} />
+          <Route path="/change-password" element={<Navigate to="/my-profile" replace />} />
           <Route path="/wallet-recharge/:amount?" element={<WalletRecharge />} />
           <Route path="/wallet" element={<WalletRecharge />} />
           <Route path="/payment-status/:order_id" element={<PaymentStatus />} />

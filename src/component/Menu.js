@@ -427,9 +427,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
 
   const profileItems = [
     { title: 'My Profile', icon: <FiUser size={16} />, path: '/my-profile' },
-    { title: 'Change Password', icon: <FiLock size={16} />, path: '/change-password' },
-    { title: 'Help & Support', icon: <FiHelpCircle size={16} />, path: '/support' },
-    { title: 'My Plan', icon: <FiCreditCard size={16} />, path: '/my-plan' },
+    { title: 'My Subscription', icon: <FiCreditCard size={16} />, path: '/my-subscription' },
     { title: 'Transactions', icon: <FiPieChart size={16} />, path: '/transactions' },
   ];
 

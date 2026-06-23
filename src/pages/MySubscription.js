@@ -63,7 +63,7 @@ function AnimatedCheckbox({ checked, indeterminate, onChange, 'aria-label': aria
     );
 }
 
-function MyPlan() {
+function MySubscription() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isMinimized, setIsMinimized] = useState(() => {
         const saved = localStorage.getItem('sidebarMinimized');
@@ -301,7 +301,7 @@ function MyPlan() {
                 <div className="max-w-5xl mx-auto px-4 sm:px-6 md:px-8 py-6">
                     {/* Page header */}
                     <div className="mb-6">
-                        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">My Plan</h1>
+                        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">My Subscription</h1>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Plans are per project. View package pricing and project validity below.</p>
                     </div>
 
@@ -644,4 +644,4 @@ function MyPlan() {
     );
 }
 
-export default MyPlan;
+export default MySubscription;

@@ -18,6 +18,50 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { fetchUserProfile, createProject, getSubscriptionPacks } from '../api/auth';
 
+const SkeletonBar = ({ className = '' }) => (
+  <div className={`bg-gray-200 dark:bg-gray-700 rounded animate-pulse ${className}`} />
+);
+
+const ProjectCardSkeleton = () => (
+  <div className="p-4 rounded-xl border-2 border-gray-200 dark:border-gray-600 min-h-[100px] flex flex-col animate-pulse">
+    <div className="flex items-start gap-2 w-full">
+      <SkeletonBar className="h-5 flex-1" />
+      <SkeletonBar className="h-5 w-16 rounded flex-shrink-0" />
+    </div>
+    <SkeletonBar className="h-4 w-2/3 mt-2" />
+    <div className="mt-auto pt-2 flex items-center gap-2">
+      <SkeletonBar className="h-5 w-16 rounded-full" />
+      <SkeletonBar className="h-4 w-24" />
+    </div>
+  </div>
+);
+
+const ProjectsSkeleton = () => (
+  <>
+    <div className="mb-6 animate-pulse">
+      <SkeletonBar className="h-10 w-full rounded-lg" />
+    </div>
+
+    <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div
+          key={index}
+          className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-4 animate-pulse"
+        >
+          <SkeletonBar className="h-4 w-24 mb-2" />
+          <SkeletonBar className="h-8 w-12" />
+        </div>
+      ))}
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <ProjectCardSkeleton key={index} />
+      ))}
+    </div>
+  </>
+);
+
 const Projects = () => {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -103,7 +147,7 @@ const Projects = () => {
     localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
   }, [isMinimized]);
 
-  // Fetch package pricing (same as MyPlan) for create project modal
+  // Fetch package pricing (same as MySubscription) for create project modal
   useEffect(() => {
     const fetchPackage = async () => {
       setPackageLoading(true);
@@ -286,9 +330,13 @@ const Projects = () => {
               </div>
               <div>
                 <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Projects</h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                  {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''} · {sharedCount} agent
-                </p>
+                {loading ? (
+                  <SkeletonBar className="h-4 w-36 mt-1" />
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                    {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''} · {sharedCount} agent
+                  </p>
+                )}
               </div>
             </div>
             <button
@@ -300,14 +348,9 @@ const Projects = () => {
             </button>
           </div>
 
-          {/* Loading State */}
-          {loading && (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-            </div>
-          )}
-
-          {!loading && (
+          {loading ? (
+            <ProjectsSkeleton />
+          ) : (
             <>
               {/* No Projects Warning */}
               {!hasUserProjects && (
@@ -449,7 +492,7 @@ const Projects = () => {
                           {isOwned && (
                             <button
                               onClick={(e) => { e.stopPropagation(); navigate(`/project-details/${project.id}`); }}
-                              className="inline-flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                              className="inline-flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 font-medium"
                             >
                               <FiEye className="w-3.5 h-3.5" />
                               View Details

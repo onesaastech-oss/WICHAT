@@ -6,7 +6,7 @@ import { Encrypt } from './encryption/payload-encryption';
 import axios from 'axios';
 import toast, { Toaster } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import { GoogleLogin } from '@react-oauth/google';
+import GoogleAuthButton, { isGoogleAuthEnabled } from '../component/GoogleAuthButton';
 import { jwtDecode } from 'jwt-decode';
 import { Turnstile } from '@marsidev/react-turnstile';
 
@@ -359,39 +359,37 @@ const Register = () => {
             )}
           </AnimatePresence>
 
-          {/* Google Register Button - Always visible */}
-          <div className="mb-6">
-            <GoogleLogin
-              onSuccess={handleGoogleSuccess}
-              onError={handleGoogleError}
-              shape="rectangular"
-              size="large"
-              width="100%"
-              text="signup_with"
-              locale="en"
-            />
-            {isGoogleLoading && (
-              <div className="text-center mt-2">
-                <div className="inline-flex items-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Registering with Google...
+          {isGoogleAuthEnabled() && (
+            <>
+              <div className="mb-6">
+                <GoogleAuthButton
+                  onSuccess={handleGoogleSuccess}
+                  onError={handleGoogleError}
+                  text="signup_with"
+                />
+                {isGoogleLoading && (
+                  <div className="text-center mt-2">
+                    <div className="inline-flex items-center">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Registering with Google...
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="relative mb-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">Or register with email</span>
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* Divider */}
-          <div className="relative mb-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">Or register with email</span>
-            </div>
-          </div>
+            </>
+          )}
 
           <form onSubmit={step === 2 ? handleSubmit : (e) => e.preventDefault()}>
             <AnimatePresence mode="wait">
