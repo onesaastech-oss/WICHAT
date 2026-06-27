@@ -12,6 +12,7 @@ import { setAuthData, setSelectedProjectId } from '../store/authSlice';
 import { loginUser } from '../api/auth';
 import SwitchProjectModal from '../component/Modals/SwitchProjectModal';
 import { Turnstile } from '@marsidev/react-turnstile';
+import LegalLinks from '../component/LegalLinks';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -518,6 +519,8 @@ const Login = () => {
               </Link>
             </p>
           </div>
+
+          <LegalLinks className="mt-6 pt-4 border-t border-gray-100" />
         </div>
       </motion.div>
       <Toaster />

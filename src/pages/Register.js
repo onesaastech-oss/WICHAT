@@ -9,6 +9,8 @@ import { useNavigate } from 'react-router-dom';
 import GoogleAuthButton, { isGoogleAuthEnabled } from '../component/GoogleAuthButton';
 import { jwtDecode } from 'jwt-decode';
 import { Turnstile } from '@marsidev/react-turnstile';
+import LegalLinks from '../component/LegalLinks';
+import { websiteUrl } from '../config/website';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -711,6 +713,28 @@ const Register = () => {
                       />
                     </div>
                   )}
+
+                  <p className="text-xs text-gray-500 text-center leading-relaxed">
+                    By creating an account, you agree to our{' '}
+                    <a
+                      href={websiteUrl('/terms')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-indigo-600 hover:text-indigo-500 font-medium"
+                    >
+                      Terms &amp; Conditions
+                    </a>{' '}
+                    and{' '}
+                    <a
+                      href={websiteUrl('/privacy-policy')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-indigo-600 hover:text-indigo-500 font-medium"
+                    >
+                      Privacy Policy
+                    </a>
+                    .
+                  </p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -770,6 +794,8 @@ const Register = () => {
               </Link>
             </p>
           </div>
+
+          <LegalLinks className="mt-6 pt-4 border-t border-gray-100" />
         </div>
       </motion.div>
       <Toaster />
