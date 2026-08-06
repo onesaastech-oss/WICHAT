@@ -14,13 +14,16 @@ const PROJECT_CONFIG_STORAGE_KEY = (projectId) => `project_config_${projectId}`;
 const getStoredConfig = (projectId) => {
     try {
         const raw = localStorage.getItem(PROJECT_CONFIG_STORAGE_KEY(projectId));
-        if (!raw) return { autoCaseCreate: false };
+        if (!raw) return { autoCaseCreate: false, autoReplyEnabled: false, autoReplyMode: 'all', companyContext: '' };
         const parsed = JSON.parse(raw);
         return {
-            autoCaseCreate: Boolean(parsed?.autoCaseCreate ?? false)
+            autoCaseCreate: Boolean(parsed?.autoCaseCreate ?? false),
+            autoReplyEnabled: Boolean(parsed?.autoReplyEnabled ?? false),
+            autoReplyMode: parsed?.autoReplyMode || 'all',
+            companyContext: parsed?.companyContext || ''
         };
     } catch {
-        return { autoCaseCreate: false };
+        return { autoCaseCreate: false, autoReplyEnabled: false, autoReplyMode: 'all', companyContext: '' };
     }
 };
 
@@ -30,6 +33,12 @@ const setStoredConfig = (projectId, config) => {
     } catch (e) {
         console.warn('Failed to save project config', e);
     }
+};
+
+const updateStoredConfig = (projectId, partialConfig) => {
+    if (!projectId) return;
+    const prev = getStoredConfig(projectId);
+    setStoredConfig(projectId, { ...prev, ...partialConfig });
 };
 
 function ProjectConfig() {
@@ -44,9 +53,15 @@ function ProjectConfig() {
         return saved ? JSON.parse(saved) : false;
     });
     const [autoCaseCreate, setAutoCaseCreate] = useState(false);
+    const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
+    const [autoReplyMode, setAutoReplyMode] = useState('all');
+    const [companyContext, setCompanyContext] = useState('');
     const [projectId, setProjectId] = useState(null);
     const [autoCaseCreateLoading, setAutoCaseCreateLoading] = useState(false);
+    const [autoReplyLoading, setAutoReplyLoading] = useState(false);
+    const [companyContextLoading, setCompanyContextLoading] = useState(false);
     const [autoCaseCreateStatusLoading, setAutoCaseCreateStatusLoading] = useState(true);
+    const [autoReplyStatusLoading, setAutoReplyStatusLoading] = useState(true);
 
     useEffect(() => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -60,13 +75,23 @@ function ProjectConfig() {
 
     useEffect(() => {
         const userData = localStorage.getItem('userData');
-        if (!userData) return;
+        if (!userData) {
+            setAutoReplyStatusLoading(false);
+            return;
+        }
         try {
             const parsed = JSON.parse(userData);
             const id = parsed?.selected_project_id || parsed?.projects?.list?.[0]?.project_id || '';
             setProjectId(id);
-            if (id) setAutoCaseCreate(getStoredConfig(id).autoCaseCreate);
+            if (id) {
+                const storedConfig = getStoredConfig(id);
+                setAutoCaseCreate(storedConfig.autoCaseCreate);
+                setAutoReplyEnabled(storedConfig.autoReplyEnabled);
+                setAutoReplyMode(storedConfig.autoReplyMode);
+                setCompanyContext(storedConfig.companyContext);
+            }
         } catch (_) { }
+        setAutoReplyStatusLoading(false);
     }, []);
 
     useEffect(() => {
@@ -120,6 +145,65 @@ function ProjectConfig() {
         return () => { cancelled = true; };
     }, [projectId, isOwner]);
 
+    useEffect(() => {
+        if (!projectId || !isOwner) {
+            setAutoReplyStatusLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        const fetchAutoReplyStatus = async () => {
+            const userDataRaw = localStorage.getItem('userData');
+            let token = '';
+            let username = '';
+            try {
+                const parsed = userDataRaw ? JSON.parse(userDataRaw) : null;
+                token = parsed?.token || '';
+                username = parsed?.username || '';
+            } catch (_) { }
+            if (!token || !username) {
+                setAutoReplyStatusLoading(false);
+                return;
+            }
+            try {
+                const response = await axios.get(
+                    `${API_BASE_URL}/bot-reply/status`,
+                    {
+                        params: { project_id: projectId },
+                        headers: {
+                            token,
+                            username
+                        }
+                    }
+                );
+                if (cancelled) return;
+                if (response?.data?.error) {
+                    const stored = getStoredConfig(projectId);
+                    setAutoReplyEnabled(stored.autoReplyEnabled);
+                    setAutoReplyMode(stored.autoReplyMode);
+                    return;
+                }
+                setAutoReplyEnabled(Boolean(response?.data?.auto_reply));
+                setAutoReplyMode(response?.data?.auto_reply_type || getStoredConfig(projectId).autoReplyMode);
+                updateStoredConfig(projectId, {
+                    autoReplyEnabled: Boolean(response?.data?.auto_reply),
+                    autoReplyMode: response?.data?.auto_reply_type || getStoredConfig(projectId).autoReplyMode
+                });
+            } catch (_) {
+                if (!cancelled) {
+                    const stored = getStoredConfig(projectId);
+                    setAutoReplyEnabled(stored.autoReplyEnabled);
+                    setAutoReplyMode(stored.autoReplyMode);
+                }
+            } finally {
+                if (!cancelled) setAutoReplyStatusLoading(false);
+            }
+        };
+
+        fetchAutoReplyStatus();
+        return () => { cancelled = true; };
+    }, [projectId, isOwner]);
+
     const handleAutoCaseCreateChange = async (checked) => {
         if (!projectId) return;
         const userDataRaw = localStorage.getItem('userData');
@@ -158,13 +242,152 @@ function ProjectConfig() {
                 return;
             }
             setAutoCaseCreate(checked);
-            const prev = getStoredConfig(projectId);
-            setStoredConfig(projectId, { ...prev, autoCaseCreate: checked });
+            updateStoredConfig(projectId, { autoCaseCreate: checked });
             toast.success(response?.data?.msg ?? 'Auto case create updated successfully');
         } catch (error) {
             toast.error(error?.response?.data?.error ?? 'Failed to update. Please try again.');
         } finally {
             setAutoCaseCreateLoading(false);
+        }
+    };
+
+    const handleAutoReplyEnabledChange = async (checked) => {
+        if (!projectId) return;
+        const userDataRaw = localStorage.getItem('userData');
+        let token = '';
+        let username = '';
+        try {
+            const parsed = userDataRaw ? JSON.parse(userDataRaw) : null;
+            token = parsed?.token || '';
+            username = parsed?.username || '';
+        } catch (_) { }
+        if (!token || !username) {
+            toast.error('Session expired. Please log in again.');
+            return;
+        }
+        setAutoReplyLoading(true);
+        try {
+            const payload = {
+                project_id: projectId,
+                auto_reply: checked
+            };
+            const { data, key } = Encrypt(payload);
+            const response = await axios.post(
+                `${API_BASE_URL}/bot-reply/toggle-auto-reply`,
+                JSON.stringify({ data, key }),
+                {
+                    headers: {
+                        token,
+                        username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            if (response?.data?.error) {
+                const errMsg = typeof response.data.error === 'string' ? response.data.error : 'Failed to update auto reply';
+                toast.error(errMsg);
+                return;
+            }
+            setAutoReplyEnabled(checked);
+            updateStoredConfig(projectId, { autoReplyEnabled: checked });
+            toast.success(response?.data?.msg ?? 'Auto reply updated successfully');
+        } catch (error) {
+            toast.error(error?.response?.data?.error ?? 'Failed to update auto reply. Please try again.');
+        } finally {
+            setAutoReplyLoading(false);
+        }
+    };
+
+    const handleAutoReplyModeChange = async (mode) => {
+        if (!projectId) return;
+        const userDataRaw = localStorage.getItem('userData');
+        let token = '';
+        let username = '';
+        try {
+            const parsed = userDataRaw ? JSON.parse(userDataRaw) : null;
+            token = parsed?.token || '';
+            username = parsed?.username || '';
+        } catch (_) { }
+        if (!token || !username) {
+            toast.error('Session expired. Please log in again.');
+            return;
+        }
+        setAutoReplyLoading(true);
+        try {
+            const payload = {
+                project_id: projectId,
+                auto_reply_type: mode
+            };
+            const { data, key } = Encrypt(payload);
+            const response = await axios.post(
+                `${API_BASE_URL}/bot-reply/update-auto-reply-type`,
+                JSON.stringify({ data, key }),
+                {
+                    headers: {
+                        token,
+                        username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            if (response?.data?.error) {
+                const errMsg = typeof response.data.error === 'string' ? response.data.error : 'Failed to update auto reply type';
+                toast.error(errMsg);
+                return;
+            }
+            setAutoReplyMode(mode);
+            updateStoredConfig(projectId, { autoReplyMode: mode });
+            toast.success(response?.data?.msg ?? 'Auto reply type updated successfully');
+        } catch (error) {
+            toast.error(error?.response?.data?.error ?? 'Failed to update auto reply type. Please try again.');
+        } finally {
+            setAutoReplyLoading(false);
+        }
+    };
+
+    const handleUpdateContext = async () => {
+        if (!projectId) return;
+        const userDataRaw = localStorage.getItem('userData');
+        let token = '';
+        let username = '';
+        try {
+            const parsed = userDataRaw ? JSON.parse(userDataRaw) : null;
+            token = parsed?.token || '';
+            username = parsed?.username || '';
+        } catch (_) { }
+        if (!token || !username) {
+            toast.error('Session expired. Please log in again.');
+            return;
+        }
+        setCompanyContextLoading(true);
+        try {
+            const payload = {
+                project_id: projectId,
+                context: companyContext
+            };
+            const { data, key } = Encrypt(payload);
+            const response = await axios.post(
+                `${API_BASE_URL}/bot-reply/update-context`,
+                JSON.stringify({ data, key }),
+                {
+                    headers: {
+                        token,
+                        username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            if (response?.data?.error) {
+                const errMsg = typeof response.data.error === 'string' ? response.data.error : 'Failed to update company context';
+                toast.error(errMsg);
+                return;
+            }
+            updateStoredConfig(projectId, { companyContext });
+            toast.success(response?.data?.msg ?? 'Company context updated successfully');
+        } catch (error) {
+            toast.error(error?.response?.data?.error ?? 'Failed to update company context. Please try again.');
+        } finally {
+            setCompanyContextLoading(false);
         }
     };
 
@@ -236,6 +459,93 @@ function ProjectConfig() {
                                 </div>
                                 <h3 className="font-semibold text-slate-800 mt-4">Auto Case Create</h3>
                                 <p className="text-sm text-slate-600 mt-1.5">Create a new case automatically based on your project rules.</p>
+                            </div>
+                        </div>
+
+                        {/* Auto Reply - active card */}
+                        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
+                            <div className="p-5 flex-1">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600">
+                                        <FiMessageSquare className="w-6 h-6" />
+                                    </div>
+                                    {autoReplyStatusLoading ? (
+                                        <div className="flex items-center gap-2 text-slate-500">
+                                            <span className="inline-block h-5 w-5 border-2 border-slate-300 border-t-transparent rounded-full animate-spin" />
+                                            <span className="text-sm font-medium">Loading...</span>
+                                        </div>
+                                    ) : (
+                                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                            <input
+                                                type="checkbox"
+                                                checked={autoReplyEnabled}
+                                                disabled={autoReplyLoading}
+                                                onChange={(e) => handleAutoReplyEnabledChange(e.target.checked)}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600 peer-disabled:opacity-60" />
+                                            <span className="ms-3 text-sm font-medium text-slate-700">{autoReplyLoading ? '...' : (autoReplyEnabled ? 'On' : 'Off')}</span>
+                                        </label>
+                                    )}
+                                </div>
+                                <h3 className="font-semibold text-slate-800 mt-4">Auto Reply</h3>
+                                <p className="text-sm text-slate-600 mt-1.5">Send automatic replies to all conversations or only new conversation starts.</p>
+                                {autoReplyEnabled && (
+                                    <div className="mt-4 space-y-3">
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                id="auto-reply-all"
+                                                type="radio"
+                                                name="autoReplyMode"
+                                                value="all"
+                                                checked={autoReplyMode === 'all'}
+                                                onChange={() => handleAutoReplyModeChange('all')}
+                                                className="h-4 w-4 text-emerald-600 border-slate-300"
+                                            />
+                                            <label htmlFor="auto-reply-all" className="text-sm text-slate-700">All conversations</label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                id="auto-reply-new"
+                                                type="radio"
+                                                name="autoReplyMode"
+                                                value="new"
+                                                checked={autoReplyMode === 'new'}
+                                                onChange={() => handleAutoReplyModeChange('new')}
+                                                className="h-4 w-4 text-emerald-600 border-slate-300"
+                                            />
+                                            <label htmlFor="auto-reply-new" className="text-sm text-slate-700">New conversations only</label>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Company Context - active card */}
+                        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
+                            <div className="p-5 flex-1">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="p-2.5 rounded-xl bg-sky-100 text-sky-600">
+                                        <FiShield className="w-6 h-6" />
+                                    </div>
+                                </div>
+                                <h3 className="font-semibold text-slate-800 mt-4">Company Context</h3>
+                                <p className="text-sm text-slate-600 mt-1.5">Update the company context used by the bot to answer FAQs and support queries.</p>
+                                <textarea
+                                    value={companyContext}
+                                    onChange={(e) => setCompanyContext(e.target.value)}
+                                    rows={6}
+                                    className="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                                    placeholder="Q: What are your working hours?\nA: We work 9am to 6pm IST.\n\nQ: How can I contact support?\nA: Email us at support@company.com"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleUpdateContext}
+                                    disabled={companyContextLoading || !companyContext.trim()}
+                                    className="mt-4 inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                >
+                                    {companyContextLoading ? 'Saving...' : 'Save Context'}
+                                </button>
                             </div>
                         </div>
 
