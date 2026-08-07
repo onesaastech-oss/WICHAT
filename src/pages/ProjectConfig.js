@@ -14,16 +14,65 @@ const PROJECT_CONFIG_STORAGE_KEY = (projectId) => `project_config_${projectId}`;
 const getStoredConfig = (projectId) => {
     try {
         const raw = localStorage.getItem(PROJECT_CONFIG_STORAGE_KEY(projectId));
-        if (!raw) return { autoCaseCreate: false, autoReplyEnabled: false, autoReplyMode: 'all', companyContext: '' };
+        if (!raw) return {
+            autoCaseCreate: false,
+            autoReplyEnabled: false,
+            autoReplyMode: 'all',
+            companyContext: '',
+            agentProvider: 'gemini',
+            agentUsePersonalKey: true,
+            agentModel: 'gemini-1.5-flash',
+            agentApiKey: '',
+            agentGeminiApiKey: '',
+            agentClaudeApiKey: '',
+            agentOpenaiApiKey: '',
+            agentGroqApiKey: '',
+            hasAgentApiKey: false,
+            hasAgentGeminiApiKey: false,
+            hasAgentClaudeApiKey: false,
+            hasAgentOpenaiApiKey: false,
+            hasAgentGroqApiKey: false
+        };
         const parsed = JSON.parse(raw);
         return {
             autoCaseCreate: Boolean(parsed?.autoCaseCreate ?? false),
             autoReplyEnabled: Boolean(parsed?.autoReplyEnabled ?? false),
             autoReplyMode: parsed?.autoReplyMode || 'all',
-            companyContext: parsed?.companyContext || ''
+            companyContext: parsed?.companyContext || '',
+            agentProvider: parsed?.agentProvider || 'gemini',
+            agentUsePersonalKey: Boolean(parsed?.agentUsePersonalKey ?? true),
+            agentModel: parsed?.agentModel || 'gemini-1.5-flash',
+            agentApiKey: parsed?.agentApiKey || '',
+            agentGeminiApiKey: parsed?.agentGeminiApiKey || '',
+            agentClaudeApiKey: parsed?.agentClaudeApiKey || '',
+            agentOpenaiApiKey: parsed?.agentOpenaiApiKey || '',
+            agentGroqApiKey: parsed?.agentGroqApiKey || '',
+            hasAgentApiKey: Boolean(parsed?.hasAgentApiKey ?? false),
+            hasAgentGeminiApiKey: Boolean(parsed?.hasAgentGeminiApiKey ?? false),
+            hasAgentClaudeApiKey: Boolean(parsed?.hasAgentClaudeApiKey ?? false),
+            hasAgentOpenaiApiKey: Boolean(parsed?.hasAgentOpenaiApiKey ?? false),
+            hasAgentGroqApiKey: Boolean(parsed?.hasAgentGroqApiKey ?? false)
         };
     } catch {
-        return { autoCaseCreate: false, autoReplyEnabled: false, autoReplyMode: 'all', companyContext: '' };
+        return {
+            autoCaseCreate: false,
+            autoReplyEnabled: false,
+            autoReplyMode: 'all',
+            companyContext: '',
+            agentProvider: 'gemini',
+            agentUsePersonalKey: true,
+            agentModel: 'gemini-1.5-flash',
+            agentApiKey: '',
+            agentGeminiApiKey: '',
+            agentClaudeApiKey: '',
+            agentOpenaiApiKey: '',
+            agentGroqApiKey: '',
+            hasAgentApiKey: false,
+            hasAgentGeminiApiKey: false,
+            hasAgentClaudeApiKey: false,
+            hasAgentOpenaiApiKey: false,
+            hasAgentGroqApiKey: false
+        };
     }
 };
 
@@ -203,6 +252,7 @@ function ProjectConfig() {
         fetchAutoReplyStatus();
         return () => { cancelled = true; };
     }, [projectId, isOwner]);
+
 
     const handleAutoCaseCreateChange = async (checked) => {
         if (!projectId) return;
@@ -518,6 +568,27 @@ function ProjectConfig() {
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+
+                        {/* Agent Configuration - active card */}
+                        <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => navigate('/agent-config')}
+                            className="group rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden cursor-pointer transition hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50"
+                        >
+                            <div className="p-5 flex-1">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="p-2.5 rounded-xl bg-violet-100 text-violet-600">
+                                        <FiShield className="w-6 h-6" />
+                                    </div>
+                                    <div className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 transition group-hover:bg-violet-100 group-hover:text-violet-700">
+                                        Open settings
+                                    </div>
+                                </div>
+                                <h3 className="font-semibold text-slate-800 mt-4">Agent Configuration</h3>
+                                <p className="text-sm text-slate-600 mt-1.5">Manage provider and personal API key settings on a dedicated page.</p>
                             </div>
                         </div>
 

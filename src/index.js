@@ -36,6 +36,7 @@ import WalletRecharge from './pages/WalletRecharge.js';
 import PaymentStatus from './pages/PaymentStatus.js';
 import ProjectDetails from './pages/ProjectDetails';
 import ProjectConfig from './pages/ProjectConfig';
+import AgentConfig from './pages/AgentConfig';
 import DeveloperAccess from './pages/DeveloperAccess';
 import Support from './pages/Support';
 import ProtectedRoute from './component/ProtectedRoute';
@@ -175,6 +176,11 @@ root.render(
           <Route path="/project-config" element={
             <ProtectedRoute requiresProject={true}>
               <ProjectConfig />
+            </ProtectedRoute>
+          } />
+          <Route path="/agent-config" element={
+            <ProtectedRoute requiresProject={true}>
+              <AgentConfig />
             </ProtectedRoute>
           } />
           <Route path="/developer-access" element={
