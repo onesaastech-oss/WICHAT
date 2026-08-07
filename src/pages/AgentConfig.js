@@ -20,13 +20,22 @@ function AgentConfig() {
         const saved = localStorage.getItem('sidebarMinimized');
         return saved ? JSON.parse(saved) : false;
     });
-    
+
     const [projectId, setProjectId] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
-    
+
+    // agentUsePersonalKey = the AUTHORITATIVE backend value.
+    // Invariant this component now enforces: agentUsePersonalKey can only be
+    // true if apiKeys.length > 0. We never call the toggle API in a way that
+    // would break that invariant.
     const [agentUsePersonalKey, setAgentUsePersonalKey] = useState(true);
     const [apiKeys, setApiKeys] = useState([]);
-    
+
+    // selectedTab = purely local UI state for which panel is shown.
+    // Clicking a tab does NOT necessarily persist anything to the backend
+    // anymore — see handleTabChange.
+    const [selectedTab, setSelectedTab] = useState('onechat'); // 'onechat' | 'personal'
+
     const [agentProvider, setAgentProvider] = useState('gemini');
     const [agentModel, setAgentModel] = useState('gemini-1.5-flash');
     const [agentApiKey, setAgentApiKey] = useState('');
@@ -82,12 +91,14 @@ function AgentConfig() {
         return null;
     };
 
+    // Returns the fetched keys (or null on failure) so callers can make
+    // decisions based on the freshest data instead of racing React state.
     const fetchApiKeys = async () => {
-        if (!projectId || !isOwner) return;
+        if (!projectId || !isOwner) return null;
         const auth = getAuthHeaders();
         if (!auth) {
             setIsLoading(false);
-            return;
+            return null;
         }
 
         try {
@@ -100,14 +111,19 @@ function AgentConfig() {
             );
 
             if (!response?.data?.error && response?.data?.data) {
-                setAgentUsePersonalKey(Boolean(response.data.data.agent_use_personal_key));
-                setApiKeys(response.data.data.keys || []);
+                const usePersonal = Boolean(response.data.data.agent_use_personal_key);
+                const keys = response.data.data.keys || [];
+                setAgentUsePersonalKey(usePersonal);
+                setApiKeys(keys);
+                setSelectedTab(usePersonal ? 'personal' : 'onechat');
+                return { usePersonal, keys };
             }
         } catch (error) {
             console.error('Failed to fetch api keys', error);
         } finally {
             setIsLoading(false);
         }
+        return null;
     };
 
     useEffect(() => {
@@ -118,12 +134,14 @@ function AgentConfig() {
         }
     }, [projectId, isOwner]);
 
+    // Low-level call. Callers are responsible for only invoking this when the
+    // resulting state is valid (i.e. never usePersonal=true with zero keys).
     const handleTogglePersonalKey = async (usePersonal) => {
-        if (!projectId) return;
+        if (!projectId) return false;
         const auth = getAuthHeaders();
         if (!auth) {
             toast.error('Session expired. Please log in again.');
-            return;
+            return false;
         }
 
         try {
@@ -137,14 +155,40 @@ function AgentConfig() {
 
             if (response?.data?.error) {
                 toast.error(typeof response.data.error === 'string' ? response.data.error : 'Failed to update setting');
-                return;
+                return false;
             }
-            
+
             setAgentUsePersonalKey(usePersonal);
             toast.success(response?.data?.msg || 'Updated successfully');
+            return true;
         } catch (error) {
             toast.error(error?.response?.data?.error || 'Failed to update setting');
+            return false;
         }
+    };
+
+    // This is the click handler for the OneChat's / Personal tab pair.
+    // Switching to "Personal" only flips the backend flag if a key is
+    // already saved. If there are no keys yet, we just show the panel and
+    // let handleSaveApiKey flip the flag once a key actually exists.
+    const handleTabChange = async (tab) => {
+        if (tab === selectedTab) return;
+
+        if (tab === 'onechat') {
+            setSelectedTab('onechat');
+            if (agentUsePersonalKey) {
+                await handleTogglePersonalKey(false);
+            }
+            return;
+        }
+
+        // tab === 'personal'
+        setSelectedTab('personal');
+        if (!agentUsePersonalKey && apiKeys.length > 0) {
+            // Keys already exist from before — safe to re-enable immediately.
+            await handleTogglePersonalKey(true);
+        }
+        // else: no keys yet, stay in "not enabled" state until one is saved.
     };
 
     const handleSaveApiKey = async () => {
@@ -174,10 +218,19 @@ function AgentConfig() {
                 toast.error(typeof response.data.error === 'string' ? response.data.error : 'Failed to save API key');
                 return;
             }
-            
+
             toast.success('API key saved successfully');
             setAgentApiKey(''); // reset input
-            fetchApiKeys(); // refresh list
+            const result = await fetchApiKeys(); // refresh list, get fresh truth
+
+            // First key just landed — flip the backend flag on now that it's
+            // actually valid to do so. fetchApiKeys() will already reflect
+            // whatever the backend says, but if the backend hasn't been told
+            // yet (usePersonal still false) and we now have a key, tell it.
+            if (result && !result.usePersonal && result.keys.length > 0) {
+                const ok = await handleTogglePersonalKey(true);
+                if (ok) setSelectedTab('personal');
+            }
         } catch (error) {
             toast.error(error?.response?.data?.error || 'Failed to save API key');
         } finally {
@@ -195,6 +248,8 @@ function AgentConfig() {
 
         if (!window.confirm('Are you sure you want to delete this API key?')) return;
 
+        const wasActive = apiKeys.find((k) => k.unique_id === keyUniqueId)?.is_active;
+
         try {
             const payload = { project_id: projectId, key_unique_id: keyUniqueId };
             const { data, key } = Encrypt(payload);
@@ -208,9 +263,20 @@ function AgentConfig() {
                 toast.error(typeof response.data.error === 'string' ? response.data.error : 'Failed to delete API key');
                 return;
             }
-            
+
             toast.success('API key deleted successfully');
-            fetchApiKeys(); // refresh list
+            const result = await fetchApiKeys(); // refresh list, get fresh truth
+
+            // That was the last key — the backend can't legitimately keep
+            // agent_use_personal_key = true with nothing to call, so fall
+            // back to OneChat's managed provider automatically.
+            if (result && result.keys.length === 0 && result.usePersonal) {
+                const ok = await handleTogglePersonalKey(false);
+                if (ok) {
+                    setSelectedTab('onechat');
+                    toast('Switched back to OneChat\'s provider — no personal keys left.', { icon: '\u2139\ufe0f' });
+                }
+            }
         } catch (error) {
             toast.error(error?.response?.data?.error || 'Failed to delete API key');
         }
@@ -247,6 +313,8 @@ function AgentConfig() {
             </div>
         );
     }
+
+    const personalEnabledButNoKeys = selectedTab === 'personal' && apiKeys.length === 0 && !agentUsePersonalKey;
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -293,25 +361,43 @@ function AgentConfig() {
                                 <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
                                     <button
                                         type="button"
-                                        onClick={() => handleTogglePersonalKey(false)}
-                                        className={`rounded-xl px-4 py-2 text-sm font-medium transition ${!agentUsePersonalKey ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                                        onClick={() => handleTabChange('onechat')}
+                                        className={`rounded-xl px-4 py-2 text-sm font-medium transition ${selectedTab === 'onechat' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
                                     >
                                         OneChat's
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => handleTogglePersonalKey(true)}
-                                        className={`rounded-xl px-4 py-2 text-sm font-medium transition ${agentUsePersonalKey ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                                        onClick={() => handleTabChange('personal')}
+                                        className={`rounded-xl px-4 py-2 text-sm font-medium transition ${selectedTab === 'personal' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
                                     >
                                         Personal
                                     </button>
                                 </div>
+                                {/* Explicit status so it's never ambiguous what the backend is actually doing */}
+                                <p className="mt-2 text-xs text-slate-400">
+                                    {agentUsePersonalKey
+                                        ? 'Currently active: your personal API key.'
+                                        : 'Currently active: OneChat\'s managed provider.'}
+                                </p>
                             </div>
 
-                            {agentUsePersonalKey ? (
+                            {selectedTab === 'personal' ? (
                                 <div className="mt-6 border-t border-slate-200 pt-6">
                                     <h3 className="text-md font-semibold text-slate-800 mb-4">Saved API Keys</h3>
-                                    
+
+                                    {personalEnabledButNoKeys && (
+                                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 mb-6">
+                                            Personal key mode isn't active yet — add at least one API key below and it will switch on automatically.
+                                        </div>
+                                    )}
+
+                                    {apiKeys.length > 1 && (
+                                        <p className="text-xs text-slate-400 mb-3">
+                                            You have multiple keys saved. Only the one marked <span className="font-medium text-emerald-600">Active</span> is used for auto-reply.
+                                        </p>
+                                    )}
+
                                     {apiKeys.length === 0 ? (
                                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 mb-6 text-center">
                                             No personal API keys saved. Add one below to get started.
@@ -324,12 +410,13 @@ function AgentConfig() {
                                                         <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Provider</th>
                                                         <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Model</th>
                                                         <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">API Key</th>
+                                                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
                                                         <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Action</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="bg-white divide-y divide-slate-200">
                                                     {apiKeys.map((keyObj) => (
-                                                        <tr key={keyObj.unique_id} className="hover:bg-slate-50">
+                                                        <tr key={keyObj.unique_id} className={keyObj.is_active ? 'bg-emerald-50/60 hover:bg-emerald-50' : 'hover:bg-slate-50'}>
                                                             <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-slate-800 capitalize">
                                                                 {keyObj.api_provider}
                                                             </td>
@@ -338,6 +425,22 @@ function AgentConfig() {
                                                             </td>
                                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-500 font-mono">
                                                                 {keyObj.api_key_masked}
+                                                            </td>
+                                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                                {keyObj.is_active ? (
+                                                                    <span
+                                                                        className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700"
+                                                                        title="This key is currently used for auto-reply"
+                                                                    >
+                                                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                                                        Active
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
+                                                                        <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                                                                        Inactive
+                                                                    </span>
+                                                                )}
                                                             </td>
                                                             <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                                                                 <button
