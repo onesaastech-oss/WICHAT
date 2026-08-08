@@ -37,16 +37,8 @@ function AgentConfig() {
     const [selectedTab, setSelectedTab] = useState('onechat'); // 'onechat' | 'personal'
 
     const [agentProvider, setAgentProvider] = useState('gemini');
-    const [agentModel, setAgentModel] = useState('gemini-1.5-flash');
     const [agentApiKey, setAgentApiKey] = useState('');
     const [isSavingKey, setIsSavingKey] = useState(false);
-
-    const agentModelsByProvider = {
-        gemini: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.5-mini', 'gemini-1.0'],
-        claude: ['claude-3-5-sonnet-latest', 'claude-3-5-mini', 'claude-4-1', 'claude-4o'],
-        openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-3.5-turbo'],
-        groq: ['groq-1', 'groq-2', 'groq-2-small', 'groq-1.5']
-    };
 
     const availableAgentProviders = [
         { value: 'gemini', label: 'Gemini' },
@@ -54,8 +46,6 @@ function AgentConfig() {
         { value: 'openai', label: 'OpenAI' },
         { value: 'groq', label: 'Groq' }
     ];
-
-    const getModelOptions = agentModelsByProvider[agentProvider] || agentModelsByProvider.gemini;
 
     useEffect(() => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -204,7 +194,6 @@ function AgentConfig() {
             const payload = {
                 project_id: projectId,
                 api_provider: agentProvider,
-                api_model: agentModel,
                 api_key: agentApiKey
             };
             const { data, key } = Encrypt(payload);
@@ -282,12 +271,7 @@ function AgentConfig() {
         }
     };
 
-    // Ensure model resets if switching provider
-    useEffect(() => {
-        if (!getModelOptions.includes(agentModel)) {
-            setAgentModel(getModelOptions[0]);
-        }
-    }, [agentProvider, getModelOptions, agentModel]);
+
 
     if (!isOwner) {
         return (
@@ -408,7 +392,6 @@ function AgentConfig() {
                                                 <thead className="bg-slate-50">
                                                     <tr>
                                                         <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Provider</th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Model</th>
                                                         <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">API Key</th>
                                                         <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
                                                         <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Action</th>
@@ -419,9 +402,6 @@ function AgentConfig() {
                                                         <tr key={keyObj.unique_id} className={keyObj.is_active ? 'bg-emerald-50/60 hover:bg-emerald-50' : 'hover:bg-slate-50'}>
                                                             <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-slate-800 capitalize">
                                                                 {keyObj.api_provider}
-                                                            </td>
-                                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-600">
-                                                                {keyObj.api_model}
                                                             </td>
                                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-500 font-mono">
                                                                 {keyObj.api_key_masked}
@@ -461,7 +441,7 @@ function AgentConfig() {
                                     <h3 className="text-md font-semibold text-slate-800 mb-4 flex items-center gap-2">
                                         <FiPlus className="w-4 h-4" /> Add New Key
                                     </h3>
-                                    <div className="grid gap-6 md:grid-cols-3">
+                                    <div className="grid gap-6 md:grid-cols-2">
                                         <div>
                                             <label className="block text-sm font-medium text-slate-700">Provider</label>
                                             <select
@@ -471,18 +451,6 @@ function AgentConfig() {
                                             >
                                                 {availableAgentProviders.map((p) => (
                                                     <option key={p.value} value={p.value}>{p.label}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700">Model</label>
-                                            <select
-                                                value={agentModel}
-                                                onChange={(e) => setAgentModel(e.target.value)}
-                                                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
-                                            >
-                                                {getModelOptions.map((modelOption) => (
-                                                    <option key={modelOption} value={modelOption}>{modelOption}</option>
                                                 ))}
                                             </select>
                                         </div>
