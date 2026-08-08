@@ -105,10 +105,8 @@ function ProjectConfig() {
     const [projectId, setProjectId] = useState(null);
     const [autoCaseCreateLoading, setAutoCaseCreateLoading] = useState(false);
     const [autoReplyLoading, setAutoReplyLoading] = useState(false);
-    const [companyContextLoading, setCompanyContextLoading] = useState(false);
     const [autoCaseCreateStatusLoading, setAutoCaseCreateStatusLoading] = useState(true);
     const [autoReplyStatusLoading, setAutoReplyStatusLoading] = useState(true);
-    const [isEditingContext, setIsEditingContext] = useState(false);
 
     useEffect(() => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -401,53 +399,6 @@ function ProjectConfig() {
         }
     };
 
-    const handleUpdateContext = async () => {
-        if (!projectId) return;
-        const userDataRaw = localStorage.getItem('userData');
-        let token = '';
-        let username = '';
-        try {
-            const parsed = userDataRaw ? JSON.parse(userDataRaw) : null;
-            token = parsed?.token || '';
-            username = parsed?.username || '';
-        } catch (_) { }
-        if (!token || !username) {
-            toast.error('Session expired. Please log in again.');
-            return;
-        }
-        setCompanyContextLoading(true);
-        try {
-            const payload = {
-                project_id: projectId,
-                context: companyContext
-            };
-            const { data, key } = Encrypt(payload);
-            const response = await axios.post(
-                `${API_BASE_URL}/bot-reply/update-context`,
-                JSON.stringify({ data, key }),
-                {
-                    headers: {
-                        token,
-                        username,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-            if (response?.data?.error) {
-                const errMsg = typeof response.data.error === 'string' ? response.data.error : 'Failed to update company context';
-                toast.error(errMsg);
-                return;
-            }
-            updateStoredConfig(projectId, { companyContext });
-            setIsEditingContext(false);
-            toast.success(response?.data?.msg ?? 'Company context updated successfully');
-        } catch (error) {
-            toast.error(error?.response?.data?.error ?? 'Failed to update company context. Please try again.');
-        } finally {
-            setCompanyContextLoading(false);
-        }
-    };
-
     if (!isOwner) {
         return (
             <div className="min-h-screen bg-slate-50">
@@ -599,67 +550,24 @@ function ProjectConfig() {
                             </div>
                         </div>
 
-                        {/* Company Context - active card */}
-                        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
+                        {/* Company Context - navigable card */}
+                        <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => navigate('/context-config')}
+                            className="group rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden cursor-pointer transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50"
+                        >
                             <div className="p-5 flex-1">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="p-2.5 rounded-xl bg-sky-100 text-sky-600">
                                         <FiShield className="w-6 h-6" />
                                     </div>
-                                    {!isEditingContext && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsEditingContext(true)}
-                                            className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-sky-100 hover:text-sky-700"
-                                        >
-                                            Edit
-                                        </button>
-                                    )}
+                                    <div className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 transition group-hover:bg-sky-100 group-hover:text-sky-700">
+                                        Open settings
+                                    </div>
                                 </div>
                                 <h3 className="font-semibold text-slate-800 mt-4">Company Context</h3>
                                 <p className="text-sm text-slate-600 mt-1.5">Update the company context used by the bot to answer FAQs and support queries.</p>
-                                
-                                {isEditingContext ? (
-                                    <>
-                                        <textarea
-                                            value={companyContext}
-                                            onChange={(e) => setCompanyContext(e.target.value)}
-                                            rows={6}
-                                            className="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
-                                            placeholder="Q: What are your working hours?\nA: We work 9am to 6pm IST.\n\nQ: How can I contact support?\nA: Email us at support@company.com"
-                                        />
-                                        <div className="mt-4 flex gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={handleUpdateContext}
-                                                disabled={companyContextLoading || !companyContext.trim()}
-                                                className="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                                            >
-                                                {companyContextLoading ? 'Saving...' : 'Save'}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsEditingContext(false)}
-                                                disabled={companyContextLoading}
-                                                className="inline-flex items-center justify-center rounded-xl bg-white border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                                            >
-                                                Cancel
-                                            </button>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="mt-4 p-4 rounded-xl border border-slate-100 bg-slate-50 min-h-[140px] max-h-[300px] overflow-y-auto">
-                                        {companyContext ? (
-                                            <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans">
-                                                {companyContext}
-                                            </pre>
-                                        ) : (
-                                            <div className="flex items-center justify-center h-full text-sm text-slate-400 italic">
-                                                No company context has been provided yet.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
                             </div>
                         </div>
 

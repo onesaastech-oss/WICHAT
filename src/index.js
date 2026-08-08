@@ -37,6 +37,7 @@ import PaymentStatus from './pages/PaymentStatus.js';
 import ProjectDetails from './pages/ProjectDetails';
 import ProjectConfig from './pages/ProjectConfig';
 import AgentConfig from './pages/AgentConfig';
+import ContextConfig from './pages/ContextConfig';
 import DeveloperAccess from './pages/DeveloperAccess';
 import Support from './pages/Support';
 import ProtectedRoute from './component/ProtectedRoute';
@@ -181,6 +182,11 @@ root.render(
           <Route path="/agent-config" element={
             <ProtectedRoute requiresProject={true}>
               <AgentConfig />
+            </ProtectedRoute>
+          } />
+          <Route path="/context-config" element={
+            <ProtectedRoute requiresProject={true}>
+              <ContextConfig />
             </ProtectedRoute>
           } />
           <Route path="/developer-access" element={
