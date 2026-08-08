@@ -108,6 +108,7 @@ function ProjectConfig() {
     const [companyContextLoading, setCompanyContextLoading] = useState(false);
     const [autoCaseCreateStatusLoading, setAutoCaseCreateStatusLoading] = useState(true);
     const [autoReplyStatusLoading, setAutoReplyStatusLoading] = useState(true);
+    const [isEditingContext, setIsEditingContext] = useState(false);
 
     useEffect(() => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -198,7 +199,7 @@ function ProjectConfig() {
         }
 
         let cancelled = false;
-        const fetchAutoReplyStatus = async () => {
+        const fetchSettings = async () => {
             const userDataRaw = localStorage.getItem('userData');
             let token = '';
             let username = '';
@@ -212,13 +213,16 @@ function ProjectConfig() {
                 return;
             }
             try {
-                const response = await axios.get(
-                    `${API_BASE_URL}/bot-reply/status`,
+                const payload = { project_id: projectId };
+                const { data, key } = Encrypt(payload);
+                const response = await axios.post(
+                    `${API_BASE_URL}/bot-reply/get-settings`,
+                    JSON.stringify({ data, key }),
                     {
-                        params: { project_id: projectId },
                         headers: {
                             token,
-                            username
+                            username,
+                            'Content-Type': 'application/json'
                         }
                     }
                 );
@@ -227,26 +231,31 @@ function ProjectConfig() {
                     const stored = getStoredConfig(projectId);
                     setAutoReplyEnabled(stored.autoReplyEnabled);
                     setAutoReplyMode(stored.autoReplyMode);
+                    setCompanyContext(stored.companyContext);
                     return;
                 }
-                setAutoReplyEnabled(Boolean(response?.data?.auto_reply));
-                setAutoReplyMode(response?.data?.auto_reply_type || getStoredConfig(projectId).autoReplyMode);
+                const responseData = response?.data?.data || {};
+                setAutoReplyEnabled(Boolean(responseData.auto_reply));
+                setAutoReplyMode(responseData.auto_reply_type || getStoredConfig(projectId).autoReplyMode);
+                setCompanyContext(responseData.context || '');
                 updateStoredConfig(projectId, {
-                    autoReplyEnabled: Boolean(response?.data?.auto_reply),
-                    autoReplyMode: response?.data?.auto_reply_type || getStoredConfig(projectId).autoReplyMode
+                    autoReplyEnabled: Boolean(responseData.auto_reply),
+                    autoReplyMode: responseData.auto_reply_type || getStoredConfig(projectId).autoReplyMode,
+                    companyContext: responseData.context || ''
                 });
             } catch (_) {
                 if (!cancelled) {
                     const stored = getStoredConfig(projectId);
                     setAutoReplyEnabled(stored.autoReplyEnabled);
                     setAutoReplyMode(stored.autoReplyMode);
+                    setCompanyContext(stored.companyContext);
                 }
             } finally {
                 if (!cancelled) setAutoReplyStatusLoading(false);
             }
         };
 
-        fetchAutoReplyStatus();
+        fetchSettings();
         return () => { cancelled = true; };
     }, [projectId, isOwner]);
 
@@ -430,6 +439,7 @@ function ProjectConfig() {
                 return;
             }
             updateStoredConfig(projectId, { companyContext });
+            setIsEditingContext(false);
             toast.success(response?.data?.msg ?? 'Company context updated successfully');
         } catch (error) {
             toast.error(error?.response?.data?.error ?? 'Failed to update company context. Please try again.');
@@ -596,24 +606,60 @@ function ProjectConfig() {
                                     <div className="p-2.5 rounded-xl bg-sky-100 text-sky-600">
                                         <FiShield className="w-6 h-6" />
                                     </div>
+                                    {!isEditingContext && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsEditingContext(true)}
+                                            className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-sky-100 hover:text-sky-700"
+                                        >
+                                            Edit
+                                        </button>
+                                    )}
                                 </div>
                                 <h3 className="font-semibold text-slate-800 mt-4">Company Context</h3>
                                 <p className="text-sm text-slate-600 mt-1.5">Update the company context used by the bot to answer FAQs and support queries.</p>
-                                <textarea
-                                    value={companyContext}
-                                    onChange={(e) => setCompanyContext(e.target.value)}
-                                    rows={6}
-                                    className="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
-                                    placeholder="Q: What are your working hours?\nA: We work 9am to 6pm IST.\n\nQ: How can I contact support?\nA: Email us at support@company.com"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={handleUpdateContext}
-                                    disabled={companyContextLoading || !companyContext.trim()}
-                                    className="mt-4 inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                                >
-                                    {companyContextLoading ? 'Saving...' : 'Save Context'}
-                                </button>
+                                
+                                {isEditingContext ? (
+                                    <>
+                                        <textarea
+                                            value={companyContext}
+                                            onChange={(e) => setCompanyContext(e.target.value)}
+                                            rows={6}
+                                            className="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                                            placeholder="Q: What are your working hours?\nA: We work 9am to 6pm IST.\n\nQ: How can I contact support?\nA: Email us at support@company.com"
+                                        />
+                                        <div className="mt-4 flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={handleUpdateContext}
+                                                disabled={companyContextLoading || !companyContext.trim()}
+                                                className="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                            >
+                                                {companyContextLoading ? 'Saving...' : 'Save'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsEditingContext(false)}
+                                                disabled={companyContextLoading}
+                                                className="inline-flex items-center justify-center rounded-xl bg-white border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="mt-4 p-4 rounded-xl border border-slate-100 bg-slate-50 min-h-[140px] max-h-[300px] overflow-y-auto">
+                                        {companyContext ? (
+                                            <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans">
+                                                {companyContext}
+                                            </pre>
+                                        ) : (
+                                            <div className="flex items-center justify-center h-full text-sm text-slate-400 italic">
+                                                No company context has been provided yet.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
