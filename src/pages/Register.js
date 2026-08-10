@@ -11,6 +11,7 @@ import { jwtDecode } from 'jwt-decode';
 import { Turnstile } from '@marsidev/react-turnstile';
 import LegalLinks from '../component/LegalLinks';
 import { websiteUrl } from '../config/website';
+import { sendOtp } from '../api/auth';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -20,35 +21,21 @@ const Register = () => {
     mobile: '',
     email: '',
     firmName: '',
-    password: '',
-    confirmPassword: '',
+    otp: '',
   });
   const [errors, setErrors] = useState({
     name: '',
     mobile: '',
     email: '',
     firmName: '',
-    password: '',
-    confirmPassword: '',
+    otp: '',
     global: ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showPasswordInfo, setShowPasswordInfo] = useState(false);
   const [showGlobalError, setShowGlobalError] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
   const turnstileSiteKey = process.env.REACT_APP_TURNSTILE_SITE_KEY || '0x4AAAAAACuMb3QQyxLqxHpe';
-
-  // Password validation checks
-  const passwordChecks = {
-    hasCapital: /[A-Z]/.test(formData.password),
-    hasNumber: /\d/.test(formData.password),
-    hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(formData.password),
-    hasMinLength: formData.password.length >= 8,
-    hasMaxLength: formData.password.length <= 20,
-    hasNoSpace: !/\s/.test(formData.password),
-  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -90,25 +77,13 @@ const Register = () => {
         newErrors.email = 'Invalid email address';
         valid = false;
       }
-    } else if (currentStep === 2) {
       if (!formData.firmName.trim()) {
         newErrors.firmName = 'Firm name is required';
         valid = false;
       }
-
-      if (!formData.password) {
-        newErrors.password = 'Password is required';
-        valid = false;
-      } else if (!Object.values(passwordChecks).every(check => check)) {
-        newErrors.password = 'Password does not meet all requirements';
-        valid = false;
-      }
-
-      if (!formData.confirmPassword) {
-        newErrors.confirmPassword = 'Please confirm your password';
-        valid = false;
-      } else if (formData.password !== formData.confirmPassword) {
-        newErrors.confirmPassword = 'Passwords do not match';
+    } else if (currentStep === 2) {
+      if (!formData.otp.trim()) {
+        newErrors.otp = 'OTP is required';
         valid = false;
       }
     }
@@ -117,9 +92,30 @@ const Register = () => {
     return valid;
   };
 
-  const nextStep = () => {
+  const nextStep = async () => {
     if (validateStep(step)) {
-      setStep(step + 1);
+      if (step === 1) {
+        setIsLoading(true);
+        try {
+          const data = await sendOtp({ mobile: formData.mobile });
+          if (data.error === false) {
+             setStep(step + 1);
+             toast.success('OTP sent successfully');
+          } else {
+             throw new Error(data.error || 'Failed to send OTP');
+          }
+        } catch (error) {
+          setErrors((prev) => ({
+            ...prev,
+            global: error.message || 'Failed to send OTP'
+          }));
+          setShowGlobalError(true);
+        } finally {
+          setIsLoading(false);
+        }
+      } else {
+        setStep(step + 1);
+      }
     }
   };
 
@@ -203,8 +199,7 @@ const Register = () => {
 
       const payload = {
         email: formData.email,
-        password: formData.password,
-        confirm_password: formData.confirmPassword,
+        otp: formData.otp,
         name: formData.name,
         firm_name: formData.firmName,
         mobile: formData.mobile,
@@ -487,16 +482,7 @@ const Register = () => {
                       )}
                     </AnimatePresence>
                   </div>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="step2"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                  className="space-y-6"
-                >
+
                   <div>
                     <label htmlFor="firmName" className="block text-sm font-medium text-gray-700 mb-1">
                       Firm Name
@@ -524,168 +510,31 @@ const Register = () => {
                       )}
                     </AnimatePresence>
                   </div>
-
-                  <div className="relative">
-                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                      Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        id="password"
-                        name="password"
-                        value={formData.password}
-                        onChange={handleChange}
-                        className={`w-full px-4 py-3 rounded-lg border ${errors.password ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all pr-10`}
-                        placeholder="Create a password"
-                      />
-                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex space-x-2">
-                        <button
-                          type="button"
-                          className="text-gray-400 hover:text-gray-600"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? (
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                            </svg>
-                          ) : (
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
-                            </svg>
-                          )}
-                        </button>
-                        <div
-                          className="relative"
-                          onMouseEnter={() => setShowPasswordInfo(true)}
-                          onMouseLeave={() => setShowPasswordInfo(false)}
-                        >
-                          <button
-                            type="button"
-                            className="text-gray-400 hover:text-indigo-600 mt-1.5"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                          </button>
-
-                          {showPasswordInfo && (
-                            <motion.div
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              className="absolute right-0 bottom-full mb-2 w-64 p-4 bg-white rounded-lg shadow-lg z-10 border border-gray-200"
-                            >
-                              <h3 className="font-medium text-gray-800 mb-2">Password Requirements:</h3>
-                              <ul className="text-sm space-y-1">
-                                <li className={`flex items-center ${passwordChecks.hasCapital ? 'text-green-600' : 'text-red-600'}`}>
-                                  {passwordChecks.hasCapital ? (
-                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                                    </svg>
-                                  ) : (
-                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path>
-                                    </svg>
-                                  )}
-                                  At least one capital letter
-                                </li>
-                                <li className={`flex items-center ${passwordChecks.hasNumber ? 'text-green-600' : 'text-red-600'}`}>
-                                  {passwordChecks.hasNumber ? (
-                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                                    </svg>
-                                  ) : (
-                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path>
-                                    </svg>
-                                  )}
-                                  At least one number
-                                </li>
-                                <li className={`flex items-center ${passwordChecks.hasSpecialChar ? 'text-green-600' : 'text-red-600'}`}>
-                                  {passwordChecks.hasSpecialChar ? (
-                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                                    </svg>
-                                  ) : (
-                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path>
-                                    </svg>
-                                  )}
-                                  At least one special character
-                                </li>
-                                <li className={`flex items-center ${passwordChecks.hasMinLength ? 'text-green-600' : 'text-red-600'}`}>
-                                  {passwordChecks.hasMinLength ? (
-                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                                    </svg>
-                                  ) : (
-                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path>
-                                    </svg>
-                                  )}
-                                  Minimum 8 characters
-                                </li>
-                                <li className={`flex items-center ${passwordChecks.hasMaxLength ? 'text-green-600' : 'text-red-600'}`}>
-                                  {passwordChecks.hasMaxLength ? (
-                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                                    </svg>
-                                  ) : (
-                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path>
-                                    </svg>
-                                  )}
-                                  Maximum 20 characters
-                                </li>
-                                <li className={`flex items-center ${passwordChecks.hasNoSpace ? 'text-green-600' : 'text-red-600'}`}>
-                                  {passwordChecks.hasNoSpace ? (
-                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                                    </svg>
-                                  ) : (
-                                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path>
-                                    </svg>
-                                  )}
-                                  No spaces
-                                </li>
-                              </ul>
-                            </motion.div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <AnimatePresence>
-                      {errors.password && (
-                        <motion.p
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="text-red-500 text-sm mt-1"
-                        >
-                          {errors.password}
-                        </motion.p>
-                      )}
-                    </AnimatePresence>
-                  </div>
-
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="step2"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                  className="space-y-6"
+                >
                   <div>
-                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                      Confirm Password
+                    <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-1">
+                      OTP
                     </label>
                     <input
-                      type="password"
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      value={formData.confirmPassword}
+                      type="text"
+                      id="otp"
+                      name="otp"
+                      value={formData.otp}
                       onChange={handleChange}
-                      className={`w-full px-4 py-3 rounded-lg border ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all`}
-                      placeholder="Confirm your password"
+                      className={`w-full px-4 py-3 rounded-lg border ${errors.otp ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all`}
+                      placeholder="Enter OTP"
                     />
                     <AnimatePresence>
-                      {errors.confirmPassword && (
+                      {errors.otp && (
                         <motion.p
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: 'auto' }}
@@ -693,7 +542,7 @@ const Register = () => {
                           transition={{ duration: 0.2 }}
                           className="text-red-500 text-sm mt-1"
                         >
-                          {errors.confirmPassword}
+                          {errors.otp}
                         </motion.p>
                       )}
                     </AnimatePresence>

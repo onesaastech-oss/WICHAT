@@ -13,7 +13,7 @@ import {
 // Adjust these import paths if necessary
 import { fetchProjectInfo } from '../store/projectSlice';
 import { setSelectedProjectId, setAuthData } from '../store/authSlice';
-import { fetchUserProfile, getTotalUnreadCount } from '../api/auth';
+import { fetchUserProfile, getTotalUnreadCount, logoutUser } from '../api/auth';
 import SwitchProjectModal from './Modals/SwitchProjectModal';
 import { dbHelper } from '../pages/db';
 import { socketManager } from '../pages/socket';
@@ -294,7 +294,15 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      const userData = getUserData();
+      if (userData?.token) {
+        await logoutUser(userData.token);
+      }
+    } catch (error) {
+      console.error('Logout API failed:', error);
+    }
     localStorage.removeItem("userData");
     navigate('/login');
   };

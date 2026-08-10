@@ -2,9 +2,9 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
 import { Encrypt } from '../pages/encryption/payload-encryption';
 
-// Submit new password with reset token (from email link)
-export const submitPasswordResetWithToken = async ({ token, password, captcha_token }) => {
-  const payload = { token, password, captcha_token };
+// Send OTP
+export const sendOtp = async ({ mobile }) => {
+  const payload = { mobile };
 
   const { data, key } = Encrypt(payload);
 
@@ -16,32 +16,7 @@ export const submitPasswordResetWithToken = async ({ token, password, captcha_to
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: `${API_BASE_URL}/account/reset-password`,
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    data: data_pass
-  };
-
-  const response = await axios.request(config);
-  return response.data;
-};
-
-// Request password reset - sends link to email
-export const requestPasswordReset = async ({ email, captcha_token }) => {
-  const payload = { email, captcha_token };
-
-  const { data, key } = Encrypt(payload);
-
-  const data_pass = JSON.stringify({
-    data,
-    key
-  });
-
-  const config = {
-    method: 'post',
-    maxBodyLength: Infinity,
-    url: `${API_BASE_URL}/account/reset-password-request`,
+    url: `${API_BASE_URL}/account/send-otp`,
     headers: {
       'Content-Type': 'application/json'
     },
@@ -53,9 +28,8 @@ export const requestPasswordReset = async ({ email, captcha_token }) => {
 };
 
 // Perform login and return the raw API response data
-// captchaToken: Cloudflare Turnstile response token
-export const loginUser = async ({ email, password, captcha_token }) => {
-  const payload = { email, password, ...(captcha_token && { captcha_token }) };
+export const loginUser = async ({ mobile, otp, captcha_token }) => {
+  const payload = { mobile, otp, ...(captcha_token && { captcha_token }) };
 
   const { data, key } = Encrypt(payload);
 
@@ -76,6 +50,26 @@ export const loginUser = async ({ email, password, captcha_token }) => {
 
   const response = await axios.request(config);
   return response.data;
+};
+
+// Logout User
+export const logoutUser = async (token) => {
+  if (!token) return { error: false };
+  const config = {
+    method: 'post',
+    maxBodyLength: Infinity,
+    url: `${API_BASE_URL}/account/logout`,
+    headers: {
+      'Content-Type': 'application/json',
+      'token': token
+    }
+  };
+  try {
+    const response = await axios.request(config);
+    return response.data;
+  } catch (error) {
+    return { error: 'Failed to logout' };
+  }
 };
 
 // Fetch user profile with projects
@@ -705,54 +699,6 @@ export const checkSession = async () => {
   }
 };
 
-// Change password
-export const changePassword = async ({ old_password, new_password }) => {
-  const getUserData = () => {
-    try {
-      const userData = localStorage.getItem('userData');
-      return userData ? JSON.parse(userData) : null;
-    } catch (error) {
-      console.error('Error parsing userData from localStorage:', error);
-      return null;
-    }
-  };
-
-  const userData = getUserData();
-  const token = userData?.token;
-  const username = userData?.username;
-
-  if (!token || !username) {
-    throw new Error('Session expired');
-  }
-
-  const payload = {
-    old_password,
-    new_password
-  };
-
-  // Encrypt the payload
-  const { data, key } = Encrypt(payload);
-
-  const data_pass = JSON.stringify({
-    data,
-    key
-  });
-
-  const config = {
-    method: 'post',
-    maxBodyLength: Infinity,
-    url: `${API_BASE_URL}/account/change-password`,
-    headers: {
-      'Content-Type': 'application/json',
-      'token': token,
-      'username': username
-    },
-    data: data_pass
-  };
-
-  const response = await axios.request(config);
-  return response.data;
-};
 
 // Get subscription packs
 export const getSubscriptionPacks = async () => {

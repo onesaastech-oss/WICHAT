@@ -9,7 +9,7 @@ import GoogleAuthButton, { isGoogleAuthEnabled } from '../component/GoogleAuthBu
 import { jwtDecode } from 'jwt-decode';
 import { useDispatch } from 'react-redux';
 import { setAuthData, setSelectedProjectId } from '../store/authSlice';
-import { loginUser } from '../api/auth';
+import { loginUser, sendOtp } from '../api/auth';
 import SwitchProjectModal from '../component/Modals/SwitchProjectModal';
 import { Turnstile } from '@marsidev/react-turnstile';
 import LegalLinks from '../component/LegalLinks';
@@ -18,13 +18,14 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
+  const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
-    username: '',
-    password: '',
+    mobile: '',
+    otp: '',
   });
   const [errors, setErrors] = useState({
-    username: '',
-    password: '',
+    mobile: '',
+    otp: '',
     global: '',
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -39,26 +40,23 @@ const Login = () => {
   const [turnstileToken, setTurnstileToken] = useState('');
   const turnstileSiteKey = process.env.REACT_APP_TURNSTILE_SITE_KEY || '0x4AAAAAACuMb3QQyxLqxHpe';
 
-  // Prefill form from URL query params (?username=...&password=...)
+  // Prefill form from URL query params
   useEffect(() => {
     if (!location?.search) return;
 
     const params = new URLSearchParams(location.search);
-    const usernameFromUrl = params.get('username') || '';
-    const passwordFromUrl = params.get('password') || '';
+    const mobileFromUrl = params.get('mobile') || '';
 
-    if (usernameFromUrl || passwordFromUrl) {
+    if (mobileFromUrl) {
       setFormData(prev => ({
         ...prev,
-        username: usernameFromUrl || prev.username,
-        password: passwordFromUrl || prev.password,
+        mobile: mobileFromUrl || prev.mobile,
       }));
 
       // Clear any existing field errors when URL provides values
       setErrors(prev => ({
         ...prev,
-        username: '',
-        password: '',
+        mobile: '',
       }));
     }
   }, [location.search]);
@@ -80,22 +78,21 @@ const Login = () => {
 
   const validateForm = () => {
     let valid = true;
-    const newErrors = { username: '', password: '' };
+    const newErrors = { mobile: '', otp: '' };
 
-    if (!formData.username.trim()) {
-      newErrors.username = 'Username is required';
+    if (!formData.mobile.trim()) {
+      newErrors.mobile = 'Mobile number is required';
       valid = false;
-    } else if (formData.username.length < 3) {
-      newErrors.username = 'Username must be at least 3 characters';
+    } else if (!/^\d{10}$/.test(formData.mobile)) {
+      newErrors.mobile = 'Mobile number must be 10 digits';
       valid = false;
     }
 
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-      valid = false;
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-      valid = false;
+    if (step === 2) {
+      if (!formData.otp.trim()) {
+        newErrors.otp = 'OTP is required';
+        valid = false;
+      }
     }
 
     setErrors(newErrors);
@@ -108,69 +105,79 @@ const Login = () => {
 
     setIsLoading(true);
     try {
-      const data = await loginUser({
-        email: formData.username,
-        password: formData.password,
-        captcha_token: turnstileToken || undefined
-      });
-
-      if (data.error === false) {
-        // Persist full user payload (including projects) for backward compatibility
-        const projects = Array.isArray(data.projects) ? data.projects : [];
-
-        // Base object to store (without selected project for now)
-        let userDataToStore = {
-          ...data,
-          selected_project_id: null
-        };
-
-        // If no projects at all, just store and redirect to projects page
-        if (projects.length === 0) {
-          localStorage.setItem('userData', JSON.stringify(userDataToStore));
-          dispatch(setAuthData(userDataToStore));
-          toast.success('Login successful, but no projects found.');
-          setTimeout(() => {
-            toast.dismiss();
-            navigate('/projects');
-          }, 800);
-          return;
+      if (step === 1) {
+        const data = await sendOtp({ mobile: formData.mobile });
+        if (data.error === false) {
+          setStep(2);
+          toast.success('OTP sent successfully');
+        } else {
+          throw new Error(data.error || 'Failed to send OTP');
         }
+      } else {
+        const data = await loginUser({
+          mobile: formData.mobile,
+          otp: formData.otp,
+          captcha_token: turnstileToken || undefined
+        });
 
-        // If there is exactly one project, auto-select it and redirect
-        if (projects.length === 1) {
-          const onlyProjectId = projects[0]?.project_id || null;
-          userDataToStore = {
-            ...userDataToStore,
-            selected_project_id: onlyProjectId
+        if (data.error === false) {
+          // Persist full user payload (including projects) for backward compatibility
+          const projects = Array.isArray(data.projects) ? data.projects : [];
+
+          // Base object to store (without selected project for now)
+          let userDataToStore = {
+            ...data,
+            selected_project_id: null
           };
 
-          localStorage.setItem('userData', JSON.stringify(userDataToStore));
-          dispatch(setAuthData(userDataToStore));
-          if (onlyProjectId) {
-            dispatch(setSelectedProjectId(onlyProjectId));
+          // If no projects at all, just store and redirect to projects page
+          if (projects.length === 0) {
+            localStorage.setItem('userData', JSON.stringify(userDataToStore));
+            dispatch(setAuthData(userDataToStore));
+            toast.success('Login successful, but no projects found.');
+            setTimeout(() => {
+              toast.dismiss();
+              navigate('/projects');
+            }, 800);
+            return;
           }
 
-          toast.loading('Redirecting...');
-          setTimeout(() => {
-            toast.dismiss();
-            navigate('/'); // Navigate to Home directly
-          }, 1500);
-          return;
-        }
+          // If there is exactly one project, auto-select it and redirect
+          if (projects.length === 1) {
+            const onlyProjectId = projects[0]?.project_id || null;
+            userDataToStore = {
+              ...userDataToStore,
+              selected_project_id: onlyProjectId
+            };
 
-        // More than one project → open SwitchProjectModal (same as Menu) for selection
-        localStorage.setItem('userData', JSON.stringify(userDataToStore));
-        dispatch(setAuthData(userDataToStore));
-        setLoginProjects(projects);
-        setShowProjectModal(true);
-        toast.success('Login successful. Please choose a project.');
-      } else {
-        throw new Error(data.error || 'Something went wrong');
+            localStorage.setItem('userData', JSON.stringify(userDataToStore));
+            dispatch(setAuthData(userDataToStore));
+            if (onlyProjectId) {
+              dispatch(setSelectedProjectId(onlyProjectId));
+            }
+
+            toast.loading('Redirecting...');
+            setTimeout(() => {
+              toast.dismiss();
+              navigate('/'); // Navigate to Home directly
+            }, 1500);
+            return;
+          }
+
+          // More than one project → open SwitchProjectModal (same as Menu) for selection
+          localStorage.setItem('userData', JSON.stringify(userDataToStore));
+          dispatch(setAuthData(userDataToStore));
+          setLoginProjects(projects);
+          setShowProjectModal(true);
+          toast.success('Login successful. Please choose a project.');
+        } else {
+          throw new Error(data.error || 'Something went wrong');
+        }
       }
     } catch (error) {
       setErrors((prev) => ({
         ...prev,
-        global: error.message || 'An error occurred during login'
+        global: error.message || 'An error occurred'
       }));
       setShowGlobalError(true);
     } finally {
@@ -399,21 +406,52 @@ const Login = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {step === 1 && (
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-                Username
+              <label htmlFor="mobile" className="block text-sm font-medium text-gray-700 mb-1">
+                Mobile Number
+              </label>
+              <input
+                type="tel"
+                id="mobile"
+                name="mobile"
+                value={formData.mobile}
+                onChange={handleChange}
+                className={`w-full px-4 py-3 rounded-lg border ${errors.mobile ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all`}
+                placeholder="Enter your mobile number"
+              />
+              <AnimatePresence>
+                {errors.mobile && (
+                  <motion.p
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="text-red-500 text-sm mt-1"
+                  >
+                    {errors.mobile}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+            </div>
+            )}
+
+            {step === 2 && (
+            <div>
+              <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-1">
+                OTP
               </label>
               <input
                 type="text"
-                id="username"
-                name="username"
-                value={formData.username}
+                id="otp"
+                name="otp"
+                value={formData.otp}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 rounded-lg border ${errors.username ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all`}
-                placeholder="Enter your username"
+                className={`w-full px-4 py-3 rounded-lg border ${errors.otp ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all`}
+                placeholder="Enter OTP"
               />
               <AnimatePresence>
-                {errors.username && (
+                {errors.otp && (
                   <motion.p
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
@@ -421,59 +459,17 @@ const Login = () => {
                     transition={{ duration: 0.2 }}
                     className="text-red-500 text-sm mt-1"
                   >
-                    {errors.username}
+                    {errors.otp}
                   </motion.p>
                 )}
               </AnimatePresence>
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Password
-              </label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                className={`w-full px-4 py-3 rounded-lg border ${errors.password ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all`}
-                placeholder="Enter your password"
-              />
-              <AnimatePresence>
-                {errors.password && (
-                  <motion.p
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="text-red-500 text-sm mt-1"
-                  >
-                    {errors.password}
-                  </motion.p>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
-                  Remember me
-                </label>
-              </div>
-
-              <div className="text-sm">
-                <Link to="/reset-password" className="font-medium text-indigo-600 hover:text-indigo-500">
-                  Forgot password?
-                </Link>
+              <div className="mt-2 text-sm text-right">
+                <button type="button" onClick={() => setStep(1)} className="font-medium text-indigo-600 hover:text-indigo-500">
+                  Change Number
+                </button>
               </div>
             </div>
+            )}
 
             {turnstileSiteKey ? (
               <div className="flex justify-center">
@@ -504,9 +500,9 @@ const Login = () => {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Signing in...
+                    Processing...
                   </>
-                ) : 'Sign in'}
+                ) : (step === 1 ? 'Send OTP' : 'Sign in')}
               </motion.button>
             </div>
           </form>
