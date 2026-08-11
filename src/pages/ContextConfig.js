@@ -3,12 +3,13 @@ import { API_BASE_URL } from '../config/api';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import axios from 'axios';
+import { uploadFile } from '../utils/uploadFile';
 import { Header, Sidebar } from '../component/Menu';
 import { fetchProjectInfo } from '../store/projectSlice';
 import { Encrypt } from './encryption/payload-encryption';
 import {
     FiArrowLeft, FiShield, FiLock, FiEdit2, FiPlus, FiTrash2,
-    FiChevronDown, FiChevronUp, FiMessageSquare, FiInfo, FiFileText, FiX
+    FiChevronDown, FiChevronUp, FiMessageSquare, FiInfo, FiFileText, FiX, FiUpload
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
@@ -19,13 +20,15 @@ const generateId = () => Date.now().toString(36) + Math.random().toString(36).su
 const SECTION_TYPES = [
     { value: 'qa', label: 'Q & A', icon: FiMessageSquare, color: 'emerald', description: 'Question and Answer pairs' },
     { value: 'info', label: 'Key-Value', icon: FiInfo, color: 'blue', description: 'Label and value pairs' },
-    { value: 'text', label: 'Free Text', icon: FiFileText, color: 'amber', description: 'Free-form text content' }
+    { value: 'text', label: 'Free Text', icon: FiFileText, color: 'amber', description: 'Free-form text content' },
+    { value: 'docs', label: 'Document', icon: FiUpload, color: 'purple', description: 'Upload PDF or Excel files' }
 ];
 
 const TYPE_COLORS = {
     qa: { bg: 'bg-emerald-100', text: 'text-emerald-600', border: 'border-emerald-200', light: 'bg-emerald-50' },
     info: { bg: 'bg-blue-100', text: 'text-blue-600', border: 'border-blue-200', light: 'bg-blue-50' },
-    text: { bg: 'bg-amber-100', text: 'text-amber-600', border: 'border-amber-200', light: 'bg-amber-50' }
+    text: { bg: 'bg-amber-100', text: 'text-amber-600', border: 'border-amber-200', light: 'bg-amber-50' },
+    docs: { bg: 'bg-purple-100', text: 'text-purple-600', border: 'border-purple-200', light: 'bg-purple-50' }
 };
 
 const createEmptyItem = (type) => {
@@ -34,6 +37,7 @@ const createEmptyItem = (type) => {
         case 'qa': return { id, question: '', answer: '' };
         case 'info': return { id, label: '', value: '' };
         case 'text': return { id, content: '' };
+        case 'docs': return { id, label: '', url: '', fileName: '', fileType: '' };
         default: return { id, question: '', answer: '' };
     }
 };
@@ -116,6 +120,7 @@ function ContextConfig() {
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [uploadingDocId, setUploadingDocId] = useState(null);
 
     useEffect(() => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -243,6 +248,47 @@ function ContextConfig() {
         }));
     }, []);
 
+    const handleFileUpload = async (sectionId, itemId, file) => {
+        if (!file || !projectId) return;
+
+        const userDataRaw = localStorage.getItem('userData');
+        let token = '', username = '';
+        try {
+            const parsed = userDataRaw ? JSON.parse(userDataRaw) : null;
+            token = parsed?.token || '';
+            username = parsed?.username || '';
+        } catch (_) { }
+
+        setUploadingDocId(itemId);
+        try {
+            // 1. Upload to centralized storage (OneSaaS)
+            const uploadResult = await uploadFile(file);
+            const fileUrl = uploadResult.url;
+            
+            const ext = file.name.split('.').pop().toLowerCase();
+            
+            // 2. Save directly to UI state (will be saved to DB when user clicks Save)
+            setSections(prev => prev.map(s => {
+                if (s.id !== sectionId) return s;
+                return {
+                    ...s,
+                    items: s.items.map(i => i.id === itemId ? {
+                        ...i,
+                        label: i.label || file.name,
+                        url: fileUrl,
+                        fileName: file.name,
+                        fileType: ext
+                    } : i)
+                };
+            }));
+            toast.success('Document uploaded successfully');
+        } catch (error) {
+            toast.error(error?.response?.data?.error || error?.message || 'Failed to upload document');
+        } finally {
+            setUploadingDocId(null);
+        }
+    };
+
     /* ─── Save / Cancel ───────────────────────────────── */
 
     const handleSave = async () => {
@@ -344,6 +390,23 @@ function ContextConfig() {
                         <pre key={item.id || idx} className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">
                             {item.content || '—'}
                         </pre>
+                    ))}
+                    {section.type === 'docs' && section.items?.map((item, idx) => (
+                        <div key={item.id || idx} className="rounded-lg border border-slate-200 bg-white p-4">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="p-2 rounded bg-slate-100 text-slate-500">
+                                    <FiFileText className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-medium text-slate-800">{item.label || item.fileName || 'Unnamed Document'}</h4>
+                                    {item.url && (
+                                        <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-600 hover:underline">
+                                            View Document ({item.fileType?.toUpperCase()})
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     ))}
                 </div>
             </div>
@@ -469,6 +532,63 @@ function ContextConfig() {
                                         className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400 resize-y"
                                     />
                                 )}
+
+                                {/* Docs item */}
+                                {section.type === 'docs' && (
+                                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+                                        <input
+                                            type="text"
+                                            value={item.label}
+                                            onChange={(e) => updateItemField(section.id, item.id, 'label', e.target.value)}
+                                            placeholder="Document Label (e.g. Price List)"
+                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
+                                        />
+                                        {item.url ? (
+                                            <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg p-3">
+                                                <div className="flex items-center gap-2">
+                                                    <FiFileText className="text-slate-400" />
+                                                    <span className="text-sm text-slate-700 truncate">{item.fileName}</span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        updateItemField(section.id, item.id, 'url', '');
+                                                        updateItemField(section.id, item.id, 'fileName', '');
+                                                    }}
+                                                    className="text-xs text-red-500 hover:text-red-700 hover:underline"
+                                                >
+                                                    Remove File
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-center w-full">
+                                                <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors">
+                                                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                                        {uploadingDocId === item.id ? (
+                                                            <div className="flex items-center gap-2 text-sm text-slate-500">
+                                                                <span className="inline-block h-4 w-4 border-2 border-slate-300 border-t-transparent rounded-full animate-spin"></span>
+                                                                Uploading...
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                <FiUpload className="w-6 h-6 mb-2 text-slate-400" />
+                                                                <p className="mb-1 text-sm text-slate-500"><span className="font-semibold">Click to upload</span> or drag and drop</p>
+                                                                <p className="text-xs text-slate-400">PDF, Excel, or CSV (MAX. 10MB)</p>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                    <input
+                                                        type="file"
+                                                        className="hidden"
+                                                        accept=".pdf,.xlsx,.xls,.csv"
+                                                        disabled={uploadingDocId === item.id}
+                                                        onChange={(e) => handleFileUpload(section.id, item.id, e.target.files[0])}
+                                                    />
+                                                </label>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         ))}
 
@@ -479,7 +599,7 @@ function ContextConfig() {
                             className={`inline-flex items-center gap-1.5 text-xs font-medium ${colors.text} hover:underline transition`}
                         >
                             <FiPlus className="w-3.5 h-3.5" />
-                            Add {section.type === 'qa' ? 'Q&A pair' : section.type === 'info' ? 'field' : 'text block'}
+                            Add {section.type === 'qa' ? 'Q&A pair' : section.type === 'info' ? 'field' : section.type === 'docs' ? 'document' : 'text block'}
                         </button>
                     </div>
                 )}

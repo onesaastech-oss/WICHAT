@@ -23,6 +23,7 @@ import store from './store';
 import { Toaster } from 'react-hot-toast';
 import CreateCampaign from './pages/Campaign/CreateCampaign';
 import Transactions from './pages/Transactions';
+import AiBills from './pages/AiBills';
 import Projects from './pages/Projects';
 import CampaignList from './pages/Campaign/CampaignList';
 import CampaignDetails from './pages/Campaign/CampaignDetails.js';
@@ -202,6 +203,7 @@ root.render(
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/transactions" element={<Transactions />} />
+          <Route path="/ai-bills" element={<AiBills />} />
           <Route path="/my-profile" element={<MyProfile />} />
           <Route path="/change-password" element={<Navigate to="/my-profile" replace />} />
           <Route path="/wallet-recharge/:amount?" element={<WalletRecharge />} />

@@ -437,6 +437,7 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
     { title: 'My Profile', icon: <FiUser size={16} />, path: '/my-profile' },
     { title: 'My Subscription', icon: <FiCreditCard size={16} />, path: '/my-subscription' },
     { title: 'Transactions', icon: <FiPieChart size={16} />, path: '/transactions' },
+    { title: 'AI Bills', icon: <FiPieChart size={16} />, path: '/ai-bills' },
   ];
 
   return (
