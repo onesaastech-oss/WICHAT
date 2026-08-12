@@ -145,7 +145,7 @@ const SwitchProjectModal = ({ isOpen, onClose, companies = [], onSelectCompany }
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0.9, opacity: 0 }}
                         transition={{ type: "spring", duration: 0.3 }}
-                        className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-5xl w-full mx-4 max-h-[85vh] flex flex-col"
+                        className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-8xl w-full mx-4 max-h-[85vh] flex flex-col"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Header */}

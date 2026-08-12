@@ -298,7 +298,7 @@ function MySubscription() {
 
             {/* Main content */}
             <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
-                <div className="max-w-5xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+                <div className="max-w-8xl mx-auto px-4 sm:px-6 md:px-8 py-6">
                     {/* Page header */}
                     <div className="mb-6">
                         <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">My Subscription</h1>
@@ -421,8 +421,8 @@ function MySubscription() {
                                                                             onClick={() => isSelected && setProjectBillingCycle(record.project_id, 'monthly')}
                                                                             disabled={!isSelected}
                                                                             className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${cycle === 'monthly'
-                                                                                    ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-gray-200 dark:border-gray-600'
-                                                                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:hover:text-gray-600'
+                                                                                ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-gray-200 dark:border-gray-600'
+                                                                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:hover:text-gray-600'
                                                                                 }`}
                                                                         >
                                                                             Monthly
@@ -432,8 +432,8 @@ function MySubscription() {
                                                                             onClick={() => isSelected && setProjectBillingCycle(record.project_id, 'yearly')}
                                                                             disabled={!isSelected}
                                                                             className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${cycle === 'yearly'
-                                                                                    ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-gray-200 dark:border-gray-600'
-                                                                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:hover:text-gray-600'
+                                                                                ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-gray-200 dark:border-gray-600'
+                                                                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:hover:text-gray-600'
                                                                                 }`}
                                                                         >
                                                                             Yearly

@@ -321,7 +321,7 @@ const Projects = () => {
 
       {/* Main content - same layout as Switch Project Modal */}
       <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+        <div className="max-w-8xl mx-auto px-4 sm:px-6 md:px-8 py-6">
           {/* Header - same style as modal */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div className="flex items-center space-x-3">
@@ -447,10 +447,10 @@ const Projects = () => {
                           ? 'cursor-pointer'
                           : 'cursor-not-allowed'
                           } ${isActive
-                          ? 'border-indigo-400 bg-indigo-50/70 dark:bg-indigo-900/15'
-                          : isOwned
-                            ? 'border-gray-200 dark:border-gray-600 hover:border-indigo-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm'
-                            : 'border-gray-200 dark:border-gray-600 opacity-90'
+                            ? 'border-indigo-400 bg-indigo-50/70 dark:bg-indigo-900/15'
+                            : isOwned
+                              ? 'border-gray-200 dark:border-gray-600 hover:border-indigo-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm'
+                              : 'border-gray-200 dark:border-gray-600 opacity-90'
                           }`}
                         onClick={() => { if (isOwned) navigate(`/project-details/${project.id}`); }}
                       >
@@ -590,22 +590,20 @@ const Projects = () => {
                             <button
                               type="button"
                               onClick={() => setBillingCycle('monthly')}
-                              className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                                billingCycle === 'monthly'
+                              className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${billingCycle === 'monthly'
                                   ? 'bg-white text-indigo-600 shadow-sm border border-gray-200'
                                   : 'text-gray-600 hover:text-gray-900'
-                              }`}
+                                }`}
                             >
                               Monthly — ₹{subscriptionPackage.monthly?.amount != null ? Number(subscriptionPackage.monthly.amount).toLocaleString() : '0'}
                             </button>
                             <button
                               type="button"
                               onClick={() => setBillingCycle('yearly')}
-                              className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                                billingCycle === 'yearly'
+                              className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${billingCycle === 'yearly'
                                   ? 'bg-white text-indigo-600 shadow-sm border border-gray-200'
                                   : 'text-gray-600 hover:text-gray-900'
-                              }`}
+                                }`}
                             >
                               Yearly — ₹{subscriptionPackage.yearly?.amount != null ? Number(subscriptionPackage.yearly.amount).toLocaleString() : '0'}
                             </button>
