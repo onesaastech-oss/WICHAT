@@ -44,7 +44,7 @@ const Flow = () => {
 
             {/* Main content */}
             <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+                <div className="max-w-8xl mx-auto px-4 sm:px-6 md:px-8 py-6">
                     {/* Page Header */}
                     <div className="mb-6">
                         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Flow Builder</h1>
@@ -66,11 +66,11 @@ const Flow = () => {
                                     <FiGitBranch className="w-8 h-8 text-indigo-600 dark:text-indigo-300" />
                                 </div>
                             </div>
-                            
+
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
                                 Coming Soon
                             </h2>
-                            
+
                             <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
                                 We're working on an amazing Flow Builder feature. Stay tuned for updates!
                             </p>

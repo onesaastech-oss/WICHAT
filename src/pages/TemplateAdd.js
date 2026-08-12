@@ -944,7 +944,7 @@ function TemplateAdd() {
       {/* Main content */}
       <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
         }`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+        <div className="max-w-8xl mx-auto px-4 sm:px-6 md:px-8 py-6">
           {/* Page header */}
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-gray-900">Create New WhatsApp Template</h2>
@@ -1107,26 +1107,26 @@ function TemplateAdd() {
 
                 {/* Header Format */}
                 {!isAuthentication && (
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Header Format
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {headerFormats.map(format => (
-                      <button
-                        key={format.code}
-                        type="button"
-                        onClick={() => handleHeaderFormatChange(format.code)}
-                        className={`p-2 border rounded-md text-sm text-center ${formData.components.header.format === format.code
-                          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                          : 'border-gray-300 hover:bg-gray-50'
-                          }`}
-                      >
-                        {format.name}
-                      </button>
-                    ))}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Header Format
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {headerFormats.map(format => (
+                        <button
+                          key={format.code}
+                          type="button"
+                          onClick={() => handleHeaderFormatChange(format.code)}
+                          className={`p-2 border rounded-md text-sm text-center ${formData.components.header.format === format.code
+                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                            : 'border-gray-300 hover:bg-gray-50'
+                            }`}
+                        >
+                          {format.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
                 )}
 
                 {/* Header Content based on format */}
@@ -1209,242 +1209,242 @@ function TemplateAdd() {
 
                 {/* Body Content */}
                 {!isAuthentication && (
-                <div className="mb-6">
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Body Content <span className="text-red-500">*</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={addBodyVariable}
-                      className="flex items-center gap-1 text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-md hover:bg-indigo-200 transition-colors font-medium"
-                      title={`Add variable {{${getNextVariableNumber()}}}`}
-                    >
-                      <FiPlus size={12} />
-                      Add Variable {`{{${getNextVariableNumber()}}}`}
-                    </button>
-                  </div>
-                  <textarea
-                    ref={textareaRef}
-                    rows={4}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${formData.components.body.text.trim() ? 'border-green-400' : 'border-gray-300'
-                      }`}
-                    placeholder="Enter your message content here. Use {{1}} for variables."
-                    value={formData.components.body.text}
-                    onChange={handleBodyInputChange}
-                    onKeyDown={handleBodyKeyDown}
-                    required
-                  ></textarea>
-
-                  {/* Text formatting toolbar */}
-                  <div className="mt-2 flex space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => applyFormatting('bold')}
-                      className="p-1.5 rounded border border-gray-300 hover:bg-gray-100"
-                      title="Bold"
-                    >
-                      <FiBold size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyFormatting('italic')}
-                      className="p-1.5 rounded border border-gray-300 hover:bg-gray-100"
-                      title="Italic"
-                    >
-                      <FiItalic size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyFormatting('underline')}
-                      className="p-1.5 rounded border border-gray-300 hover:bg-gray-100"
-                      title="Strikethrough"
-                    >
-                      <FiUnderline size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyFormatting('code')}
-                      className="p-1.5 rounded border border-gray-300 hover:bg-gray-100"
-                      title="Monospace"
-                    >
-                      <FiCode size={16} />
-                    </button>
-                  </div>
-
-
-                  {/* Body Variables */}
-                  {bodyVariables.length > 0 && (
-                    <div className="mt-3 space-y-3">
-                      {bodyVariables.map((variable, index) => (
-                        <div key={variable.id} className="p-3 bg-gray-50 border border-gray-200 rounded-md hover:border-indigo-300 transition-colors">
-                          <div className="flex justify-between items-center mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded">
-                                {`{{${index + 1}}}`}
-                              </span>
-                              <span className="text-sm font-medium text-gray-700">
-                                {variable.name}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeBodyVariable(variable.id)}
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-colors"
-                              title="Remove variable"
-                            >
-                              <FiTrash2 size={14} />
-                            </button>
-                          </div>
-                          <input
-                            type="text"
-                            placeholder={`Sample value for {{${index + 1}}}`}
-                            className={`w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${variable.sample && variable.sample.trim() !== ''
-                              ? 'border-green-400 bg-green-50'
-                              : 'border-gray-300 bg-white'
-                              }`}
-                            value={variable.sample}
-                            onChange={e => updateBodyVariable(variable.id, e.target.value)}
-                            required
-                          />
-                          <p className="mt-1 text-xs text-gray-500">
-                            This value will replace <span className="font-mono text-indigo-600">{`{{${index + 1}}}`}</span> in the message preview
-                          </p>
-                        </div>
-                      ))}
+                  <div className="mb-6">
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Body Content <span className="text-red-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={addBodyVariable}
+                        className="flex items-center gap-1 text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-md hover:bg-indigo-200 transition-colors font-medium"
+                        title={`Add variable {{${getNextVariableNumber()}}}`}
+                      >
+                        <FiPlus size={12} />
+                        Add Variable {`{{${getNextVariableNumber()}}}`}
+                      </button>
                     </div>
-                  )}
-                </div>
+                    <textarea
+                      ref={textareaRef}
+                      rows={4}
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${formData.components.body.text.trim() ? 'border-green-400' : 'border-gray-300'
+                        }`}
+                      placeholder="Enter your message content here. Use {{1}} for variables."
+                      value={formData.components.body.text}
+                      onChange={handleBodyInputChange}
+                      onKeyDown={handleBodyKeyDown}
+                      required
+                    ></textarea>
+
+                    {/* Text formatting toolbar */}
+                    <div className="mt-2 flex space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => applyFormatting('bold')}
+                        className="p-1.5 rounded border border-gray-300 hover:bg-gray-100"
+                        title="Bold"
+                      >
+                        <FiBold size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyFormatting('italic')}
+                        className="p-1.5 rounded border border-gray-300 hover:bg-gray-100"
+                        title="Italic"
+                      >
+                        <FiItalic size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyFormatting('underline')}
+                        className="p-1.5 rounded border border-gray-300 hover:bg-gray-100"
+                        title="Strikethrough"
+                      >
+                        <FiUnderline size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyFormatting('code')}
+                        className="p-1.5 rounded border border-gray-300 hover:bg-gray-100"
+                        title="Monospace"
+                      >
+                        <FiCode size={16} />
+                      </button>
+                    </div>
+
+
+                    {/* Body Variables */}
+                    {bodyVariables.length > 0 && (
+                      <div className="mt-3 space-y-3">
+                        {bodyVariables.map((variable, index) => (
+                          <div key={variable.id} className="p-3 bg-gray-50 border border-gray-200 rounded-md hover:border-indigo-300 transition-colors">
+                            <div className="flex justify-between items-center mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded">
+                                  {`{{${index + 1}}}`}
+                                </span>
+                                <span className="text-sm font-medium text-gray-700">
+                                  {variable.name}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeBodyVariable(variable.id)}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-colors"
+                                title="Remove variable"
+                              >
+                                <FiTrash2 size={14} />
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              placeholder={`Sample value for {{${index + 1}}}`}
+                              className={`w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${variable.sample && variable.sample.trim() !== ''
+                                ? 'border-green-400 bg-green-50'
+                                : 'border-gray-300 bg-white'
+                                }`}
+                              value={variable.sample}
+                              onChange={e => updateBodyVariable(variable.id, e.target.value)}
+                              required
+                            />
+                            <p className="mt-1 text-xs text-gray-500">
+                              This value will replace <span className="font-mono text-indigo-600">{`{{${index + 1}}}`}</span> in the message preview
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Footer */}
                 {!isAuthentication && (
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Footer Text
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.components.footer.text}
-                    onChange={(e) => handleFooterTextChange(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="Optional footer text"
-                    maxLength={60}
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    {formData.components.footer.text.length}/60 characters
-                  </p>
-                </div>
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Footer Text
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.components.footer.text}
+                      onChange={(e) => handleFooterTextChange(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Optional footer text"
+                      maxLength={60}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      {formData.components.footer.text.length}/60 characters
+                    </p>
+                  </div>
                 )}
 
                 {/* Buttons */}
                 {!isAuthentication && (
-                <div className="mb-6">
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Buttons
-                    </label>
-                    <span className="text-sm text-gray-500">
-                      {formData.components.buttons.buttons.length}/3 added
-                    </span>
-                  </div>
+                  <div className="mb-6">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Buttons
+                      </label>
+                      <span className="text-sm text-gray-500">
+                        {formData.components.buttons.buttons.length}/3 added
+                      </span>
+                    </div>
 
-                  {/* Button selection */}
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    {buttonTypes.map(btn => (
-                      <button
-                        key={btn.type}
-                        type="button"
-                        onClick={() => addButton(btn.type)}
-                        disabled={formData.components.buttons.buttons.length >= 3}
-                        className="flex items-center justify-center p-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <span className="mr-1">{btn.icon}</span>
-                        {btn.label}
-                      </button>
-                    ))}
-                  </div>
+                    {/* Button selection */}
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                      {buttonTypes.map(btn => (
+                        <button
+                          key={btn.type}
+                          type="button"
+                          onClick={() => addButton(btn.type)}
+                          disabled={formData.components.buttons.buttons.length >= 3}
+                          className="flex items-center justify-center p-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <span className="mr-1">{btn.icon}</span>
+                          {btn.label}
+                        </button>
+                      ))}
+                    </div>
 
-                  {/* Added buttons */}
-                  <div className="space-y-3">
-                    {formData.components.buttons.buttons.map((btn, index) => (
-                      <div key={index} className="p-3 border border-gray-200 rounded-md bg-gray-50">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-sm font-medium text-gray-700">
-                            {buttonTypes.find(b => b.type === btn.type)?.label}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeButton(index)}
-                            className="text-gray-500 hover:text-gray-700"
-                          >
-                            <FiX size={16} />
-                          </button>
-                        </div>
+                    {/* Added buttons */}
+                    <div className="space-y-3">
+                      {formData.components.buttons.buttons.map((btn, index) => (
+                        <div key={index} className="p-3 border border-gray-200 rounded-md bg-gray-50">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-medium text-gray-700">
+                              {buttonTypes.find(b => b.type === btn.type)?.label}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeButton(index)}
+                              className="text-gray-500 hover:text-gray-700"
+                            >
+                              <FiX size={16} />
+                            </button>
+                          </div>
 
-                        {/* Button Text */}
-                        <input
-                          type="text"
-                          placeholder="Button text"
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 mb-2"
-                          value={btn.text}
-                          onChange={e => updateButton(index, 'text', e.target.value)}
-                        />
-
-                        {/* Phone Number Button */}
-                        {btn.type === 'PHONE_NUMBER' && (
+                          {/* Button Text */}
                           <input
-                            type="tel"
-                            placeholder="Phone number (e.g., 917089379345)"
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            value={btn.phone_number}
-                            onChange={e => updateButton(index, 'phone_number', e.target.value)}
+                            type="text"
+                            placeholder="Button text"
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 mb-2"
+                            value={btn.text}
+                            onChange={e => updateButton(index, 'text', e.target.value)}
                           />
-                        )}
 
-                        {/* URL Button */}
-                        {btn.type === 'URL' && (
-                          <div className="space-y-2">
+                          {/* Phone Number Button */}
+                          {btn.type === 'PHONE_NUMBER' && (
                             <input
-                              type="url"
-                              placeholder="URL (e.g., https://example.com/{{1}})"
+                              type="tel"
+                              placeholder="Phone number (e.g., 917089379345)"
                               className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                              value={btn.url}
-                              onChange={e => updateButton(index, 'url', e.target.value)}
+                              value={btn.phone_number}
+                              onChange={e => updateButton(index, 'phone_number', e.target.value)}
                             />
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-gray-600">URL Examples:</span>
-                              <button
-                                type="button"
-                                onClick={() => addButtonUrlExample(index)}
-                                className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
-                              >
-                                + Add Example
-                              </button>
-                            </div>
-                            {btn.example?.map((example, exIndex) => (
-                              <div key={exIndex} className="flex gap-2">
-                                <input
-                                  type="url"
-                                  placeholder="Example URL"
-                                  className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                  value={example}
-                                  onChange={e => updateButtonUrlExample(index, exIndex, e.target.value)}
-                                />
+                          )}
+
+                          {/* URL Button */}
+                          {btn.type === 'URL' && (
+                            <div className="space-y-2">
+                              <input
+                                type="url"
+                                placeholder="URL (e.g., https://example.com/{{1}})"
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                value={btn.url}
+                                onChange={e => updateButton(index, 'url', e.target.value)}
+                              />
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-gray-600">URL Examples:</span>
                                 <button
                                   type="button"
-                                  onClick={() => removeButtonUrlExample(index, exIndex)}
-                                  className="px-2 text-red-500 hover:text-red-700"
+                                  onClick={() => addButtonUrlExample(index)}
+                                  className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
                                 >
-                                  <FiX size={14} />
+                                  + Add Example
                                 </button>
                               </div>
-                            ))}
-                          </div>
-                        )}
+                              {btn.example?.map((example, exIndex) => (
+                                <div key={exIndex} className="flex gap-2">
+                                  <input
+                                    type="url"
+                                    placeholder="Example URL"
+                                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    value={example}
+                                    onChange={e => updateButtonUrlExample(index, exIndex, e.target.value)}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => removeButtonUrlExample(index, exIndex)}
+                                    className="px-2 text-red-500 hover:text-red-700"
+                                  >
+                                    <FiX size={14} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
 
-                        {/* Copy Code Button */}
-                        {/* {btn.type === 'COPY_CODE' && (
+                          {/* Copy Code Button */}
+                          {/* {btn.type === 'COPY_CODE' && (
                           <div className="space-y-2">
                             <p className="text-xs text-gray-600 mb-1">
                               This button will be converted to OTP format with type "otp" and otp_type "copy_code"
@@ -1458,10 +1458,10 @@ function TemplateAdd() {
                             />
                           </div>
                         )} */}
-                      </div>
-                    ))}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
                 )}
 
                 {/* Submit button */}

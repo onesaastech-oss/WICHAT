@@ -109,7 +109,7 @@ const Support = () => {
             />
 
             <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-8">
+                <div className="max-w-8xl mx-auto px-4 sm:px-6 md:px-8 py-8">
                     {/* Header Section */}
                     <div className="mb-8">
                         <div className="flex items-center gap-3 mb-2">
@@ -288,10 +288,10 @@ const SupportCard = ({ title, icon, iconBg, iconColor, items, type, onCopy, copi
                                             }
                                         }}
                                         className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${type === 'phone'
-                                                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
-                                                : type === 'whatsapp'
-                                                    ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
-                                                    : 'bg-purple-600 text-white hover:bg-purple-700 shadow-md hover:shadow-lg'
+                                            ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
+                                            : type === 'whatsapp'
+                                                ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
+                                                : 'bg-purple-600 text-white hover:bg-purple-700 shadow-md hover:shadow-lg'
                                             }`}
                                     >
                                         {type === 'phone' ? 'Call' : type === 'whatsapp' ? 'Chat' : 'Email'}

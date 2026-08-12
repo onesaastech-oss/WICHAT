@@ -9,11 +9,6 @@ import {
 } from 'react-icons/fi';
 import moment from 'moment';
 import { parseServerDate } from '../utils/dateTime';
-
-const formatMoment = (value, format) => {
-  const date = parseServerDate(value);
-  return date ? moment(date).format(format) : 'N/A';
-};
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import axios from 'axios';
@@ -22,6 +17,11 @@ import Pagination from '../component/Pagination';
 import DateRangePicker from '../component/DateRangePicker';
 import MultiSelect from '../component/MultiSelect';
 // import logo from "../../public/logo-main.png";
+
+const formatMoment = (value, format) => {
+  const date = parseServerDate(value);
+  return date ? moment(date).format(format) : 'N/A';
+};
 
 const Transactions = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -645,8 +645,8 @@ const Transactions = () => {
                   <div className="flex flex-col sm:flex-row sm:items-start">
                     <span className="text-sm font-medium text-gray-500 w-32 shrink-0">Type:</span>
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${selectedTransaction.type === 'Credit'
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                        : 'bg-rose-100 text-rose-800 border border-rose-200'
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                      : 'bg-rose-100 text-rose-800 border border-rose-200'
                       }`}>
                       {selectedTransaction.type}
                     </span>
@@ -828,7 +828,7 @@ const Transactions = () => {
 
       {/* Main content */}
       <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+        <div className="max-w-8xl mx-auto px-4 sm:px-6 md:px-8 py-6">
           {/* Header Section */}
           <div className="mb-6">
             <div className="flex justify-between items-center mb-2">

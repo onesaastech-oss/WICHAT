@@ -89,7 +89,7 @@ export default function CampaignBuilder() {
         />
 
         <main className="mt-16 flex-1 overflow-y-auto p-4 sm:p-6">
-          <div className="max-w-7xl mx-auto">
+          <div className="max-w-8xl mx-auto">
             <CampaignHeader activeTab={activeTab} />
 
             {/* Main Content */}

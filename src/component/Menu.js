@@ -442,9 +442,8 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
 
   return (
     <>
-      <header className={`fixed top-0 inset-x-0 z-50 h-16 border-b border-indigo-100 bg-white/90 backdrop-blur-md transition-all duration-300 ease-in-out ${
-        isFullScreen ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
-      }`}>
+      <header className={`fixed top-0 inset-x-0 z-50 h-16 border-b border-indigo-100 bg-white/90 backdrop-blur-md transition-all duration-300 ease-in-out ${isFullScreen ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
+        }`}>
         <div className="flex h-full items-center justify-between px-4 sm:px-6">
           {/* Left */}
           <div className="flex items-center gap-4">
@@ -806,7 +805,7 @@ const Layout = () => {
         className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-[260px]'
           }`}
       >
-        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto animate-in fade-in duration-500">
+        <div className="p-4 sm:p-6 lg:p-8 max-w-8xl mx-auto animate-in fade-in duration-500">
           <Outlet />
         </div>
       </main>

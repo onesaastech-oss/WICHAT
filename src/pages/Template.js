@@ -307,7 +307,7 @@ function Template() {
         />
 
         <main className={`flex-1 transition-all duration-300 ease-in-out pt-16 overflow-y-auto ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
 
             {/* Action Bar */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">

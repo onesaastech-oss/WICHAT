@@ -366,7 +366,7 @@ function TemplateView() {
                 />
                 <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
                     }`}>
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+                    <div className="max-w-8xl mx-auto px-4 sm:px-6 md:px-8 py-6">
                         <div className="flex items-center justify-center h-64">
                             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
                             <span className="ml-3 text-lg text-gray-600">Loading template...</span>
@@ -395,7 +395,7 @@ function TemplateView() {
             {/* Main content */}
             <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
                 }`}>
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+                <div className="max-w-8xl mx-auto px-4 sm:px-6 md:px-8 py-6">
                     {/* Page header */}
                     <div className="mb-6">
                         <div className="flex items-center mb-4">
@@ -493,17 +493,17 @@ function TemplateView() {
                                         {formData.category === 'AUTHENTICATION' ? 'Verification Message' : 'Body Content'}
                                     </label>
                                     {formData.components.body.text ? (
-                                    <div className="p-4 bg-gray-50 rounded-md border border-gray-200 whitespace-pre-wrap">
-                                        {formData.components.body.text}
-                                    </div>
+                                        <div className="p-4 bg-gray-50 rounded-md border border-gray-200 whitespace-pre-wrap">
+                                            {formData.components.body.text}
+                                        </div>
                                     ) : formData.category === 'AUTHENTICATION' ? (
-                                    <div className="p-4 bg-indigo-50 rounded-md border border-indigo-200 text-sm text-indigo-800">
-                                        Legacy Meta default OTP format
-                                        {authConfig?.addSecurityRecommendation && ' (with security recommendation)'}
-                                        {authConfig?.includeCodeExpiration && ` · expires in ${authConfig.codeExpirationMinutes} min`}
-                                    </div>
+                                        <div className="p-4 bg-indigo-50 rounded-md border border-indigo-200 text-sm text-indigo-800">
+                                            Legacy Meta default OTP format
+                                            {authConfig?.addSecurityRecommendation && ' (with security recommendation)'}
+                                            {authConfig?.includeCodeExpiration && ` · expires in ${authConfig.codeExpirationMinutes} min`}
+                                        </div>
                                     ) : (
-                                    <p className="text-sm text-gray-500 italic">No body content</p>
+                                        <p className="text-sm text-gray-500 italic">No body content</p>
                                     )}
 
                                     {/* Body Variables */}

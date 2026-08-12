@@ -448,8 +448,8 @@ function PermissionsList() {
                 disabled={disabled}
                 onClick={handleClick}
                 className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-all ease-in-out duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transform hover:scale-105 ${checked
-                        ? 'bg-gradient-to-r from-indigo-500 to-indigo-600'
-                        : 'bg-gradient-to-r from-gray-200 to-gray-300'
+                    ? 'bg-gradient-to-r from-indigo-500 to-indigo-600'
+                    : 'bg-gradient-to-r from-gray-200 to-gray-300'
                     }`}
                 role="switch"
                 aria-checked={checked}
@@ -571,7 +571,7 @@ function PermissionsList() {
             {/* Main content */}
             <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
                 }`}>
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-8">
+                <div className="max-w-8xl mx-auto px-4 sm:px-6 md:px-8 py-8">
                     {/* Header with title and create button - Professional styling */}
                     <div className="md:flex md:items-center md:justify-between mb-8">
                         <div className="flex-1 min-w-0">

@@ -168,9 +168,9 @@ const AutoReply = () => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        
+
         const keywordsArray = formData.keywords.split(',').map(k => k.trim()).filter(k => k);
-        
+
         if (keywordsArray.length === 0) {
             alert('Please enter at least one keyword');
             return;
@@ -275,268 +275,265 @@ const AutoReply = () => {
 
             {/* Main content */}
             <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
-                        {/* Page Header */}
-                        <div className="mb-6">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Auto Reply</h1>
-                                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                        Automate responses to incoming WhatsApp messages
-                                    </p>
-                                </div>
-                                <div className="mt-4 sm:mt-0 flex items-center space-x-3">
-                                    <button
-                                        onClick={handleToggleAutoReply}
-                                        className={`inline-flex items-center px-4 py-2 rounded-md shadow-sm text-sm font-medium transition-colors ${
-                                            autoReplyEnabled
-                                                ? 'bg-green-600 text-white hover:bg-green-700'
-                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                <div className="max-w-8xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+                    {/* Page Header */}
+                    <div className="mb-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Auto Reply</h1>
+                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    Automate responses to incoming WhatsApp messages
+                                </p>
+                            </div>
+                            <div className="mt-4 sm:mt-0 flex items-center space-x-3">
+                                <button
+                                    onClick={handleToggleAutoReply}
+                                    className={`inline-flex items-center px-4 py-2 rounded-md shadow-sm text-sm font-medium transition-colors ${autoReplyEnabled
+                                            ? 'bg-green-600 text-white hover:bg-green-700'
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                         }`}
-                                    >
-                                        {autoReplyEnabled ? (
-                                            <>
-                                                <FiPower className="mr-2" size={18} />
-                                                Enabled
-                                            </>
-                                        ) : (
-                                            <>
-                                                <FiBarChart2 className="mr-2" size={18} />
-                                                Disabled
-                                            </>
-                                        )}
-                                    </button>
+                                >
+                                    {autoReplyEnabled ? (
+                                        <>
+                                            <FiPower className="mr-2" size={18} />
+                                            Enabled
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FiBarChart2 className="mr-2" size={18} />
+                                            Disabled
+                                        </>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={handleCreateRule}
+                                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                                >
+                                    <FiPlus className="mr-2" size={18} />
+                                    Create Rule
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Summary Stats */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Rules</div>
+                                    <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</div>
+                                </div>
+                                <div className="p-3 bg-indigo-100 dark:bg-indigo-900 rounded-lg">
+                                    <FiZap className="w-6 h-6 text-indigo-600 dark:text-indigo-300" />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Rules</div>
+                                    <div className="mt-2 text-2xl font-bold text-green-600 dark:text-green-400">{stats.enabled}</div>
+                                </div>
+                                <div className="p-3 bg-green-100 dark:bg-green-900 rounded-lg">
+                                    <FiCheckCircle className="w-6 h-6 text-green-600 dark:text-green-300" />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Inactive Rules</div>
+                                    <div className="mt-2 text-2xl font-bold text-gray-600 dark:text-gray-400">{stats.disabled}</div>
+                                </div>
+                                <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                                    <FiXCircle className="w-6 h-6 text-gray-600 dark:text-gray-300" />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Triggered</div>
+                                    <div className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.totalTriggered}</div>
+                                </div>
+                                <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                                    <FiBarChart2 className="w-6 h-6 text-blue-600 dark:text-blue-300" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Search and Filter Bar */}
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 p-4">
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <div className="flex-1">
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <FiSearch className="h-5 w-5 text-gray-400" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Search rules by name, keywords, or response..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                    />
+                                </div>
+                            </div>
+                            <div className="sm:w-48">
+                                <select
+                                    value={filterStatus}
+                                    onChange={(e) => setFilterStatus(e.target.value)}
+                                    className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                >
+                                    <option value="all">All Status</option>
+                                    <option value="enabled">Enabled</option>
+                                    <option value="disabled">Disabled</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Rules List */}
+                    <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                        {sortedRules.length === 0 ? (
+                            <div className="p-12 text-center">
+                                <FiMessageSquare className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No auto-reply rules</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                    {searchTerm || filterStatus !== 'all'
+                                        ? 'No rules match your search criteria.'
+                                        : 'Create your first auto-reply rule to get started.'}
+                                </p>
+                                {!searchTerm && filterStatus === 'all' && (
                                     <button
                                         onClick={handleCreateRule}
-                                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
                                     >
-                                        <FiPlus className="mr-2" size={18} />
+                                        <FiPlus className="mr-2" />
                                         Create Rule
                                     </button>
-                                </div>
+                                )}
                             </div>
-                        </div>
-
-                        {/* Summary Stats */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Rules</div>
-                                        <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</div>
-                                    </div>
-                                    <div className="p-3 bg-indigo-100 dark:bg-indigo-900 rounded-lg">
-                                        <FiZap className="w-6 h-6 text-indigo-600 dark:text-indigo-300" />
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Rules</div>
-                                        <div className="mt-2 text-2xl font-bold text-green-600 dark:text-green-400">{stats.enabled}</div>
-                                    </div>
-                                    <div className="p-3 bg-green-100 dark:bg-green-900 rounded-lg">
-                                        <FiCheckCircle className="w-6 h-6 text-green-600 dark:text-green-300" />
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Inactive Rules</div>
-                                        <div className="mt-2 text-2xl font-bold text-gray-600 dark:text-gray-400">{stats.disabled}</div>
-                                    </div>
-                                    <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                                        <FiXCircle className="w-6 h-6 text-gray-600 dark:text-gray-300" />
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Triggered</div>
-                                        <div className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.totalTriggered}</div>
-                                    </div>
-                                    <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-lg">
-                                        <FiBarChart2 className="w-6 h-6 text-blue-600 dark:text-blue-300" />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Search and Filter Bar */}
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 p-4">
-                            <div className="flex flex-col sm:flex-row gap-4">
-                                <div className="flex-1">
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <FiSearch className="h-5 w-5 text-gray-400" />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            placeholder="Search rules by name, keywords, or response..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="sm:w-48">
-                                    <select
-                                        value={filterStatus}
-                                        onChange={(e) => setFilterStatus(e.target.value)}
-                                        className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        ) : (
+                            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                                {sortedRules.map((rule) => (
+                                    <div
+                                        key={rule.id}
+                                        className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                                     >
-                                        <option value="all">All Status</option>
-                                        <option value="enabled">Enabled</option>
-                                        <option value="disabled">Disabled</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Rules List */}
-                        <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-                            {sortedRules.length === 0 ? (
-                                <div className="p-12 text-center">
-                                    <FiMessageSquare className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No auto-reply rules</h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                                        {searchTerm || filterStatus !== 'all'
-                                            ? 'No rules match your search criteria.'
-                                            : 'Create your first auto-reply rule to get started.'}
-                                    </p>
-                                    {!searchTerm && filterStatus === 'all' && (
-                                        <button
-                                            onClick={handleCreateRule}
-                                            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-                                        >
-                                            <FiPlus className="mr-2" />
-                                            Create Rule
-                                        </button>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                                    {sortedRules.map((rule) => (
-                                        <div
-                                            key={rule.id}
-                                            className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                                        >
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex-1">
-                                                    <div className="flex items-center space-x-3 mb-2">
-                                                        <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                                                            {rule.name}
-                                                        </h3>
-                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                                            rule.enabled
-                                                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                                <div className="flex items-center space-x-3 mb-2">
+                                                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                                                        {rule.name}
+                                                    </h3>
+                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${rule.enabled
+                                                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                                                         }`}>
-                                                            {rule.enabled ? 'Enabled' : 'Disabled'}
-                                                        </span>
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
-                                                            Priority: {rule.priority}
-                                                        </span>
+                                                        {rule.enabled ? 'Enabled' : 'Disabled'}
+                                                    </span>
+                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                                                        Priority: {rule.priority}
+                                                    </span>
+                                                </div>
+
+                                                <div className="mt-3 space-y-2">
+                                                    <div className="flex items-start">
+                                                        <FiKey className="mt-1 mr-2 text-gray-400 flex-shrink-0" size={16} />
+                                                        <div>
+                                                            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Keywords:</span>
+                                                            <div className="flex flex-wrap gap-2 mt-1">
+                                                                {rule.keywords.map((keyword, idx) => (
+                                                                    <span
+                                                                        key={idx}
+                                                                        className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                                                                    >
+                                                                        {keyword}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                            <span className="text-xs text-gray-400 ml-2">({rule.matchType})</span>
+                                                        </div>
                                                     </div>
 
-                                                    <div className="mt-3 space-y-2">
+                                                    <div className="flex items-start">
+                                                        <FiMessageSquare className="mt-1 mr-2 text-gray-400 flex-shrink-0" size={16} />
+                                                        <div className="flex-1">
+                                                            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Response:</span>
+                                                            <p className="mt-1 text-sm text-gray-900 dark:text-white">{rule.response}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    {Array.isArray(rule.multiSteps) && rule.multiSteps.length > 0 && (
                                                         <div className="flex items-start">
-                                                            <FiKey className="mt-1 mr-2 text-gray-400 flex-shrink-0" size={16} />
+                                                            <FiLayers className="mt-1 mr-2 text-gray-400 flex-shrink-0" size={16} />
                                                             <div>
-                                                                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Keywords:</span>
-                                                                <div className="flex flex-wrap gap-2 mt-1">
-                                                                    {rule.keywords.map((keyword, idx) => (
-                                                                        <span
-                                                                            key={idx}
-                                                                            className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                                                                        >
-                                                                            {keyword}
-                                                                        </span>
-                                                                    ))}
-                                                                </div>
-                                                                <span className="text-xs text-gray-400 ml-2">({rule.matchType})</span>
+                                                                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                                                    Multi-level follow-ups:
+                                                                </span>
+                                                                <p className="mt-1 text-sm text-gray-900 dark:text-white">
+                                                                    {rule.multiSteps.length} step{rule.multiSteps.length > 1 ? 's' : ''} configured
+                                                                </p>
                                                             </div>
                                                         </div>
+                                                    )}
 
+                                                    {rule.businessHours && (
                                                         <div className="flex items-start">
-                                                            <FiMessageSquare className="mt-1 mr-2 text-gray-400 flex-shrink-0" size={16} />
-                                                            <div className="flex-1">
-                                                                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Response:</span>
-                                                                <p className="mt-1 text-sm text-gray-900 dark:text-white">{rule.response}</p>
+                                                            <FiClock className="mt-1 mr-2 text-gray-400 flex-shrink-0" size={16} />
+                                                            <div>
+                                                                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Business Hours:</span>
+                                                                <p className="mt-1 text-sm text-gray-900 dark:text-white">
+                                                                    {rule.startTime} - {rule.endTime} ({rule.daysOfWeek.map(d => daysOfWeek[d].label).join(', ')})
+                                                                </p>
                                                             </div>
                                                         </div>
+                                                    )}
 
-                                        {Array.isArray(rule.multiSteps) && rule.multiSteps.length > 0 && (
-                                            <div className="flex items-start">
-                                                <FiLayers className="mt-1 mr-2 text-gray-400 flex-shrink-0" size={16} />
-                                                <div>
-                                                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                                        Multi-level follow-ups:
-                                                    </span>
-                                                    <p className="mt-1 text-sm text-gray-900 dark:text-white">
-                                                        {rule.multiSteps.length} step{rule.multiSteps.length > 1 ? 's' : ''} configured
-                                                    </p>
+                                                    <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400 mt-3">
+                                                        <span>Triggered: {rule.stats?.triggered || 0} times</span>
+                                                        {rule.stats?.lastTriggered && (
+                                                            <span>Last: {moment(rule.stats.lastTriggered).fromNow()}</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        )}
 
-                                                        {rule.businessHours && (
-                                                            <div className="flex items-start">
-                                                                <FiClock className="mt-1 mr-2 text-gray-400 flex-shrink-0" size={16} />
-                                                                <div>
-                                                                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Business Hours:</span>
-                                                                    <p className="mt-1 text-sm text-gray-900 dark:text-white">
-                                                                        {rule.startTime} - {rule.endTime} ({rule.daysOfWeek.map(d => daysOfWeek[d].label).join(', ')})
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400 mt-3">
-                                                            <span>Triggered: {rule.stats?.triggered || 0} times</span>
-                                                            {rule.stats?.lastTriggered && (
-                                                                <span>Last: {moment(rule.stats.lastTriggered).fromNow()}</span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-center space-x-2 ml-4">
-                                                    <button
-                                                        onClick={() => handleToggleRule(rule.id)}
-                                                        className={`p-2 rounded-md transition-colors ${
-                                                            rule.enabled
-                                                                ? 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900'
-                                                                : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                            <div className="flex items-center space-x-2 ml-4">
+                                                <button
+                                                    onClick={() => handleToggleRule(rule.id)}
+                                                    className={`p-2 rounded-md transition-colors ${rule.enabled
+                                                            ? 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900'
+                                                            : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
                                                         }`}
-                                                        title={rule.enabled ? 'Disable rule' : 'Enable rule'}
-                                                    >
-                                                        {rule.enabled ? <FiPower size={18} /> : <FiBarChart2 size={18} />}
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleEditRule(rule)}
-                                                        className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-md transition-colors"
-                                                        title="Edit rule"
-                                                    >
-                                                        <FiEdit size={18} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDeleteRule(rule.id)}
-                                                        className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors"
-                                                        title="Delete rule"
-                                                    >
-                                                        <FiTrash2 size={18} />
-                                                    </button>
-                                                </div>
+                                                    title={rule.enabled ? 'Disable rule' : 'Enable rule'}
+                                                >
+                                                    {rule.enabled ? <FiPower size={18} /> : <FiBarChart2 size={18} />}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleEditRule(rule)}
+                                                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-md transition-colors"
+                                                    title="Edit rule"
+                                                >
+                                                    <FiEdit size={18} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteRule(rule.id)}
+                                                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors"
+                                                    title="Delete rule"
+                                                >
+                                                    <FiTrash2 size={18} />
+                                                </button>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -796,11 +793,10 @@ const AutoReply = () => {
                                                             key={day.value}
                                                             type="button"
                                                             onClick={() => handleDayToggle(day.value)}
-                                                            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                                                                formData.daysOfWeek.includes(day.value)
+                                                            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${formData.daysOfWeek.includes(day.value)
                                                                     ? 'bg-indigo-600 text-white'
                                                                     : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                                                            }`}
+                                                                }`}
                                                         >
                                                             {day.label}
                                                         </button>

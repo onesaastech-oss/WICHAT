@@ -920,7 +920,7 @@ function TemplateEdit() {
         />
         <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
           }`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+          <div className="max-w-8xl mx-auto px-4 sm:px-6 md:px-8 py-6">
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
               <span className="ml-3 text-lg text-gray-600">Loading template...</span>
@@ -949,7 +949,7 @@ function TemplateEdit() {
       {/* Main content */}
       <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
         }`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+        <div className="max-w-8xl mx-auto px-4 sm:px-6 md:px-8 py-6">
           {/* Page header */}
           <div className="mb-6">
             <div className="flex items-center mb-4">
