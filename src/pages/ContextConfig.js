@@ -50,30 +50,39 @@ const createEmptySection = (type = 'qa') => ({
     collapsed: false
 });
 
-/** Parse a context string (JSON or legacy plain text) into sections array */
+/** Parse a context string (JSON or legacy plain text) into { sections, companyOverview, companyAddress } */
 const parseContextToSections = (contextStr) => {
-    if (!contextStr) return [];
+    const result = { sections: [], companyOverview: '', companyAddress: '' };
+    if (!contextStr) return result;
     try {
         const parsed = JSON.parse(contextStr);
+        result.companyOverview = parsed?.companyOverview || '';
+        result.companyAddress = parsed?.companyAddress || '';
         if (parsed && Array.isArray(parsed.sections) && parsed.sections.length > 0) {
-            return parsed.sections.map(s => ({ ...s, collapsed: false }));
+            result.sections = parsed.sections.map(s => ({ ...s, collapsed: false }));
+            return result;
         }
     } catch (_) { }
     // Legacy plain text fallback — wrap in a single text section
-    return [{
-        id: generateId(),
-        title: 'General Context',
-        type: 'text',
-        items: [{ id: generateId(), content: contextStr }],
-        collapsed: false
-    }];
+    if (!result.sections.length && contextStr) {
+        try { JSON.parse(contextStr); } catch (_) {
+            result.sections = [{
+                id: generateId(),
+                title: 'General Context',
+                type: 'text',
+                items: [{ id: generateId(), content: contextStr }],
+                collapsed: false
+            }];
+        }
+    }
+    return result;
 };
 
-/** Serialize sections array to a JSON string for storage */
-const serializeSectionsToJSON = (sections) => {
+/** Serialize sections + fixed fields to a JSON string for storage */
+const serializeSectionsToJSON = (sections, companyOverview = '', companyAddress = '') => {
     // Strip UI-only fields (collapsed) before persisting
     const clean = sections.map(({ collapsed, ...rest }) => rest);
-    return JSON.stringify({ sections: clean });
+    return JSON.stringify({ companyOverview, companyAddress, sections: clean });
 };
 
 /* ─── Local-storage helpers (reuse ProjectConfig key) ───── */
@@ -117,6 +126,10 @@ function ContextConfig() {
     const [projectId, setProjectId] = useState(null);
     const [sections, setSections] = useState([]);
     const [originalSections, setOriginalSections] = useState([]);
+    const [companyOverview, setCompanyOverview] = useState('');
+    const [companyAddress, setCompanyAddress] = useState('');
+    const [originalCompanyOverview, setOriginalCompanyOverview] = useState('');
+    const [originalCompanyAddress, setOriginalCompanyAddress] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -142,8 +155,12 @@ function ContextConfig() {
             if (id) {
                 const stored = getStoredConfig(id);
                 const parsed2 = parseContextToSections(stored.companyContext);
-                setSections(parsed2);
-                setOriginalSections(JSON.parse(JSON.stringify(parsed2)));
+                setSections(parsed2.sections);
+                setOriginalSections(JSON.parse(JSON.stringify(parsed2.sections)));
+                setCompanyOverview(parsed2.companyOverview);
+                setCompanyAddress(parsed2.companyAddress);
+                setOriginalCompanyOverview(parsed2.companyOverview);
+                setOriginalCompanyAddress(parsed2.companyAddress);
             }
         } catch (_) { }
         setIsLoading(false);
@@ -174,21 +191,33 @@ function ContextConfig() {
                 if (response?.data?.error) {
                     const stored = getStoredConfig(projectId);
                     const p = parseContextToSections(stored.companyContext);
-                    setSections(p);
-                    setOriginalSections(JSON.parse(JSON.stringify(p)));
+                    setSections(p.sections);
+                    setOriginalSections(JSON.parse(JSON.stringify(p.sections)));
+                    setCompanyOverview(p.companyOverview);
+                    setCompanyAddress(p.companyAddress);
+                    setOriginalCompanyOverview(p.companyOverview);
+                    setOriginalCompanyAddress(p.companyAddress);
                     return;
                 }
                 const ctx = response?.data?.data?.context || '';
                 const p = parseContextToSections(ctx);
-                setSections(p);
-                setOriginalSections(JSON.parse(JSON.stringify(p)));
+                setSections(p.sections);
+                setOriginalSections(JSON.parse(JSON.stringify(p.sections)));
+                setCompanyOverview(p.companyOverview);
+                setCompanyAddress(p.companyAddress);
+                setOriginalCompanyOverview(p.companyOverview);
+                setOriginalCompanyAddress(p.companyAddress);
                 updateStoredConfig(projectId, { companyContext: ctx });
             } catch (_) {
                 if (!cancelled) {
                     const stored = getStoredConfig(projectId);
                     const p = parseContextToSections(stored.companyContext);
-                    setSections(p);
-                    setOriginalSections(JSON.parse(JSON.stringify(p)));
+                    setSections(p.sections);
+                    setOriginalSections(JSON.parse(JSON.stringify(p.sections)));
+                    setCompanyOverview(p.companyOverview);
+                    setCompanyAddress(p.companyAddress);
+                    setOriginalCompanyOverview(p.companyOverview);
+                    setOriginalCompanyAddress(p.companyAddress);
                 }
             } finally {
                 if (!cancelled) setIsLoading(false);
@@ -306,7 +335,7 @@ function ContextConfig() {
         }
         setIsSaving(true);
         try {
-            const contextJSON = serializeSectionsToJSON(sections);
+            const contextJSON = serializeSectionsToJSON(sections, companyOverview, companyAddress);
             const payload = { project_id: projectId, context: contextJSON };
             const { data, key } = Encrypt(payload);
             const response = await axios.post(
@@ -321,6 +350,8 @@ function ContextConfig() {
             }
             updateStoredConfig(projectId, { companyContext: contextJSON });
             setOriginalSections(JSON.parse(JSON.stringify(sections)));
+            setOriginalCompanyOverview(companyOverview);
+            setOriginalCompanyAddress(companyAddress);
             setIsEditing(false);
             toast.success(response?.data?.msg ?? 'Company context updated successfully');
         } catch (error) {
@@ -332,11 +363,15 @@ function ContextConfig() {
 
     const handleCancel = () => {
         setSections(JSON.parse(JSON.stringify(originalSections)));
+        setCompanyOverview(originalCompanyOverview);
+        setCompanyAddress(originalCompanyAddress);
         setIsEditing(false);
     };
 
     const handleStartEdit = () => {
         setOriginalSections(JSON.parse(JSON.stringify(sections)));
+        setOriginalCompanyOverview(companyOverview);
+        setOriginalCompanyAddress(companyAddress);
         if (sections.length === 0) {
             setSections([createEmptySection('qa')]);
         }
@@ -684,6 +719,52 @@ function ContextConfig() {
                     ) : isEditing ? (
                         /* ─── EDIT MODE ─── */
                         <>
+                            {/* Fixed fields: Company Overview & Address */}
+                            <div className="space-y-5 mb-5">
+                                {/* Company Overview */}
+                                <div className="rounded-xl border border-sky-200 bg-white shadow-sm overflow-hidden">
+                                    <div className="px-5 py-4 bg-gradient-to-r from-sky-50 to-white border-b border-sky-100 flex items-center gap-3">
+                                        <div className="p-2 rounded-lg bg-sky-100 text-sky-600">
+                                            <FiShield className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="font-semibold text-slate-800">Company Overview</h3>
+                                            <p className="text-xs text-slate-500">Brief description of your company, products, or services</p>
+                                        </div>
+                                    </div>
+                                    <div className="p-5">
+                                        <textarea
+                                            value={companyOverview}
+                                            onChange={(e) => setCompanyOverview(e.target.value)}
+                                            placeholder="e.g. We are a SaaS company providing customer support automation tools..."
+                                            rows={3}
+                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400 resize-y"
+                                        />
+                                    </div>
+                                </div>
+                                {/* Company Address */}
+                                <div className="rounded-xl border border-sky-200 bg-white shadow-sm overflow-hidden">
+                                    <div className="px-5 py-4 bg-gradient-to-r from-sky-50 to-white border-b border-sky-100 flex items-center gap-3">
+                                        <div className="p-2 rounded-lg bg-sky-100 text-sky-600">
+                                            <FiInfo className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="font-semibold text-slate-800">Company Address</h3>
+                                            <p className="text-xs text-slate-500">Physical or mailing address of your company</p>
+                                        </div>
+                                    </div>
+                                    <div className="p-5">
+                                        <input
+                                            type="text"
+                                            value={companyAddress}
+                                            onChange={(e) => setCompanyAddress(e.target.value)}
+                                            placeholder="e.g. 123 Main Street, Suite 100, San Francisco, CA 94105"
+                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="space-y-5">
                                 {sections.map((section, idx) => renderEditSection(section, idx))}
                             </div>
@@ -731,17 +812,52 @@ function ContextConfig() {
                     ) : (
                         /* ─── VIEW MODE ─── */
                         <>
+                            {/* Fixed fields: Company Overview & Address (view) */}
+                            {(companyOverview || companyAddress) && (
+                                <div className="space-y-5 mb-5">
+                                    {companyOverview && (
+                                        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                                            <div className="px-5 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100 flex items-center gap-3">
+                                                <div className="p-2 rounded-lg bg-sky-100 text-sky-600">
+                                                    <FiShield className="w-4 h-4" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="font-semibold text-slate-800">Company Overview</h3>
+                                                </div>
+                                            </div>
+                                            <div className="p-5">
+                                                <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{companyOverview}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {companyAddress && (
+                                        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                                            <div className="px-5 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100 flex items-center gap-3">
+                                                <div className="p-2 rounded-lg bg-sky-100 text-sky-600">
+                                                    <FiInfo className="w-4 h-4" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="font-semibold text-slate-800">Company Address</h3>
+                                                </div>
+                                            </div>
+                                            <div className="p-5">
+                                                <p className="text-sm text-slate-700 leading-relaxed">{companyAddress}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             {sections.length > 0 ? (
                                 <div className="space-y-5">
                                     {sections.map(renderViewSection)}
                                 </div>
-                            ) : (
+                            ) : !companyOverview && !companyAddress ? (
                                 <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-12 text-center">
                                     <FiShield className="w-12 h-12 mx-auto text-slate-300 mb-4" />
                                     <p className="text-sm text-slate-500 italic">No company context has been provided yet.</p>
                                     <p className="text-xs text-slate-400 mt-1">Click "Edit" to add structured sections for your bot's knowledge base.</p>
                                 </div>
-                            )}
+                            ) : null}
                         </>
                     )}
                 </div>
