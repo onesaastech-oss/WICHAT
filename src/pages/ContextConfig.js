@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { API_BASE_URL } from '../config/api';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
@@ -9,7 +9,8 @@ import { fetchProjectInfo } from '../store/projectSlice';
 import { Encrypt } from './encryption/payload-encryption';
 import {
     FiArrowLeft, FiShield, FiLock, FiEdit2, FiPlus, FiTrash2,
-    FiChevronDown, FiChevronUp, FiMessageSquare, FiInfo, FiFileText, FiX, FiUpload, FiAlertTriangle
+    FiChevronDown, FiChevronUp, FiMessageSquare, FiInfo, FiFileText, FiX, FiUpload,
+    FiAlertTriangle, FiCheck, FiKey, FiExternalLink
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
@@ -17,18 +18,92 @@ import toast from 'react-hot-toast';
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
 
+const TABS = [
+    {
+        id: 'overview',
+        label: 'Company Info',
+        icon: FiShield,
+        color: 'sky',
+        description: 'Company overview and address information used for introductory answers.'
+    },
+    {
+        id: 'qa',
+        label: 'Q & A',
+        icon: FiMessageSquare,
+        color: 'emerald',
+        description: 'Question and answer pairs to match user inquiries and FAQs.'
+    },
+    {
+        id: 'info',
+        label: 'Key-Value',
+        icon: FiInfo,
+        color: 'blue',
+        description: 'Structured parameters, attributes, contact details, and specifications.'
+    },
+    {
+        id: 'text',
+        label: 'Free Text',
+        icon: FiFileText,
+        color: 'amber',
+        description: 'Free-form contextual knowledge, policies, procedures, and terms.'
+    },
+    {
+        id: 'docs',
+        label: 'Documents',
+        icon: FiUpload,
+        color: 'purple',
+        description: 'Uploaded reference documents (PDF, Excel, CSV) for deep context retrieval.'
+    }
+];
+
 const SECTION_TYPES = [
-    { value: 'qa', label: 'Q & A', icon: FiMessageSquare, color: 'emerald', description: 'Question and Answer pairs' },
-    { value: 'info', label: 'Key-Value', icon: FiInfo, color: 'blue', description: 'Label and value pairs' },
-    { value: 'text', label: 'Free Text', icon: FiFileText, color: 'amber', description: 'Free-form text content' },
-    { value: 'docs', label: 'Document', icon: FiUpload, color: 'purple', description: 'Upload PDF or Excel files' }
+    { value: 'qa', label: 'Q & A', icon: FiMessageSquare, color: 'emerald' },
+    { value: 'info', label: 'Key-Value', icon: FiInfo, color: 'blue' },
+    { value: 'text', label: 'Free Text', icon: FiFileText, color: 'amber' },
+    { value: 'docs', label: 'Document', icon: FiUpload, color: 'purple' }
 ];
 
 const TYPE_COLORS = {
-    qa: { bg: 'bg-emerald-100', text: 'text-emerald-600', border: 'border-emerald-200', light: 'bg-emerald-50' },
-    info: { bg: 'bg-blue-100', text: 'text-blue-600', border: 'border-blue-200', light: 'bg-blue-50' },
-    text: { bg: 'bg-amber-100', text: 'text-amber-600', border: 'border-amber-200', light: 'bg-amber-50' },
-    docs: { bg: 'bg-purple-100', text: 'text-purple-600', border: 'border-purple-200', light: 'bg-purple-50' }
+    overview: {
+        bg: 'bg-sky-50',
+        activeBg: 'bg-sky-600',
+        activeText: 'text-white',
+        text: 'text-sky-600',
+        border: 'border-sky-200',
+        badge: 'bg-sky-100 text-sky-700'
+    },
+    qa: {
+        bg: 'bg-emerald-50',
+        activeBg: 'bg-emerald-600',
+        activeText: 'text-white',
+        text: 'text-emerald-600',
+        border: 'border-emerald-200',
+        badge: 'bg-emerald-100 text-emerald-700'
+    },
+    info: {
+        bg: 'bg-blue-50',
+        activeBg: 'bg-blue-600',
+        activeText: 'text-white',
+        text: 'text-blue-600',
+        border: 'border-blue-200',
+        badge: 'bg-blue-100 text-blue-700'
+    },
+    text: {
+        bg: 'bg-amber-50',
+        activeBg: 'bg-amber-600',
+        activeText: 'text-white',
+        text: 'text-amber-600',
+        border: 'border-amber-200',
+        badge: 'bg-amber-100 text-amber-700'
+    },
+    docs: {
+        bg: 'bg-purple-50',
+        activeBg: 'bg-purple-600',
+        activeText: 'text-white',
+        text: 'text-purple-600',
+        border: 'border-purple-200',
+        badge: 'bg-purple-100 text-purple-700'
+    }
 };
 
 const createEmptyItem = (type) => {
@@ -63,7 +138,7 @@ const parseContextToSections = (contextStr) => {
             return result;
         }
     } catch (_) { }
-    // Legacy plain text fallback — wrap in a single text section
+    // Legacy plain text fallback
     if (!result.sections.length && contextStr) {
         try { JSON.parse(contextStr); } catch (_) {
             result.sections = [{
@@ -80,12 +155,9 @@ const parseContextToSections = (contextStr) => {
 
 /** Serialize sections + fixed fields to a JSON string for storage */
 const serializeSectionsToJSON = (sections, companyOverview = '', companyAddress = '') => {
-    // Strip UI-only fields (collapsed) before persisting
     const clean = sections.map(({ collapsed, ...rest }) => rest);
     return JSON.stringify({ companyOverview, companyAddress, sections: clean });
 };
-
-/* ─── Local-storage helpers (reuse ProjectConfig key) ───── */
 
 const PROJECT_CONFIG_STORAGE_KEY = (projectId) => `project_config_${projectId}`;
 
@@ -138,6 +210,7 @@ function ContextConfig() {
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [uploadingDocId, setUploadingDocId] = useState(null);
+    const [activeTab, setActiveTab] = useState('overview');
 
     useEffect(() => {
         localStorage.setItem('sidebarMinimized', JSON.stringify(isMinimized));
@@ -216,7 +289,7 @@ function ContextConfig() {
                     updateStoredConfig(projectId, { companyContext: ctx });
                 }
 
-                // 2. Fetch API key settings to check if personal key is active
+                // 2. Fetch API key settings
                 try {
                     const keyResponse = await axios.post(
                         `${API_BASE_URL}/bot-reply/list-api-keys`,
@@ -252,6 +325,32 @@ function ContextConfig() {
         return () => { cancelled = true; };
     }, [projectId, isOwner]);
 
+    /* ─── Counts per Tab ──────────────────────────────── */
+
+    const tabCounts = useMemo(() => {
+        let overviewCount = 0;
+        if (companyOverview && companyOverview.trim()) overviewCount++;
+        if (companyAddress && companyAddress.trim()) overviewCount++;
+
+        const counts = { overview: overviewCount, qa: 0, info: 0, text: 0, docs: 0 };
+
+        sections.forEach(s => {
+            const count = s.items?.filter(i => {
+                if (s.type === 'qa') return Boolean(i.question?.trim() || i.answer?.trim());
+                if (s.type === 'info') return Boolean(i.label?.trim() || i.value?.trim());
+                if (s.type === 'text') return Boolean(i.content?.trim());
+                if (s.type === 'docs') return Boolean(i.label?.trim() || i.url);
+                return true;
+            }).length || 0;
+
+            if (counts[s.type] !== undefined) {
+                counts[s.type] += (count > 0 ? count : (s.items?.length || 1));
+            }
+        });
+
+        return counts;
+    }, [sections, companyOverview, companyAddress]);
+
     /* ─── Section & Item CRUD ─────────────────────────── */
 
     const addSection = useCallback((type = 'qa') => {
@@ -259,7 +358,9 @@ function ContextConfig() {
             toast.error('Document context can only be added when using a Personal API Key for AI auto reply.');
             return;
         }
-        setSections(prev => [...prev, createEmptySection(type)]);
+        const newSec = createEmptySection(type);
+        setSections(prev => [...prev, newSec]);
+        setActiveTab(type);
     }, [usePersonalKey]);
 
     const removeSection = useCallback((sectionId) => {
@@ -279,6 +380,7 @@ function ContextConfig() {
             if (s.id !== sectionId) return s;
             return { ...s, type: newType, items: [createEmptyItem(newType)] };
         }));
+        setActiveTab(newType);
     }, [usePersonalKey]);
 
     const toggleSectionCollapse = useCallback((sectionId) => {
@@ -320,13 +422,10 @@ function ContextConfig() {
 
         setUploadingDocId(itemId);
         try {
-            // 1. Upload to centralized storage (OneSaaS)
             const uploadResult = await uploadFile(file);
             const fileUrl = uploadResult.url;
-
             const ext = file.name.split('.').pop().toLowerCase();
 
-            // 2. Save directly to UI state (will be saved to DB when user clicks Save)
             setSections(prev => prev.map(s => {
                 if (s.id !== sectionId) return s;
                 return {
@@ -398,17 +497,25 @@ function ContextConfig() {
         setIsEditing(false);
     };
 
-    const handleStartEdit = () => {
+    const handleStartEdit = (targetTab) => {
         setOriginalSections(JSON.parse(JSON.stringify(sections)));
         setOriginalCompanyOverview(companyOverview);
         setOriginalCompanyAddress(companyAddress);
-        if (sections.length === 0) {
-            setSections([createEmptySection('qa')]);
+        if (targetTab) {
+            setActiveTab(targetTab);
+            const count = sections.filter(s => s.type === targetTab).length;
+            if (count === 0 && targetTab !== 'overview') {
+                setSections(prev => [...prev, createEmptySection(targetTab)]);
+            }
         }
         setIsEditing(true);
     };
 
-    /* ─── Render helpers ──────────────────────────────── */
+    const activeSections = useMemo(() => {
+        return sections.filter(s => s.type === activeTab);
+    }, [sections, activeTab]);
+
+    /* ─── Render View Section ─────────────────────────── */
 
     const renderViewSection = (section) => {
         const typeConf = SECTION_TYPES.find(t => t.value === section.type) || SECTION_TYPES[0];
@@ -416,67 +523,101 @@ function ContextConfig() {
         const TypeIcon = typeConf.icon;
 
         return (
-            <div key={section.id} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div key={section.id} className="rounded-2xl border border-slate-200/80 bg-white shadow-xs overflow-hidden transition-all hover:border-slate-300">
                 {/* Section header */}
-                <div className="px-5 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100 flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${colors.bg} ${colors.text}`}>
-                        <TypeIcon className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-slate-800 truncate">{section.title || 'Untitled Section'}</h3>
-                        <p className="text-xs text-slate-500">{typeConf.label} · {section.items?.length || 0} {section.items?.length === 1 ? 'item' : 'items'}</p>
+                <div className="px-5 py-3.5 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className={`p-2 rounded-xl ${colors.bg} ${colors.text} flex-shrink-0`}>
+                            <TypeIcon className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                            <h3 className="font-semibold text-slate-800 truncate text-sm sm:text-base">{section.title || 'Untitled Section'}</h3>
+                            <p className="text-xs text-slate-400 font-medium">{typeConf.label} &middot; {section.items?.length || 0} {section.items?.length === 1 ? 'item' : 'items'}</p>
+                        </div>
                     </div>
                 </div>
+
                 {/* Section body */}
-                <div className="p-5 space-y-4">
-                    {section.type === 'qa' && section.items?.map((item, idx) => (
-                        <div key={item.id || idx} className={`rounded-lg ${colors.light} p-4 ${idx > 0 ? '' : ''}`}>
-                            <div className="flex items-start gap-2.5 mb-2">
-                                <span className="text-xs font-bold text-emerald-700 bg-emerald-200 px-2 py-0.5 rounded-full mt-0.5 flex-shrink-0">Q</span>
-                                <p className="text-sm font-medium text-slate-800 leading-relaxed">{item.question || '—'}</p>
-                            </div>
-                            <div className="flex items-start gap-2.5">
-                                <span className="text-xs font-bold text-sky-700 bg-sky-200 px-2 py-0.5 rounded-full mt-0.5 flex-shrink-0">A</span>
-                                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">{item.answer || '—'}</p>
-                            </div>
-                        </div>
-                    ))}
-                    {section.type === 'info' && (
-                        <div className="divide-y divide-slate-100">
+                <div className="p-5 space-y-3">
+                    {section.type === 'qa' && (
+                        <div className="space-y-3">
                             {section.items?.map((item, idx) => (
-                                <div key={item.id || idx} className="flex items-start gap-4 py-3 first:pt-0 last:pb-0">
-                                    <span className="text-sm font-medium text-slate-500 min-w-[120px] flex-shrink-0">{item.label || '—'}</span>
-                                    <span className="text-sm text-slate-800">{item.value || '—'}</span>
+                                <div key={item.id || idx} className="rounded-xl border border-emerald-100 bg-emerald-50/30 p-4 space-y-2.5">
+                                    <div className="flex items-start gap-2.5">
+                                        <span className="text-[11px] font-bold text-emerald-800 bg-emerald-200/90 px-2 py-0.5 rounded-full mt-0.5 flex-shrink-0">Q</span>
+                                        <p className="text-sm font-semibold text-slate-800 leading-relaxed">{item.question || <span className="italic text-slate-400 font-normal">No question specified</span>}</p>
+                                    </div>
+                                    <div className="flex items-start gap-2.5">
+                                        <span className="text-[11px] font-bold text-sky-800 bg-sky-200/90 px-2 py-0.5 rounded-full mt-0.5 flex-shrink-0">A</span>
+                                        <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">{item.answer || <span className="italic text-slate-400 font-normal">No answer specified</span>}</p>
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     )}
-                    {section.type === 'text' && section.items?.map((item, idx) => (
-                        <pre key={item.id || idx} className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">
-                            {item.content || '—'}
-                        </pre>
-                    ))}
-                    {section.type === 'docs' && section.items?.map((item, idx) => (
-                        <div key={item.id || idx} className="rounded-lg border border-slate-200 bg-white p-4">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="p-2 rounded bg-slate-100 text-slate-500">
-                                    <FiFileText className="w-5 h-5" />
+                    {section.type === 'info' && (
+                        <div className="rounded-xl border border-slate-100 divide-y divide-slate-100 overflow-hidden">
+                            {section.items?.map((item, idx) => (
+                                <div key={item.id || idx} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-6 px-4 py-3 bg-white hover:bg-slate-50/60 transition">
+                                    <span className="text-xs sm:text-sm font-semibold text-slate-500 sm:w-44 flex-shrink-0">{item.label || <span className="italic text-slate-400 font-normal">Label</span>}</span>
+                                    <span className="text-sm text-slate-800 font-medium break-words flex-1">{item.value || <span className="italic text-slate-400 font-normal">—</span>}</span>
                                 </div>
-                                <div>
-                                    <h4 className="text-sm font-medium text-slate-800">{item.label || item.fileName || 'Unnamed Document'}</h4>
-                                    {item.url && (
-                                        <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-600 hover:underline">
-                                            View Document ({item.fileType?.toUpperCase()})
-                                        </a>
-                                    )}
-                                </div>
-                            </div>
+                            ))}
                         </div>
-                    ))}
+                    )}
+                    {section.type === 'text' && (
+                        <div className="space-y-3">
+                            {section.items?.map((item, idx) => (
+                                <div key={item.id || idx} className="p-4 rounded-xl border border-amber-100 bg-amber-50/20">
+                                    <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">
+                                        {item.content || <span className="italic text-slate-400">No text content provided</span>}
+                                    </pre>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {section.type === 'docs' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            {section.items?.map((item, idx) => (
+                                <div key={item.id || idx} className="rounded-xl border border-slate-200 bg-white p-4 hover:border-purple-300 transition-all flex flex-col justify-between">
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2.5 rounded-xl bg-purple-50 text-purple-600 flex-shrink-0">
+                                            <FiFileText className="w-5 h-5" />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <h4 className="text-sm font-semibold text-slate-800 truncate">{item.label || item.fileName || 'Unnamed Document'}</h4>
+                                            {item.fileName && item.fileName !== item.label && (
+                                                <p className="text-xs text-slate-500 truncate mt-0.5">{item.fileName}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                                        <span className="text-[10px] font-bold text-purple-700 uppercase bg-purple-50 px-2 py-0.5 rounded border border-purple-100">
+                                            {item.fileType || 'DOC'}
+                                        </span>
+                                        {item.url ? (
+                                            <a
+                                                href={item.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 text-xs font-semibold text-sky-600 hover:text-sky-700 hover:underline"
+                                            >
+                                                Open Document <FiExternalLink className="w-3 h-3 ml-0.5" />
+                                            </a>
+                                        ) : (
+                                            <span className="text-xs text-slate-400 italic">No file uploaded</span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         );
     };
+
+    /* ─── Render Edit Section ─────────────────────────── */
 
     const renderEditSection = (section, sectionIdx) => {
         const typeConf = SECTION_TYPES.find(t => t.value === section.type) || SECTION_TYPES[0];
@@ -484,130 +625,87 @@ function ContextConfig() {
         const TypeIcon = typeConf.icon;
 
         return (
-            <div key={section.id} className={`rounded-xl border ${colors.border} bg-white shadow-sm overflow-hidden transition-all`}>
+            <div key={section.id} className={`rounded-2xl border ${colors.border} bg-white shadow-xs overflow-hidden transition-all mb-5`}>
                 {/* Section header (edit) */}
-                <div className={`px-5 py-4 ${colors.light} border-b ${colors.border} flex items-center gap-3`}>
-                    <div className={`p-2 rounded-lg ${colors.bg} ${colors.text} flex-shrink-0`}>
+                <div className={`px-5 py-3.5 ${colors.bg} border-b ${colors.border} flex items-center gap-3 flex-wrap sm:flex-nowrap`}>
+                    <div className={`p-2 rounded-xl bg-white ${colors.text} shadow-2xs flex-shrink-0`}>
                         <TypeIcon className="w-4 h-4" />
                     </div>
                     <input
                         type="text"
                         value={section.title}
                         onChange={(e) => updateSectionField(section.id, 'title', e.target.value)}
-                        placeholder="Section title (e.g. FAQ, Contact Info...)"
-                        className="flex-1 min-w-0 bg-white/70 border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
+                        placeholder={`Section title (e.g. ${section.type === 'qa' ? 'FAQ, Return Policy' : section.type === 'info' ? 'Contact Details, Office Hours' : section.type === 'docs' ? 'Product Catalog' : 'Company Policies'})...`}
+                        className="flex-1 min-w-[200px] bg-white border border-slate-200 rounded-xl px-3.5 py-1.5 text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
                     />
-                    <select
-                        value={section.type}
-                        onChange={(e) => changeSectionType(section.id, e.target.value)}
-                        className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400 flex-shrink-0"
-                    >
-                        {SECTION_TYPES.map(t => (
-                            <option key={t.value} value={t.value} disabled={t.value === 'docs' && !usePersonalKey}>
-                                {t.label} {t.value === 'docs' && !usePersonalKey ? '(Personal Key Required)' : ''}
-                            </option>
-                        ))}
-                    </select>
-                    <button
-                        type="button"
-                        onClick={() => toggleSectionCollapse(section.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-white/80 transition flex-shrink-0"
-                        title={section.collapsed ? 'Expand' : 'Collapse'}
-                    >
-                        {section.collapsed ? <FiChevronDown className="w-4 h-4" /> : <FiChevronUp className="w-4 h-4" />}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => removeSection(section.id)}
-                        className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition flex-shrink-0"
-                        title="Delete section"
-                    >
-                        <FiTrash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+                        <select
+                            value={section.type}
+                            onChange={(e) => changeSectionType(section.id, e.target.value)}
+                            className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs sm:text-sm text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
+                        >
+                            {SECTION_TYPES.map(t => (
+                                <option key={t.value} value={t.value} disabled={t.value === 'docs' && !usePersonalKey}>
+                                    {t.label} {t.value === 'docs' && !usePersonalKey ? '(Personal Key Req.)' : ''}
+                                </option>
+                            ))}
+                        </select>
+                        <button
+                            type="button"
+                            onClick={() => toggleSectionCollapse(section.id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-white transition"
+                            title={section.collapsed ? 'Expand' : 'Collapse'}
+                        >
+                            {section.collapsed ? <FiChevronDown className="w-4 h-4" /> : <FiChevronUp className="w-4 h-4" />}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => removeSection(section.id)}
+                            className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition"
+                            title="Delete section"
+                        >
+                            <FiTrash2 className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Section items (collapsible) */}
                 {!section.collapsed && (
                     <div className="p-5 space-y-4">
-                        {/* Token and cost caution banner + locked notice for Document section */}
-                        {section.type === 'docs' && (
-                            <div className="space-y-3">
-                                {/* Token and cost caution banner */}
-                                <div className="rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50/40 p-4 flex items-start gap-3 shadow-xs">
-                                    <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 flex-shrink-0 mt-0.5">
-                                        <FiAlertTriangle className="w-5 h-5" />
-                                    </div>
-                                    <div className="text-xs text-amber-900 space-y-1">
-                                        <p className="font-semibold text-sm text-amber-950">
-                                            Caution: High Token Consumption & API Cost
-                                        </p>
-                                        <p className="leading-relaxed text-amber-800">
-                                            Document files (PDF, Excel, CSV) are parsed and fed directly into the AI context for every auto-reply. Depending on the file size and the volume of internal data, this will consume a <strong>very large amount of tokens</strong> and can be <strong>very costly</strong> on your personal API key. Please ensure your uploaded documents are concise and optimized.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Locked notice if not using personal key */}
-                                {!usePersonalKey && (
-                                    <div className="rounded-xl border border-rose-200 bg-rose-50/90 p-4 flex items-start justify-between gap-4 flex-wrap sm:flex-nowrap">
-                                        <div className="flex items-start gap-3">
-                                            <div className="p-1.5 rounded-lg bg-rose-100 text-rose-700 flex-shrink-0 mt-0.5">
-                                                <FiLock className="w-5 h-5" />
-                                            </div>
-                                            <div className="text-xs text-rose-900 space-y-1">
-                                                <p className="font-semibold text-sm text-rose-950">Document Upload Disabled</p>
-                                                <p className="leading-relaxed text-rose-800">
-                                                    Document-type context is only available when using your <strong>Personal API Key</strong> for AI Auto-Reply. It is disabled while OneChat's shared key is active.
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => navigate('/agent-config')}
-                                            className="flex-shrink-0 text-xs font-semibold px-3 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition shadow-sm whitespace-nowrap self-start"
-                                        >
-                                            Configure Personal Key &rarr;
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
                         {section.items.map((item, itemIdx) => (
                             <div key={item.id} className="relative group">
-                                {/* Remove item button */}
                                 {section.items.length > 1 && (
                                     <button
                                         type="button"
                                         onClick={() => removeItem(section.id, item.id)}
-                                        className="absolute -top-2 -right-2 z-10 p-1 rounded-full bg-white border border-slate-200 text-red-400 hover:text-red-600 hover:border-red-300 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                                        className="absolute -top-2.5 -right-2.5 z-10 p-1.5 rounded-full bg-white border border-slate-200 text-red-400 hover:text-red-600 hover:border-red-300 shadow-sm transition"
                                         title="Remove item"
                                     >
-                                        <FiX className="w-3 h-3" />
+                                        <FiX className="w-3.5 h-3.5" />
                                     </button>
                                 )}
 
                                 {/* Q&A item */}
                                 {section.type === 'qa' && (
-                                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
                                         <div className="flex items-start gap-2.5">
-                                            <span className="text-xs font-bold text-emerald-700 bg-emerald-200 px-2 py-0.5 rounded-full mt-2 flex-shrink-0">Q</span>
+                                            <span className="text-[11px] font-bold text-emerald-800 bg-emerald-200 px-2 py-0.5 rounded-full mt-2 flex-shrink-0">Q</span>
                                             <input
                                                 type="text"
                                                 value={item.question}
                                                 onChange={(e) => updateItemField(section.id, item.id, 'question', e.target.value)}
-                                                placeholder="Enter question..."
-                                                className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
+                                                placeholder="Enter question (e.g. What are your operating hours?)..."
+                                                className="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400"
                                             />
                                         </div>
                                         <div className="flex items-start gap-2.5">
-                                            <span className="text-xs font-bold text-sky-700 bg-sky-200 px-2 py-0.5 rounded-full mt-2 flex-shrink-0">A</span>
+                                            <span className="text-[11px] font-bold text-sky-800 bg-sky-200 px-2 py-0.5 rounded-full mt-2 flex-shrink-0">A</span>
                                             <textarea
                                                 value={item.answer}
                                                 onChange={(e) => updateItemField(section.id, item.id, 'answer', e.target.value)}
-                                                placeholder="Enter answer..."
+                                                placeholder="Enter answer (e.g. We are open Mon-Fri from 9 AM to 6 PM EST)..."
                                                 rows={2}
-                                                className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400 resize-y"
+                                                className="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400 resize-y"
                                             />
                                         </div>
                                     </div>
@@ -615,20 +713,20 @@ function ContextConfig() {
 
                                 {/* Info item */}
                                 {section.type === 'info' && (
-                                    <div className="flex items-start gap-3">
+                                    <div className="flex flex-col sm:flex-row items-start gap-3">
                                         <input
                                             type="text"
                                             value={item.label}
                                             onChange={(e) => updateItemField(section.id, item.id, 'label', e.target.value)}
-                                            placeholder="Label (e.g. Email)"
-                                            className="w-1/3 min-w-[140px] bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
+                                            placeholder="Label (e.g. Support Email)"
+                                            className="w-full sm:w-1/3 min-w-[150px] bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
                                         />
                                         <input
                                             type="text"
                                             value={item.value}
                                             onChange={(e) => updateItemField(section.id, item.id, 'value', e.target.value)}
                                             placeholder="Value (e.g. support@company.com)"
-                                            className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
+                                            className="w-full sm:flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
                                         />
                                     </div>
                                 )}
@@ -638,27 +736,29 @@ function ContextConfig() {
                                     <textarea
                                         value={item.content}
                                         onChange={(e) => updateItemField(section.id, item.id, 'content', e.target.value)}
-                                        placeholder="Enter free-form text content..."
+                                        placeholder="Enter detailed context, policies, or background knowledge..."
                                         rows={4}
-                                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400 resize-y"
+                                        className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 resize-y"
                                     />
                                 )}
 
                                 {/* Docs item */}
                                 {section.type === 'docs' && (
-                                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
                                         <input
                                             type="text"
                                             value={item.label}
                                             onChange={(e) => updateItemField(section.id, item.id, 'label', e.target.value)}
-                                            placeholder="Document Label (e.g. Price List)"
-                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
+                                            placeholder="Document Label (e.g. 2026 Price List, Return Policy PDF)"
+                                            className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400"
                                         />
                                         {item.url ? (
-                                            <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg p-3">
-                                                <div className="flex items-center gap-2">
-                                                    <FiFileText className="text-slate-400" />
-                                                    <span className="text-sm text-slate-700 truncate">{item.fileName}</span>
+                                            <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl p-3">
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <div className="p-2 bg-purple-50 text-purple-600 rounded-lg">
+                                                        <FiFileText className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="text-sm font-medium text-slate-700 truncate">{item.fileName || 'Uploaded Document'}</span>
                                                 </div>
                                                 <button
                                                     type="button"
@@ -666,33 +766,33 @@ function ContextConfig() {
                                                         updateItemField(section.id, item.id, 'url', '');
                                                         updateItemField(section.id, item.id, 'fileName', '');
                                                     }}
-                                                    className="text-xs text-red-500 hover:text-red-700 hover:underline"
+                                                    className="text-xs font-semibold text-red-500 hover:text-red-700 hover:underline flex-shrink-0 ml-3"
                                                 >
                                                     Remove File
                                                 </button>
                                             </div>
                                         ) : !usePersonalKey ? (
                                             <div className="flex items-center justify-center w-full">
-                                                <div className="flex flex-col items-center justify-center w-full h-24 border-2 border-slate-200 border-dashed rounded-lg bg-slate-100/70 text-center px-4 cursor-not-allowed">
-                                                    <FiLock className="w-5 h-5 mb-1.5 text-slate-400" />
+                                                <div className="flex flex-col items-center justify-center w-full h-24 border-2 border-slate-200 border-dashed rounded-xl bg-slate-100/70 text-center px-4 cursor-not-allowed">
+                                                    <FiLock className="w-5 h-5 mb-1 text-slate-400" />
                                                     <p className="text-xs font-semibold text-slate-600">Upload Disabled (Personal API Key Required)</p>
                                                     <p className="text-[11px] text-slate-500 mt-0.5">Please switch to your personal API key in AI Agent settings to upload documents.</p>
                                                 </div>
                                             </div>
                                         ) : (
                                             <div className="flex items-center justify-center w-full">
-                                                <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors">
-                                                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                                <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer bg-white hover:bg-slate-50 transition-colors">
+                                                    <div className="flex flex-col items-center justify-center pt-3 pb-3">
                                                         {uploadingDocId === item.id ? (
                                                             <div className="flex items-center gap-2 text-sm text-slate-500">
-                                                                <span className="inline-block h-4 w-4 border-2 border-slate-300 border-t-transparent rounded-full animate-spin"></span>
-                                                                Uploading...
+                                                                <span className="inline-block h-4 w-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></span>
+                                                                Uploading document...
                                                             </div>
                                                         ) : (
                                                             <>
-                                                                <FiUpload className="w-6 h-6 mb-2 text-slate-400" />
-                                                                <p className="mb-1 text-sm text-slate-500"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-                                                                <p className="text-xs text-slate-400">PDF, Excel, or CSV (MAX. 10MB)</p>
+                                                                <FiUpload className="w-5 h-5 mb-1 text-purple-500" />
+                                                                <p className="text-xs text-slate-600 font-medium"><span className="text-purple-600 font-semibold hover:underline">Click to upload</span> or drag and drop</p>
+                                                                <p className="text-[10px] text-slate-400 mt-0.5">PDF, Excel, or CSV (MAX. 10MB)</p>
                                                             </>
                                                         )}
                                                     </div>
@@ -712,14 +812,16 @@ function ContextConfig() {
                         ))}
 
                         {/* Add item button */}
-                        <button
-                            type="button"
-                            onClick={() => addItem(section.id, section.type)}
-                            className={`inline-flex items-center gap-1.5 text-xs font-medium ${colors.text} hover:underline transition`}
-                        >
-                            <FiPlus className="w-3.5 h-3.5" />
-                            Add {section.type === 'qa' ? 'Q&A pair' : section.type === 'info' ? 'field' : section.type === 'docs' ? 'document' : 'text block'}
-                        </button>
+                        <div className="pt-1">
+                            <button
+                                type="button"
+                                onClick={() => addItem(section.id, section.type)}
+                                className={`inline-flex items-center gap-1.5 text-xs font-semibold ${colors.text} hover:underline transition`}
+                            >
+                                <FiPlus className="w-3.5 h-3.5" />
+                                Add {section.type === 'qa' ? 'another Q&A pair' : section.type === 'info' ? 'another field' : section.type === 'docs' ? 'another document' : 'another text block'}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
@@ -735,14 +837,14 @@ function ContextConfig() {
                 <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} isMinimized={isMinimized} setIsMinimized={setIsMinimized} />
                 <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
                     <div className="max-w-8xl mx-auto px-4 sm:px-6 md:px-8 py-8">
-                        <div className="max-w-2xl mx-auto mt-12 rounded-xl border border-slate-200 bg-white p-8 shadow-sm text-center">
+                        <div className="max-w-2xl mx-auto mt-12 rounded-2xl border border-slate-200 bg-white p-8 shadow-xs text-center">
                             <FiLock className="w-14 h-14 mx-auto text-slate-300 mb-4" />
                             <h2 className="text-xl font-semibold text-slate-800 mb-2">Access denied</h2>
                             <p className="text-slate-600 mb-6">Only the project admin can access project configuration.</p>
                             <button
                                 type="button"
                                 onClick={() => navigate('/project-config')}
-                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors"
                             >
                                 Back to Project Config
                             </button>
@@ -755,206 +857,409 @@ function ContextConfig() {
 
     /* ─── Main render ──────────────────────────────────── */
 
+    const currentTabConf = TABS.find(t => t.id === activeTab) || TABS[0];
+    const currentColors = TYPE_COLORS[activeTab] || TYPE_COLORS.overview;
+    const CurrentIcon = currentTabConf.icon;
+
     return (
-        <div className="min-h-screen bg-slate-50">
+        <div className="min-h-screen bg-slate-50/60 pb-24">
             <Header mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} isMinimized={isMinimized} setIsMinimized={setIsMinimized} />
             <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} isMinimized={isMinimized} setIsMinimized={setIsMinimized} />
             <div className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'}`}>
-                <div className="max-w-8xl mx-auto px-4 sm:px-6 md:px-8 py-8">
-                    {/* Back button + header */}
-                    <div className="mb-8">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-8">
+                    
+                    {/* Header bar */}
+                    <div className="mb-6">
                         <button
                             type="button"
                             onClick={() => navigate('/project-config')}
-                            className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors mb-4"
+                            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors mb-3"
                         >
                             <FiArrowLeft className="w-4 h-4" />
                             Back to Project Config
                         </button>
+                        
                         <div className="flex items-center justify-between gap-4 flex-wrap">
-                            <div>
-                                <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                                    <FiShield className="w-7 h-7 text-sky-600" />
-                                    Company Context
-                                </h1>
-                                <p className="mt-1 text-slate-600">
-                                    Manage structured context sections used by the bot to answer FAQs and support queries.
-                                </p>
+                            <div className="flex items-center gap-3.5">
+                                <div className="p-3 bg-sky-600 text-white rounded-2xl shadow-xs">
+                                    <FiShield className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h1 className="text-2xl font-bold text-slate-900">Company Context</h1>
+                                    <p className="text-sm text-slate-500">
+                                        Manage structured knowledge base sections used by the AI bot for accurate responses.
+                                    </p>
+                                </div>
                             </div>
-                            {!isEditing && !isLoading && (
+
+                            {/* Top Action Buttons */}
+                            <div className="flex items-center gap-3">
+                                {isEditing ? (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={handleCancel}
+                                            disabled={isSaving}
+                                            className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs disabled:opacity-50"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleSave}
+                                            disabled={isSaving}
+                                            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-sky-600 text-sm font-semibold text-white hover:bg-sky-700 transition shadow-xs disabled:cursor-not-allowed disabled:bg-slate-300"
+                                        >
+                                            {isSaving ? (
+                                                <>
+                                                    <span className="inline-block h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                                    Saving...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <FiCheck className="w-4 h-4" />
+                                                    Save Changes
+                                                </>
+                                            )}
+                                        </button>
+                                    </>
+                                ) : !isLoading && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleStartEdit(activeTab)}
+                                        className="inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 shadow-xs"
+                                    >
+                                        <FiEdit2 className="w-4 h-4" />
+                                        Edit Context
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Integrated Tab Navigation Card */}
+                    <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden mb-6">
+                        <div className="flex items-center border-b border-slate-200/80 overflow-x-auto overflow-y-hidden no-scrollbar px-2 pt-1.5 bg-slate-50/50">
+                            {TABS.map(tab => {
+                                const Icon = tab.icon;
+                                const isActive = activeTab === tab.id;
+                                const count = tabCounts[tab.id] || 0;
+                                const colors = TYPE_COLORS[tab.id];
+
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        type="button"
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`group relative flex items-center gap-2.5 px-4 sm:px-5 py-2.5 text-sm font-semibold transition-all whitespace-nowrap border-b-2 ${
+                                            isActive
+                                                ? `border-sky-600 text-sky-700 bg-white rounded-t-xl shadow-2xs`
+                                                : `border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50 rounded-t-xl`
+                                        }`}
+                                    >
+                                        <Icon className={`w-4 h-4 transition ${isActive ? 'text-sky-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                                        <span>{tab.label}</span>
+                                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full transition ${
+                                            isActive
+                                                ? 'bg-sky-100 text-sky-700'
+                                                : count > 0
+                                                    ? 'bg-slate-200/80 text-slate-700'
+                                                    : 'bg-slate-100 text-slate-400'
+                                        }`}>
+                                            {count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Tab Sub-Header & Controls */}
+                        <div className="px-6 py-4 bg-white flex items-center justify-between gap-4 flex-wrap">
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-xl ${currentColors.bg} ${currentColors.text}`}>
+                                    <CurrentIcon className="w-4 h-4" />
+                                </div>
+                                <div>
+                                    <h2 className="text-sm font-bold text-slate-800">{currentTabConf.label}</h2>
+                                    <p className="text-xs text-slate-500">{currentTabConf.description}</p>
+                                </div>
+                            </div>
+
+                            {/* Quick Add Section Button if in Edit Mode */}
+                            {isEditing && activeTab !== 'overview' && (
                                 <button
                                     type="button"
-                                    onClick={handleStartEdit}
-                                    className="inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-700 flex-shrink-0"
+                                    onClick={() => addSection(activeTab)}
+                                    disabled={activeTab === 'docs' && !usePersonalKey}
+                                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition shadow-2xs ${
+                                        activeTab === 'docs' && !usePersonalKey
+                                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                            : `${currentColors.bg} ${currentColors.text} hover:opacity-90`
+                                    }`}
                                 >
-                                    <FiEdit2 className="w-4 h-4" />
-                                    Edit
+                                    <FiPlus className="w-3.5 h-3.5" />
+                                    Add {currentTabConf.label} Section
                                 </button>
                             )}
                         </div>
                     </div>
 
-                    {/* Loading */}
+                    {/* Loading State */}
                     {isLoading ? (
-                        <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-12 flex items-center justify-center">
-                            <span className="inline-block h-6 w-6 border-2 border-slate-300 border-t-transparent rounded-full animate-spin" />
-                            <span className="ml-3 text-sm text-slate-500">Loading context...</span>
+                        <div className="rounded-2xl border border-slate-200 bg-white shadow-xs p-16 flex flex-col items-center justify-center">
+                            <span className="inline-block h-7 w-7 border-3 border-sky-600 border-t-transparent rounded-full animate-spin mb-3" />
+                            <span className="text-sm font-medium text-slate-600">Loading context configurations...</span>
                         </div>
-                    ) : isEditing ? (
-                        /* ─── EDIT MODE ─── */
-                        <>
-                            {/* Fixed fields: Company Overview & Address */}
-                            <div className="space-y-5 mb-5">
-                                {/* Company Overview */}
-                                <div className="rounded-xl border border-sky-200 bg-white shadow-sm overflow-hidden">
-                                    <div className="px-5 py-4 bg-gradient-to-r from-sky-50 to-white border-b border-sky-100 flex items-center gap-3">
-                                        <div className="p-2 rounded-lg bg-sky-100 text-sky-600">
-                                            <FiShield className="w-4 h-4" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h3 className="font-semibold text-slate-800">Company Overview</h3>
-                                            <p className="text-xs text-slate-500">Brief description of your company, products, or services</p>
-                                        </div>
-                                    </div>
-                                    <div className="p-5">
-                                        <textarea
-                                            value={companyOverview}
-                                            onChange={(e) => setCompanyOverview(e.target.value)}
-                                            placeholder="e.g. We are a SaaS company providing customer support automation tools..."
-                                            rows={3}
-                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400 resize-y"
-                                        />
-                                    </div>
-                                </div>
-                                {/* Company Address */}
-                                <div className="rounded-xl border border-sky-200 bg-white shadow-sm overflow-hidden">
-                                    <div className="px-5 py-4 bg-gradient-to-r from-sky-50 to-white border-b border-sky-100 flex items-center gap-3">
-                                        <div className="p-2 rounded-lg bg-sky-100 text-sky-600">
-                                            <FiInfo className="w-4 h-4" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h3 className="font-semibold text-slate-800">Company Address</h3>
-                                            <p className="text-xs text-slate-500">Physical or mailing address of your company</p>
-                                        </div>
-                                    </div>
-                                    <div className="p-5">
-                                        <input
-                                            type="text"
-                                            value={companyAddress}
-                                            onChange={(e) => setCompanyAddress(e.target.value)}
-                                            placeholder="e.g. 123 Main Street, Suite 100, San Francisco, CA 94105"
-                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-5">
-                                {sections.map((section, idx) => renderEditSection(section, idx))}
-                            </div>
-
-                            {/* Add section buttons */}
-                            <div className="mt-5 flex flex-wrap gap-2">
-                                {SECTION_TYPES.map(t => {
-                                    const Icon = t.icon;
-                                    const colors = TYPE_COLORS[t.value];
-                                    const isDocDisabled = t.value === 'docs' && !usePersonalKey;
-                                    return (
-                                        <button
-                                            key={t.value}
-                                            type="button"
-                                            onClick={() => addSection(t.value)}
-                                            disabled={isDocDisabled}
-                                            title={isDocDisabled ? 'Personal API Key required for Document context' : ''}
-                                            className={`inline-flex items-center gap-2 rounded-xl border-2 border-dashed ${
-                                                isDocDisabled
-                                                    ? 'border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed opacity-60'
-                                                    : `${colors.border} ${colors.light} ${colors.text} hover:shadow-sm`
-                                            } px-4 py-2.5 text-sm font-medium transition`}
-                                        >
-                                            <FiPlus className="w-4 h-4" />
-                                            <Icon className="w-4 h-4" />
-                                            {t.label}
-                                            {isDocDisabled && (
-                                                <span className="text-[10px] font-medium bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded ml-1">
-                                                    Personal Key Req.
-                                                </span>
-                                            )}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Save / Cancel */}
-                            <div className="mt-8 pt-6 border-t border-slate-200 flex gap-3">
-                                <button
-                                    type="button"
-                                    onClick={handleSave}
-                                    disabled={isSaving}
-                                    className="inline-flex items-center justify-center rounded-xl bg-sky-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                                >
-                                    {isSaving ? 'Saving...' : 'Save'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleCancel}
-                                    disabled={isSaving}
-                                    className="inline-flex items-center justify-center rounded-xl bg-white border border-slate-300 px-6 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </>
                     ) : (
-                        /* ─── VIEW MODE ─── */
-                        <>
-                            {/* Fixed fields: Company Overview & Address (view) */}
-                            {(companyOverview || companyAddress) && (
-                                <div className="space-y-5 mb-5">
-                                    {companyOverview && (
-                                        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                                            <div className="px-5 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100 flex items-center gap-3">
-                                                <div className="p-2 rounded-lg bg-sky-100 text-sky-600">
-                                                    <FiShield className="w-4 h-4" />
+                        /* ─── TAB CONTENT PANELS ─── */
+                        <div className="space-y-5">
+                            {/* TAB 1: Company Info */}
+                            {activeTab === 'overview' && (
+                                <div>
+                                    {isEditing ? (
+                                        <div className="space-y-5">
+                                            {/* Company Overview Input */}
+                                            <div className="rounded-2xl border border-sky-200 bg-white shadow-xs overflow-hidden">
+                                                <div className="px-5 py-3.5 bg-gradient-to-r from-sky-50 to-white border-b border-sky-100 flex items-center gap-3">
+                                                    <div className="p-2 rounded-xl bg-sky-100 text-sky-600">
+                                                        <FiShield className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-semibold text-slate-800 text-sm">Company Overview</h3>
+                                                        <p className="text-xs text-slate-500">Brief summary of your company, mission, or key offerings</p>
+                                                    </div>
                                                 </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <h3 className="font-semibold text-slate-800">Company Overview</h3>
+                                                <div className="p-5">
+                                                    <textarea
+                                                        value={companyOverview}
+                                                        onChange={(e) => setCompanyOverview(e.target.value)}
+                                                        placeholder="e.g. We are a leading company providing automated customer support and AI chat solutions..."
+                                                        rows={4}
+                                                        className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400 resize-y"
+                                                    />
                                                 </div>
                                             </div>
-                                            <div className="p-5">
-                                                <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{companyOverview}</p>
+
+                                            {/* Company Address Input */}
+                                            <div className="rounded-2xl border border-sky-200 bg-white shadow-xs overflow-hidden">
+                                                <div className="px-5 py-3.5 bg-gradient-to-r from-sky-50 to-white border-b border-sky-100 flex items-center gap-3">
+                                                    <div className="p-2 rounded-xl bg-sky-100 text-sky-600">
+                                                        <FiInfo className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-semibold text-slate-800 text-sm">Company Address</h3>
+                                                        <p className="text-xs text-slate-500">Physical office or headquarters location</p>
+                                                    </div>
+                                                </div>
+                                                <div className="p-5">
+                                                    <input
+                                                        type="text"
+                                                        value={companyAddress}
+                                                        onChange={(e) => setCompanyAddress(e.target.value)}
+                                                        placeholder="e.g. 123 Main Street, Suite 400, San Francisco, CA 94105"
+                                                        className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
-                                    )}
-                                    {companyAddress && (
-                                        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                                            <div className="px-5 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100 flex items-center gap-3">
-                                                <div className="p-2 rounded-lg bg-sky-100 text-sky-600">
-                                                    <FiInfo className="w-4 h-4" />
+                                    ) : (
+                                        <div className="space-y-5">
+                                            {companyOverview || companyAddress ? (
+                                                <>
+                                                    {companyOverview && (
+                                                        <div className="rounded-2xl border border-slate-200/80 bg-white shadow-xs overflow-hidden">
+                                                            <div className="px-5 py-3.5 bg-slate-50/70 border-b border-slate-100 flex items-center gap-3">
+                                                                <div className="p-2 rounded-xl bg-sky-100 text-sky-600">
+                                                                    <FiShield className="w-4 h-4" />
+                                                                </div>
+                                                                <h3 className="font-semibold text-slate-800 text-sm">Company Overview</h3>
+                                                            </div>
+                                                            <div className="p-5">
+                                                                <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{companyOverview}</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {companyAddress && (
+                                                        <div className="rounded-2xl border border-slate-200/80 bg-white shadow-xs overflow-hidden">
+                                                            <div className="px-5 py-3.5 bg-slate-50/70 border-b border-slate-100 flex items-center gap-3">
+                                                                <div className="p-2 rounded-xl bg-sky-100 text-sky-600">
+                                                                    <FiInfo className="w-4 h-4" />
+                                                                </div>
+                                                                <h3 className="font-semibold text-slate-800 text-sm">Company Address</h3>
+                                                            </div>
+                                                            <div className="p-5">
+                                                                <p className="text-sm text-slate-700 leading-relaxed">{companyAddress}</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center shadow-xs">
+                                                    <div className="w-12 h-12 rounded-2xl bg-sky-50 text-sky-500 mx-auto flex items-center justify-center mb-3">
+                                                        <FiShield className="w-6 h-6" />
+                                                    </div>
+                                                    <h3 className="text-base font-semibold text-slate-800">No Company Information Set</h3>
+                                                    <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-5">
+                                                        Provide your company overview and address so the bot can introduce your business accurately to visitors.
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleStartEdit('overview')}
+                                                        className="inline-flex items-center gap-2 px-4 py-2 bg-sky-600 text-white rounded-xl text-xs font-semibold hover:bg-sky-700 transition shadow-xs"
+                                                    >
+                                                        <FiPlus className="w-3.5 h-3.5" />
+                                                        Add Company Info
+                                                    </button>
                                                 </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <h3 className="font-semibold text-slate-800">Company Address</h3>
-                                                </div>
-                                            </div>
-                                            <div className="p-5">
-                                                <p className="text-sm text-slate-700 leading-relaxed">{companyAddress}</p>
-                                            </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
                             )}
-                            {sections.length > 0 ? (
+
+                            {/* TAB 2, 3, 4, 5: Dynamic Section Types (qa, info, text, docs) */}
+                            {activeTab !== 'overview' && (
                                 <div className="space-y-5">
-                                    {sections.map(renderViewSection)}
+                                    {/* Consolidated Document alerts */}
+                                    {activeTab === 'docs' && (
+                                        <div className="rounded-2xl border border-purple-200/80 bg-gradient-to-r from-purple-50/70 via-white to-amber-50/40 p-5 shadow-xs space-y-3">
+                                            <div className="flex items-start justify-between gap-4 flex-wrap sm:flex-nowrap">
+                                                <div className="flex items-start gap-3">
+                                                    <div className="p-2 rounded-xl bg-purple-100 text-purple-700 flex-shrink-0 mt-0.5">
+                                                        <FiUpload className="w-5 h-5" />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <h4 className="text-sm font-bold text-slate-800">Document-Based Knowledge Retrieval</h4>
+                                                            {!usePersonalKey ? (
+                                                                <span className="text-[11px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                                    <FiLock className="w-3 h-3" /> Personal Key Required
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                                    <FiCheck className="w-3 h-3" /> Personal Key Active
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-xs text-slate-600 leading-relaxed">
+                                                            Uploaded files (PDF, Excel, CSV) are parsed into the AI context for rich answers.
+                                                            <span className="text-amber-800 font-medium"> Note: Large documents consume more tokens on your personal API key.</span>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {!usePersonalKey && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => navigate('/agent-config')}
+                                                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition shadow-xs whitespace-nowrap flex-shrink-0 self-start"
+                                                    >
+                                                        <FiKey className="w-3.5 h-3.5" />
+                                                        Configure Personal Key &rarr;
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Active sections list */}
+                                    {activeSections.length > 0 ? (
+                                        <div className="space-y-4">
+                                            {isEditing ? (
+                                                <>
+                                                    {activeSections.map((section, idx) => renderEditSection(section, idx))}
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => addSection(activeTab)}
+                                                        disabled={activeTab === 'docs' && !usePersonalKey}
+                                                        className={`w-full py-3.5 rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 text-sm font-semibold transition ${
+                                                            activeTab === 'docs' && !usePersonalKey
+                                                                ? 'border-slate-200 bg-slate-100/60 text-slate-400 cursor-not-allowed'
+                                                                : `${currentColors.border} ${currentColors.bg} ${currentColors.text} hover:opacity-90`
+                                                        }`}
+                                                    >
+                                                        <FiPlus className="w-4 h-4" />
+                                                        Add Another {currentTabConf.label} Section
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                activeSections.map(renderViewSection)
+                                            )}
+                                        </div>
+                                    ) : (
+                                        /* Clean, polished Empty state */
+                                        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center shadow-xs">
+                                            <div className={`w-12 h-12 rounded-2xl ${currentColors.bg} ${currentColors.text} mx-auto flex items-center justify-center mb-3`}>
+                                                <CurrentIcon className="w-6 h-6" />
+                                            </div>
+                                            <h3 className="text-base font-semibold text-slate-800">No {currentTabConf.label} Sections Added</h3>
+                                            <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-5">
+                                                {currentTabConf.description}
+                                            </p>
+
+                                            {activeTab === 'docs' && !usePersonalKey ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate('/agent-config')}
+                                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 transition shadow-xs"
+                                                >
+                                                    <FiKey className="w-3.5 h-3.5" />
+                                                    Enable Personal API Key to Add Documents
+                                                </button>
+                                            ) : isEditing ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => addSection(activeTab)}
+                                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 transition shadow-xs"
+                                                >
+                                                    <FiPlus className="w-3.5 h-3.5" />
+                                                    Create {currentTabConf.label} Section
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleStartEdit(activeTab)}
+                                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 transition shadow-xs"
+                                                >
+                                                    <FiPlus className="w-3.5 h-3.5" />
+                                                    Add {currentTabConf.label}
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                            ) : !companyOverview && !companyAddress ? (
-                                <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-12 text-center">
-                                    <FiShield className="w-12 h-12 mx-auto text-slate-300 mb-4" />
-                                    <p className="text-sm text-slate-500 italic">No company context has been provided yet.</p>
-                                    <p className="text-xs text-slate-400 mt-1">Click "Edit" to add structured sections for your bot's knowledge base.</p>
+                            )}
+
+                            {/* Floating / Sticky Save Bar when Editing */}
+                            {isEditing && (
+                                <div className="sticky bottom-6 mt-10 p-4 rounded-2xl bg-slate-900/90 backdrop-blur-md text-white shadow-xl border border-slate-800 flex items-center justify-between gap-4 flex-wrap z-20">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                                        <span className="text-xs sm:text-sm font-medium text-slate-200">
+                                            Editing Mode &middot; Remember to save all changes
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={handleCancel}
+                                            disabled={isSaving}
+                                            className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition"
+                                        >
+                                            Discard Changes
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleSave}
+                                            disabled={isSaving}
+                                            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-xs sm:text-sm font-semibold text-white transition shadow-md disabled:bg-slate-600"
+                                        >
+                                            {isSaving ? 'Saving Changes...' : 'Save Context'}
+                                        </button>
+                                    </div>
                                 </div>
-                            ) : null}
-                        </>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
@@ -963,4 +1268,3 @@ function ContextConfig() {
 }
 
 export default ContextConfig;
-
