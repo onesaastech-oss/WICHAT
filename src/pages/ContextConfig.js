@@ -9,7 +9,7 @@ import { fetchProjectInfo } from '../store/projectSlice';
 import { Encrypt } from './encryption/payload-encryption';
 import {
     FiArrowLeft, FiShield, FiLock, FiEdit2, FiPlus, FiTrash2,
-    FiChevronDown, FiChevronUp, FiMessageSquare, FiInfo, FiFileText, FiX, FiUpload
+    FiChevronDown, FiChevronUp, FiMessageSquare, FiInfo, FiFileText, FiX, FiUpload, FiAlertTriangle
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
@@ -92,10 +92,13 @@ const PROJECT_CONFIG_STORAGE_KEY = (projectId) => `project_config_${projectId}`;
 const getStoredConfig = (projectId) => {
     try {
         const raw = localStorage.getItem(PROJECT_CONFIG_STORAGE_KEY(projectId));
-        if (!raw) return { companyContext: '' };
+        if (!raw) return { companyContext: '', agentUsePersonalKey: false };
         const parsed = JSON.parse(raw);
-        return { companyContext: parsed?.companyContext || '' };
-    } catch { return { companyContext: '' }; }
+        return {
+            companyContext: parsed?.companyContext || '',
+            agentUsePersonalKey: Boolean(parsed?.agentUsePersonalKey ?? false)
+        };
+    } catch { return { companyContext: '', agentUsePersonalKey: false }; }
 };
 
 const updateStoredConfig = (projectId, partialConfig) => {
@@ -124,6 +127,7 @@ function ContextConfig() {
     });
 
     const [projectId, setProjectId] = useState(null);
+    const [usePersonalKey, setUsePersonalKey] = useState(false);
     const [sections, setSections] = useState([]);
     const [originalSections, setOriginalSections] = useState([]);
     const [companyOverview, setCompanyOverview] = useState('');
@@ -161,12 +165,13 @@ function ContextConfig() {
                 setCompanyAddress(parsed2.companyAddress);
                 setOriginalCompanyOverview(parsed2.companyOverview);
                 setOriginalCompanyAddress(parsed2.companyAddress);
+                setUsePersonalKey(Boolean(stored.agentUsePersonalKey));
             }
         } catch (_) { }
         setIsLoading(false);
     }, []);
 
-    // Fetch context from server
+    // Fetch context and API key settings from server
     useEffect(() => {
         if (!projectId || !isOwner) { setIsLoading(false); return; }
         let cancelled = false;
@@ -182,6 +187,8 @@ function ContextConfig() {
             try {
                 const payload = { project_id: projectId };
                 const { data, key } = Encrypt(payload);
+
+                // 1. Fetch context settings
                 const response = await axios.post(
                     `${API_BASE_URL}/bot-reply/get-settings`,
                     JSON.stringify({ data, key }),
@@ -197,17 +204,35 @@ function ContextConfig() {
                     setCompanyAddress(p.companyAddress);
                     setOriginalCompanyOverview(p.companyOverview);
                     setOriginalCompanyAddress(p.companyAddress);
-                    return;
+                } else {
+                    const ctx = response?.data?.data?.context || '';
+                    const p = parseContextToSections(ctx);
+                    setSections(p.sections);
+                    setOriginalSections(JSON.parse(JSON.stringify(p.sections)));
+                    setCompanyOverview(p.companyOverview);
+                    setCompanyAddress(p.companyAddress);
+                    setOriginalCompanyOverview(p.companyOverview);
+                    setOriginalCompanyAddress(p.companyAddress);
+                    updateStoredConfig(projectId, { companyContext: ctx });
                 }
-                const ctx = response?.data?.data?.context || '';
-                const p = parseContextToSections(ctx);
-                setSections(p.sections);
-                setOriginalSections(JSON.parse(JSON.stringify(p.sections)));
-                setCompanyOverview(p.companyOverview);
-                setCompanyAddress(p.companyAddress);
-                setOriginalCompanyOverview(p.companyOverview);
-                setOriginalCompanyAddress(p.companyAddress);
-                updateStoredConfig(projectId, { companyContext: ctx });
+
+                // 2. Fetch API key settings to check if personal key is active
+                try {
+                    const keyResponse = await axios.post(
+                        `${API_BASE_URL}/bot-reply/list-api-keys`,
+                        JSON.stringify({ data, key }),
+                        { headers: { token, username, 'Content-Type': 'application/json' } }
+                    );
+                    if (!cancelled && !keyResponse?.data?.error && keyResponse?.data?.data) {
+                        const isPersonal = Boolean(keyResponse.data.data.agent_use_personal_key);
+                        const keys = keyResponse.data.data.keys || [];
+                        const personalActive = isPersonal && keys.length > 0;
+                        setUsePersonalKey(personalActive);
+                        updateStoredConfig(projectId, { agentUsePersonalKey: personalActive });
+                    }
+                } catch (_) {
+                    if (!cancelled) setUsePersonalKey(false);
+                }
             } catch (_) {
                 if (!cancelled) {
                     const stored = getStoredConfig(projectId);
@@ -230,8 +255,12 @@ function ContextConfig() {
     /* ─── Section & Item CRUD ─────────────────────────── */
 
     const addSection = useCallback((type = 'qa') => {
+        if (type === 'docs' && !usePersonalKey) {
+            toast.error('Document context can only be added when using a Personal API Key for AI auto reply.');
+            return;
+        }
         setSections(prev => [...prev, createEmptySection(type)]);
-    }, []);
+    }, [usePersonalKey]);
 
     const removeSection = useCallback((sectionId) => {
         setSections(prev => prev.filter(s => s.id !== sectionId));
@@ -242,11 +271,15 @@ function ContextConfig() {
     }, []);
 
     const changeSectionType = useCallback((sectionId, newType) => {
+        if (newType === 'docs' && !usePersonalKey) {
+            toast.error('Document context can only be selected when using a Personal API Key for AI auto reply.');
+            return;
+        }
         setSections(prev => prev.map(s => {
             if (s.id !== sectionId) return s;
             return { ...s, type: newType, items: [createEmptyItem(newType)] };
         }));
-    }, []);
+    }, [usePersonalKey]);
 
     const toggleSectionCollapse = useCallback((sectionId) => {
         setSections(prev => prev.map(s => s.id === sectionId ? { ...s, collapsed: !s.collapsed } : s));
@@ -280,13 +313,10 @@ function ContextConfig() {
     const handleFileUpload = async (sectionId, itemId, file) => {
         if (!file || !projectId) return;
 
-        const userDataRaw = localStorage.getItem('userData');
-        let token = '', username = '';
-        try {
-            const parsed = userDataRaw ? JSON.parse(userDataRaw) : null;
-            token = parsed?.token || '';
-            username = parsed?.username || '';
-        } catch (_) { }
+        if (!usePersonalKey) {
+            toast.error('Document upload is disabled. Personal API Key is required for document context.');
+            return;
+        }
 
         setUploadingDocId(itemId);
         try {
@@ -473,7 +503,9 @@ function ContextConfig() {
                         className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400 flex-shrink-0"
                     >
                         {SECTION_TYPES.map(t => (
-                            <option key={t.value} value={t.value}>{t.label}</option>
+                            <option key={t.value} value={t.value} disabled={t.value === 'docs' && !usePersonalKey}>
+                                {t.label} {t.value === 'docs' && !usePersonalKey ? '(Personal Key Required)' : ''}
+                            </option>
                         ))}
                     </select>
                     <button
@@ -497,6 +529,50 @@ function ContextConfig() {
                 {/* Section items (collapsible) */}
                 {!section.collapsed && (
                     <div className="p-5 space-y-4">
+                        {/* Token and cost caution banner + locked notice for Document section */}
+                        {section.type === 'docs' && (
+                            <div className="space-y-3">
+                                {/* Token and cost caution banner */}
+                                <div className="rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50/40 p-4 flex items-start gap-3 shadow-xs">
+                                    <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 flex-shrink-0 mt-0.5">
+                                        <FiAlertTriangle className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-xs text-amber-900 space-y-1">
+                                        <p className="font-semibold text-sm text-amber-950">
+                                            Caution: High Token Consumption & API Cost
+                                        </p>
+                                        <p className="leading-relaxed text-amber-800">
+                                            Document files (PDF, Excel, CSV) are parsed and fed directly into the AI context for every auto-reply. Depending on the file size and the volume of internal data, this will consume a <strong>very large amount of tokens</strong> and can be <strong>very costly</strong> on your personal API key. Please ensure your uploaded documents are concise and optimized.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Locked notice if not using personal key */}
+                                {!usePersonalKey && (
+                                    <div className="rounded-xl border border-rose-200 bg-rose-50/90 p-4 flex items-start justify-between gap-4 flex-wrap sm:flex-nowrap">
+                                        <div className="flex items-start gap-3">
+                                            <div className="p-1.5 rounded-lg bg-rose-100 text-rose-700 flex-shrink-0 mt-0.5">
+                                                <FiLock className="w-5 h-5" />
+                                            </div>
+                                            <div className="text-xs text-rose-900 space-y-1">
+                                                <p className="font-semibold text-sm text-rose-950">Document Upload Disabled</p>
+                                                <p className="leading-relaxed text-rose-800">
+                                                    Document-type context is only available when using your <strong>Personal API Key</strong> for AI Auto-Reply. It is disabled while OneChat's shared key is active.
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate('/agent-config')}
+                                            className="flex-shrink-0 text-xs font-semibold px-3 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition shadow-sm whitespace-nowrap self-start"
+                                        >
+                                            Configure Personal Key &rarr;
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {section.items.map((item, itemIdx) => (
                             <div key={item.id} className="relative group">
                                 {/* Remove item button */}
@@ -594,6 +670,14 @@ function ContextConfig() {
                                                 >
                                                     Remove File
                                                 </button>
+                                            </div>
+                                        ) : !usePersonalKey ? (
+                                            <div className="flex items-center justify-center w-full">
+                                                <div className="flex flex-col items-center justify-center w-full h-24 border-2 border-slate-200 border-dashed rounded-lg bg-slate-100/70 text-center px-4 cursor-not-allowed">
+                                                    <FiLock className="w-5 h-5 mb-1.5 text-slate-400" />
+                                                    <p className="text-xs font-semibold text-slate-600">Upload Disabled (Personal API Key Required)</p>
+                                                    <p className="text-[11px] text-slate-500 mt-0.5">Please switch to your personal API key in AI Agent settings to upload documents.</p>
+                                                </div>
                                             </div>
                                         ) : (
                                             <div className="flex items-center justify-center w-full">
@@ -774,16 +858,28 @@ function ContextConfig() {
                                 {SECTION_TYPES.map(t => {
                                     const Icon = t.icon;
                                     const colors = TYPE_COLORS[t.value];
+                                    const isDocDisabled = t.value === 'docs' && !usePersonalKey;
                                     return (
                                         <button
                                             key={t.value}
                                             type="button"
                                             onClick={() => addSection(t.value)}
-                                            className={`inline-flex items-center gap-2 rounded-xl border-2 border-dashed ${colors.border} ${colors.light} px-4 py-2.5 text-sm font-medium ${colors.text} hover:shadow-sm transition`}
+                                            disabled={isDocDisabled}
+                                            title={isDocDisabled ? 'Personal API Key required for Document context' : ''}
+                                            className={`inline-flex items-center gap-2 rounded-xl border-2 border-dashed ${
+                                                isDocDisabled
+                                                    ? 'border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed opacity-60'
+                                                    : `${colors.border} ${colors.light} ${colors.text} hover:shadow-sm`
+                                            } px-4 py-2.5 text-sm font-medium transition`}
                                         >
                                             <FiPlus className="w-4 h-4" />
                                             <Icon className="w-4 h-4" />
                                             {t.label}
+                                            {isDocDisabled && (
+                                                <span className="text-[10px] font-medium bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded ml-1">
+                                                    Personal Key Req.
+                                                </span>
+                                            )}
                                         </button>
                                     );
                                 })}
@@ -867,3 +963,4 @@ function ContextConfig() {
 }
 
 export default ContextConfig;
+
