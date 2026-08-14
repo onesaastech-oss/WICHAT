@@ -45,6 +45,26 @@ const Login = () => {
     if (!location?.search) return;
 
     const params = new URLSearchParams(location.search);
+    const tokenFromUrl = params.get('token');
+    const usernameFromUrl = params.get('username');
+
+    if (tokenFromUrl && usernameFromUrl) {
+      const userDataToStore = {
+        token: tokenFromUrl,
+        username: usernameFromUrl,
+        is_impersonating: true,
+        impersonated_at: new Date().toISOString()
+      };
+
+      localStorage.setItem('userData', JSON.stringify(userDataToStore));
+      localStorage.setItem('user_data', JSON.stringify(userDataToStore));
+      dispatch(setAuthData(userDataToStore));
+      toast.success(`Logged in as @${usernameFromUrl} (Admin Impersonation)`);
+
+      navigate('/', { replace: true });
+      return;
+    }
+
     const mobileFromUrl = params.get('mobile') || '';
 
     if (mobileFromUrl) {
