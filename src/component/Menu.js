@@ -15,6 +15,8 @@ import { fetchProjectInfo } from '../store/projectSlice';
 import { setSelectedProjectId, setAuthData } from '../store/authSlice';
 import { fetchUserProfile, getTotalUnreadCount, logoutUser } from '../api/auth';
 import SwitchProjectModal from './Modals/SwitchProjectModal';
+import ProjectQRModal from './Modals/ProjectQRModal';
+import { LuQrCode } from 'react-icons/lu';
 import { dbHelper } from '../pages/db';
 import { socketManager } from '../pages/socket';
 
@@ -230,8 +232,10 @@ const exitBrowserFullscreen = () => {
 export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMinimized, isFullScreen = false }) => {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [switchProjectModalOpen, setSwitchProjectModalOpen] = useState(false);
+  const [projectQrModalOpen, setProjectQrModalOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [selectedProjectName, setSelectedProjectName] = useState(null);
+  const [activeProjectId, setActiveProjectId] = useState(null);
   const [userProfile, setUserProfile] = useState({ name: '', email: '' });
   const [walletBalance, setWalletBalance] = useState(0);
   const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
@@ -242,22 +246,27 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
   const projectInfoStatus = useSelector((state) => state.project?.status || 'idle');
 
   useEffect(() => {
-    const getSelectedProjectName = () => {
+    const getSelectedProjectInfo = () => {
       try {
         const userData = localStorage.getItem('userData');
-        if (!userData) return null;
+        if (!userData) return { id: null, name: null };
         const parsed = JSON.parse(userData);
         const selectedProjectId = parsed.selected_project_id;
         const projects = parsed.projects?.list || (Array.isArray(parsed.projects) ? parsed.projects : []);
 
         if (selectedProjectId && projects.length > 0) {
-          const selectedProject = projects.find(p => p.project_id === selectedProjectId);
-          return selectedProject ? selectedProject.name : null;
+          const selectedProject = projects.find(p => (p.project_id === selectedProjectId || p.id === selectedProjectId));
+          return {
+            id: selectedProjectId,
+            name: selectedProject ? selectedProject.name : null
+          };
         }
-        return null;
-      } catch (error) { return null; }
+        return { id: selectedProjectId || null, name: null };
+      } catch (error) { return { id: null, name: null }; }
     };
-    setSelectedProjectName(getSelectedProjectName());
+    const pInfo = getSelectedProjectInfo();
+    setActiveProjectId(pInfo.id);
+    setSelectedProjectName(pInfo.name);
   }, [switchProjectModalOpen]);
 
   const toggleSidebar = () => {
@@ -479,6 +488,18 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
               <FiChevronDown size={14} className="text-slate-400" />
             </button>
 
+            {activeProjectId && (
+              <button
+                type="button"
+                onClick={() => setProjectQrModalOpen(true)}
+                className="hidden sm:flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all duration-200 group"
+                title="View & Download Project QR Code"
+              >
+                <LuQrCode size={15} className="text-indigo-500 group-hover:scale-110 transition-transform" />
+                <span>QR Code</span>
+              </button>
+            )}
+
             <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1 pr-3 shadow-sm hover:border-indigo-200 transition-colors cursor-default">
               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
                 <FiCreditCard size={14} />
@@ -511,6 +532,17 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
                     <button className="md:hidden flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-colors" onClick={() => { setProfileDropdownOpen(false); setSwitchProjectModalOpen(true); }}>
                       <FiBriefcase size={16} /> Switch Project
                     </button>
+                    {activeProjectId && (
+                      <div
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          setProjectQrModalOpen(true);
+                        }}
+                        className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-colors cursor-pointer"
+                      >
+                        <LuQrCode size={16} className="text-indigo-500" /> Project QR Code
+                      </div>
+                    )}
                     {profileItems.map((item, index) => (
                       <div
                         key={index}
@@ -540,6 +572,15 @@ export const Header = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsMi
         onClose={() => setSwitchProjectModalOpen(false)}
         onSelectCompany={handleSelectCompany}
       />
+
+      {projectQrModalOpen && activeProjectId && (
+        <ProjectQRModal
+          isOpen={projectQrModalOpen}
+          onClose={() => setProjectQrModalOpen(false)}
+          projectId={activeProjectId}
+          projectName={selectedProjectName || selectedCompany?.name || 'Project Chat'}
+        />
+      )}
     </>
   );
 };

@@ -17,6 +17,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { fetchUserProfile, createProject, getSubscriptionPacks } from '../api/auth';
+import ProjectQRModal from '../component/Modals/ProjectQRModal';
+import { LuQrCode } from 'react-icons/lu';
 
 const SkeletonBar = ({ className = '' }) => (
   <div className={`bg-gray-200 dark:bg-gray-700 rounded animate-pulse ${className}`} />
@@ -76,6 +78,7 @@ const Projects = () => {
   const [submitting, setSubmitting] = useState(false);
   const [userData, setUserData] = useState(null);
   const [projects, setProjects] = useState([]);
+  const [qrModalProject, setQrModalProject] = useState(null);
 
   const userProjects = Array.isArray(userData?.projects?.list) ? userData.projects.list : [];
   const hasUserProjects = userData && userProjects.length > 0;
@@ -482,22 +485,36 @@ const Projects = () => {
                           </p>
                         )}
 
-                        {/* Row 3: Active + View Details (View Details only for owned) */}
-                        <div className="mt-auto pt-2 flex items-center gap-2 flex-wrap">
-                          {isActive && (
-                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/40 rounded-full">
-                              Current
-                            </span>
-                          )}
-                          {isOwned && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); navigate(`/project-details/${project.id}`); }}
-                              className="inline-flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 font-medium"
-                            >
-                              <FiEye className="w-3.5 h-3.5" />
-                              View Details
-                            </button>
-                          )}
+                        {/* Row 3: Active + Actions */}
+                        <div className="mt-auto pt-2 flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {isActive && (
+                              <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/40 rounded-full">
+                                Current
+                              </span>
+                            )}
+                            {isOwned && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); navigate(`/project-details/${project.id}`); }}
+                                className="inline-flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
+                              >
+                                <FiEye className="w-3.5 h-3.5" />
+                                View Details
+                              </button>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setQrModalProject(project);
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-lg transition-colors border border-indigo-100 dark:border-indigo-800"
+                            title="View & Download Project QR Code"
+                          >
+                            <LuQrCode className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                            <span>QR Code</span>
+                          </button>
                         </div>
                       </motion.div>
                     );
@@ -643,6 +660,16 @@ const Projects = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Project QR Code Modal */}
+      {qrModalProject && (
+        <ProjectQRModal
+          isOpen={!!qrModalProject}
+          onClose={() => setQrModalProject(null)}
+          projectId={qrModalProject.id || qrModalProject.project_id}
+          projectName={qrModalProject.name}
+        />
+      )}
 
       {/* Wallet / Fund load modal (402 - insufficient balance) */}
       <AnimatePresence>

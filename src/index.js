@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from './pages/Login';
 import Register from './pages/Register';
+import QRLanding from './pages/QRLanding';
 import LiveChat from './pages/LiveChat';
 import Template from './pages/Template';
 import TemplateAdd from './pages/TemplateAdd';
@@ -202,6 +203,7 @@ root.render(
           {/* Login related page */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/qr/:qr_id" element={<QRLanding />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/ai-bills" element={<AiBills />} />
           <Route path="/my-profile" element={<MyProfile />} />

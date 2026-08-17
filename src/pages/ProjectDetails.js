@@ -10,6 +10,8 @@ import {
     FiArrowLeft, FiSave, FiX, FiEdit2, FiGlobe, FiInfo,
     FiCheckCircle, FiAlertCircle, FiTrash2, FiPlus, FiCamera, FiExternalLink, FiRefreshCw
 } from 'react-icons/fi';
+import ProjectQRModal from '../component/Modals/ProjectQRModal';
+import { LuQrCode } from 'react-icons/lu';
 
 // Business type (vertical) options for WABA profile { name: display text, value: API value }
 const BUSINESS_VERTICALS = [
@@ -53,6 +55,7 @@ const ProjectDetails = () => {
     const [error, setError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
     const [isWabaConnected, setIsWabaConnected] = useState(true);
+    const [showQrModal, setShowQrModal] = useState(false);
     const [isLoadingSignupLink, setIsLoadingSignupLink] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
     const [showManualRefresh, setShowManualRefresh] = useState(false);
@@ -856,6 +859,14 @@ const ProjectDetails = () => {
                                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Business Profile</h1>
                                     <p className="text-sm text-gray-500">Connect your WhatsApp Business Account to get started.</p>
                                 </div>
+                                <button
+                                    onClick={() => setShowQrModal(true)}
+                                    className="px-3.5 py-2 text-sm font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/60 flex items-center gap-1.5 transition-colors shadow-xs"
+                                    title="View & Download Project QR Code"
+                                >
+                                    <LuQrCode size={16} />
+                                    <span>Project QR</span>
+                                </button>
                             </div>
 
                             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
@@ -993,7 +1004,15 @@ const ProjectDetails = () => {
                                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Business Profile</h1>
                                     <p className="text-sm text-gray-500">Manage your WhatsApp Business presence and settings.</p>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setShowQrModal(true)}
+                                        className="px-3.5 py-2 text-sm font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/60 flex items-center gap-1.5 transition-colors shadow-xs"
+                                        title="View & Download Project QR Code"
+                                    >
+                                        <LuQrCode size={16} />
+                                        <span>Project QR</span>
+                                    </button>
                                     {isEditing ? (
                                         <>
                                             <button
@@ -1415,6 +1434,16 @@ const ProjectDetails = () => {
                         )}
                     </div>
                 </div>
+            )}
+
+            {/* Project QR Code Modal */}
+            {showQrModal && (
+                <ProjectQRModal
+                    isOpen={showQrModal}
+                    onClose={() => setShowQrModal(false)}
+                    projectId={projectId || (data?.project?.id || data?.project?.project_id)}
+                    projectName={data?.project?.name || ''}
+                />
             )}
         </div>
     );
