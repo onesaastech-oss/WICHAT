@@ -31,6 +31,7 @@ import CampaignDetails from './pages/Campaign/CampaignDetails.js';
 import AutoReply from './pages/Automation/AutoReply';
 import Flow from './pages/Automation/Flow';
 import OpenCaseList from './pages/OpenCaseList';
+import ScannedUsers from './pages/ScannedUsers';
 import MyProfile from './pages/MyProfile.js';
 import WalletRecharge from './pages/WalletRecharge.js';
 import PaymentStatus from './pages/PaymentStatus.js';
@@ -83,6 +84,11 @@ root.render(
           <Route path="/dasboard" element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          } />
+          <Route path='scanned-users' element={
+            <ProtectedRoute requiresProject={true}>
+              <ScannedUsers />
             </ProtectedRoute>
           } />
           {/* Protected routes that require project */}

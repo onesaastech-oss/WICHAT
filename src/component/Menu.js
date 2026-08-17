@@ -690,6 +690,7 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen, isMinimized, setIsM
     { key: 'dashboard', title: 'Dashboard', icon: <FiPieChart size={18} />, path: '/' },
     { key: 'live-chat', title: 'Live Chat', icon: <FiMessageSquare size={18} />, path: '/live-chat' },
     { key: 'open-cases', title: 'Open Cases', icon: <FiBriefcase size={18} />, path: '/open-cases' },
+    { key: 'scanned-users', title: 'Scanned Users', icon: <LuQrCode size={18} />, path: '/scanned-users' },
     {
       key: 'contact', title: 'Audience', icon: <FiUsers size={18} />,
       submenus: [

@@ -138,7 +138,8 @@ function Dashboard() {
                     chat: { total: 0 },
                     contact: { total: 0 },
                     template: { total: 0, approved: 0, pending: 0, rejected: 0 },
-                    message: { total: 0, today_sent: 0 }
+                    message: { total: 0, today_sent: 0 },
+                    qr_scanned_users: { total: 0 }
                 });
                 return;
             }
@@ -321,6 +322,7 @@ function Dashboard() {
         { title: "Total Templates", value: "0", icon: <FiFileText className="w-6 h-6" />, color: "bg-orange-500", bgColor: "bg-orange-50", textColor: "text-orange-600" },
         { title: "Total Messages", value: "0", icon: <FiMail className="w-6 h-6" />, color: "bg-teal-500", bgColor: "bg-teal-50", textColor: "text-teal-600" },
         { title: "Today Sent", value: "0", icon: <FiSend className="w-6 h-6" />, color: "bg-pink-500", bgColor: "bg-pink-50", textColor: "text-pink-600" },
+        { title: "QR Scanned Users", value: "0", icon: <FiUserCheck className="w-6 h-6" />, color: "bg-indigo-500", bgColor: "bg-indigo-50", textColor: "text-indigo-600" },
     ];
 
     // Campaign message metrics
