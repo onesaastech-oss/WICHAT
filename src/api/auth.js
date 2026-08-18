@@ -3,26 +3,26 @@ import { API_BASE_URL } from '../config/api';
 import { Encrypt } from '../pages/encryption/payload-encryption';
 
 // Send OTP
-export const sendOtp = async ({ mobile }) => {
-  const payload = { mobile };
-
+export const sendOtp = async ({ mobile, purpose }) => {
+  const payload = { mobile, purpose };  // ← ADD purpose HERE!
+  
   const { data, key } = Encrypt(payload);
-
+  
   const data_pass = JSON.stringify({
     data,
     key
   });
-
+  
   const config = {
     method: 'post',
     maxBodyLength: Infinity,
-    url: `${API_BASE_URL}/account/send-otp`,
+    url: `${API_BASE_URL}/account/send-otp`,  // ← Also check this URL!
     headers: {
       'Content-Type': 'application/json'
     },
     data: data_pass
   };
-
+  
   const response = await axios.request(config);
   return response.data;
 };

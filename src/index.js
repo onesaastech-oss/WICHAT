@@ -18,7 +18,6 @@ import AgentManagement from './pages/AgentManagement';
 import MySubscription from './pages/MySubscription';
 import Blank from './pages/Blank';
 import PermissionsList from './pages/PermissionsList';
-import { GoogleOAuthProvider } from '@react-oauth/google';
 import { Provider } from 'react-redux';
 import store from './store';
 import { Toaster } from 'react-hot-toast';
@@ -42,14 +41,11 @@ import ContextConfig from './pages/ContextConfig';
 import DeveloperAccess from './pages/DeveloperAccess';
 import Support from './pages/Support';
 import ProtectedRoute from './component/ProtectedRoute';
-const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
-
 
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <Provider store={store}>
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <BrowserRouter>
         <Toaster
           position="top-center"
@@ -222,6 +218,5 @@ root.render(
           <Route path="*" element={<Error_404 />} />
         </Routes>
       </BrowserRouter>
-    </GoogleOAuthProvider>
   </Provider>
 );

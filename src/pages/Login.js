@@ -1,46 +1,167 @@
 import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../config/api';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Encrypt } from './encryption/payload-encryption';
-import axios from 'axios';
-import toast, { Toaster } from 'react-hot-toast';
-import GoogleAuthButton, { isGoogleAuthEnabled } from '../component/GoogleAuthButton';
-import { jwtDecode } from 'jwt-decode';
+import {
+  Phone, ShieldCheck, ArrowRight, X, Loader2,
+  Radio, Users, Bot, Link2, Zap, LayoutTemplate, BarChart3,
+} from 'lucide-react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { setAuthData, setSelectedProjectId } from '../store/authSlice';
 import { loginUser, sendOtp } from '../api/auth';
 import SwitchProjectModal from '../component/Modals/SwitchProjectModal';
-import { Turnstile } from '@marsidev/react-turnstile';
-import LegalLinks from '../component/LegalLinks';
+
+// ---- Design tokens --------------------------------------------------------
+const C = {
+  ink: '#120F26',
+  panelFrom: '#1B1445',
+  panelVia: '#2A1B63',
+  panelTo: '#120F26',
+  brand: '#6C5CE7',
+  brandDark: '#5847D6',
+  mint: '#2FE6B8',
+  amber: '#FFB020',
+  coral: '#FF6B6B',
+  sky: '#5FB3F0',
+  rose: '#F472B6',
+  surfaceSoft: '#F7F6FC',
+  text: '#171426',
+  muted: '#6F6B85',
+  border: '#E7E4F2',
+  danger: '#DC2626',
+  dangerBg: '#FEF2F2',
+  dangerBorder: '#FECACA',
+};
+
+const ORBIT = [
+  { label: 'Broadcast', icon: Radio, color: C.coral, top: 6, left: 50 },
+  { label: 'Team Inbox', icon: Users, color: C.amber, top: 22.5, left: 84.4 },
+  { label: 'Chatbots', icon: Bot, color: C.mint, top: 59.8, left: 92.9 },
+  { label: 'Analytics', icon: BarChart3, color: C.sky, top: 89.6, left: 69.1 },
+  { label: 'Templates', icon: LayoutTemplate, color: C.rose, top: 89.6, left: 30.9 },
+  { label: 'Auto-Replies', icon: Zap, color: C.amber, top: 59.8, left: 7.1 },
+  { label: 'CRM Sync', icon: Link2, color: C.mint, top: 22.5, left: 15.6 },
+];
+
+const Logo = ({ dark }) => (
+  <div className="flex items-center gap-2">
+    <div
+      className="w-9 h-9 rounded-xl flex items-center justify-center relative shrink-0"
+      style={{ background: `linear-gradient(135deg, ${C.brand}, ${C.mint})` }}
+    >
+      <img src="/Icon JPG & PNG/1Chatting Logo Icon PNG.png" alt="" />
+    </div>
+    <span className="text-xl font-bold" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      <span style={{ color: dark ? '#fff' : C.text }}>1</span>
+      <span style={{ color: C.brand }}>Chatting</span>
+    </span>
+  </div>
+);
+
+const OrbitPanel = () => (
+  <div className="hidden md:flex md:w-[56%] relative flex-col justify-between p-8 overflow-hidden"
+    style={{ background: `linear-gradient(160deg, ${C.panelFrom} 0%, ${C.panelVia} 55%, ${C.panelTo} 100%)` }}>
+    <style>{`
+      @keyframes ringGrow { 0% { transform: scale(1); opacity:.55 } 100% { transform: scale(6.2); opacity:0 } }
+      @keyframes floatDot { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+    `}</style>
+
+    <div className="relative z-10">
+      <span
+        className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-white/60"
+        style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+      >
+        <span className="w-1.5 h-1.5 rounded-full" style={{ background: C.mint, animation: 'floatDot 2.4s ease-in-out infinite' }} />
+        business messaging
+      </span>
+      <h1
+        className="mt-3 text-[30px] leading-[1.15] font-bold text-white"
+        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+      >
+        Reach every customer,
+        <br /> one chat at a time.
+      </h1>
+      <p className="mt-2.5 text-[13px] text-white/60 leading-relaxed max-w-[280px]">
+        Broadcasts, chatbots and a shared team inbox — all on the number your customers already trust.
+      </p>
+    </div>
+
+    <div className="relative flex-1 my-6 flex items-center justify-center">
+      <div className="relative w-full max-w-[300px] aspect-square">
+        <div className="absolute inset-[6%] rounded-full border border-white/10" />
+        <div className="absolute inset-[22%] rounded-full border border-white/10 border-dashed" />
+
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span
+            className="absolute w-16 h-16 rounded-full border"
+            style={{ borderColor: 'rgba(108,92,231,0.45)', animation: 'ringGrow 3.2s ease-out infinite' }}
+          />
+          <span
+            className="absolute w-16 h-16 rounded-full border"
+            style={{ borderColor: 'rgba(47,230,184,0.35)', animation: 'ringGrow 3.2s ease-out infinite 1.1s' }}
+          />
+          <div
+            className="relative w-[76px] h-[76px] rounded-full flex items-center justify-center shadow-lg"
+            style={{ background: '#fff', boxShadow: '0 12px 30px -8px rgba(108,92,231,0.55)' }}
+          >
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center"
+              style={{ background: `linear-gradient(135deg, ${C.brand}, ${C.mint})` }}>
+              <img src="/Icon JPG & PNG/1Chatting Logo Icon PNG.png" alt="" />
+            </div>
+          </div>
+        </div>
+
+        {ORBIT.map(({ label, icon: Icon, color, top, left }) => (
+          <div
+            key={label}
+            className="absolute flex items-center gap-1.5 pl-1.5 pr-3 py-1.5 rounded-full text-[11px] font-semibold text-white whitespace-nowrap"
+            style={{
+              top: `${top}%`, left: `${left}%`, transform: 'translate(-50%, -50%)',
+              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+              backdropFilter: 'blur(2px)', fontFamily: "'Inter', sans-serif",
+            }}
+          >
+            <span className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ background: color }}>
+              <Icon className="w-3 h-3 text-[#120F26]" strokeWidth={2.6} />
+            </span>
+            {label}
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div className="relative z-10 flex items-center gap-2 text-white/50 text-[12px]">
+      <div className="flex -space-x-1.5">
+        {[C.brand, C.mint, C.amber].map((c) => (
+          <span key={c} className="w-5 h-5 rounded-full border-2" style={{ background: c, borderColor: C.panelTo }} />
+        ))}
+      </div>
+      12,000+ businesses chatting smarter
+    </div>
+  </div>
+);
 
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
-  const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
-    mobile: '',
-    otp: '',
-  });
-  const [errors, setErrors] = useState({
-    mobile: '',
-    otp: '',
-    global: '',
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [showGlobalError, setShowGlobalError] = useState(false);
 
-  // Project selection modal state (uses SwitchProjectModal - same as Menu)
+  const [step, setStep] = useState(1);
+  const [formData, setFormData] = useState({ mobile: '', otp: '' });
+  const [errors, setErrors] = useState({ mobile: '', otp: '', global: '' });
+  const [isLoading, setIsLoading] = useState(false);
+  const [showGlobalError, setShowGlobalError] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [loginProjects, setLoginProjects] = useState([]);
 
-  // Cloudflare Turnstile
   const [turnstileToken, setTurnstileToken] = useState('');
   const turnstileSiteKey = process.env.REACT_APP_TURNSTILE_SITE_KEY || '0x4AAAAAACuMb3QQyxLqxHpe';
 
-  // Prefill form from URL query params
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 2200);
+  };
+
   useEffect(() => {
     if (!location?.search) return;
 
@@ -53,47 +174,30 @@ const Login = () => {
         token: tokenFromUrl,
         username: usernameFromUrl,
         is_impersonating: true,
-        impersonated_at: new Date().toISOString()
+        impersonated_at: new Date().toISOString(),
       };
 
       localStorage.setItem('userData', JSON.stringify(userDataToStore));
       localStorage.setItem('user_data', JSON.stringify(userDataToStore));
       dispatch(setAuthData(userDataToStore));
-      toast.success(`Logged in as @${usernameFromUrl} (Admin Impersonation)`);
+      showToast(`Logged in as @${usernameFromUrl} (Admin Impersonation)`);
 
       navigate('/', { replace: true });
       return;
     }
 
     const mobileFromUrl = params.get('mobile') || '';
-
     if (mobileFromUrl) {
-      setFormData(prev => ({
-        ...prev,
-        mobile: mobileFromUrl || prev.mobile,
-      }));
-
-      // Clear any existing field errors when URL provides values
-      setErrors(prev => ({
-        ...prev,
-        mobile: '',
-      }));
+      setFormData((prev) => ({ ...prev, mobile: mobileFromUrl || prev.mobile }));
+      setErrors((prev) => ({ ...prev, mobile: '' }));
     }
   }, [location.search]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    // Clear error when user types
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
+    const clean = name === 'mobile' ? value.replace(/\D/g, '').slice(0, 10) : value.replace(/\D/g, '').slice(0, 6);
+    setFormData((prev) => ({ ...prev, [name]: clean }));
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
   const validateForm = () => {
@@ -101,21 +205,19 @@ const Login = () => {
     const newErrors = { mobile: '', otp: '' };
 
     if (!formData.mobile.trim()) {
-      newErrors.mobile = 'Mobile number is required';
+      newErrors.mobile = 'Enter your business phone number';
       valid = false;
     } else if (!/^\d{10}$/.test(formData.mobile)) {
-      newErrors.mobile = 'Mobile number must be 10 digits';
+      newErrors.mobile = 'Enter a valid 10-digit number';
       valid = false;
     }
 
-    if (step === 2) {
-      if (!formData.otp.trim()) {
-        newErrors.otp = 'OTP is required';
-        valid = false;
-      }
+    if (step === 2 && !formData.otp.trim()) {
+      newErrors.otp = 'Enter the code we sent you';
+      valid = false;
     }
 
-    setErrors(newErrors);
+    setErrors((prev) => ({ ...prev, ...newErrors }));
     return valid;
   };
 
@@ -126,10 +228,14 @@ const Login = () => {
     setIsLoading(true);
     try {
       if (step === 1) {
-        const data = await sendOtp({ mobile: formData.mobile });
+        // ✅ FIX: Add purpose: 'login' here
+        const data = await sendOtp({ 
+          mobile: formData.mobile,
+          purpose: 'login'  // ← THIS IS THE FIX
+        });
         if (data.error === false) {
           setStep(2);
-          toast.success('OTP sent successfully');
+          showToast('Code sent to your phone');
         } else {
           throw new Error(data.error || 'Failed to send OTP');
         }
@@ -137,68 +243,44 @@ const Login = () => {
         const data = await loginUser({
           mobile: formData.mobile,
           otp: formData.otp,
-          captcha_token: turnstileToken || undefined
         });
 
         if (data.error === false) {
-          // Persist full user payload (including projects) for backward compatibility
           const projects = Array.isArray(data.projects) ? data.projects : [];
+          let userDataToStore = { ...data, selected_project_id: null };
 
-          // Base object to store (without selected project for now)
-          let userDataToStore = {
-            ...data,
-            selected_project_id: null
-          };
-
-          // If no projects at all, just store and redirect to projects page
           if (projects.length === 0) {
             localStorage.setItem('userData', JSON.stringify(userDataToStore));
             dispatch(setAuthData(userDataToStore));
-            toast.success('Login successful, but no projects found.');
-            setTimeout(() => {
-              toast.dismiss();
-              navigate('/projects');
-            }, 800);
+            showToast('Login successful, but no projects found.');
+            setTimeout(() => navigate('/projects'), 800);
             return;
           }
 
-          // If there is exactly one project, auto-select it and redirect
           if (projects.length === 1) {
             const onlyProjectId = projects[0]?.project_id || null;
-            userDataToStore = {
-              ...userDataToStore,
-              selected_project_id: onlyProjectId
-            };
+            userDataToStore = { ...userDataToStore, selected_project_id: onlyProjectId };
 
             localStorage.setItem('userData', JSON.stringify(userDataToStore));
             dispatch(setAuthData(userDataToStore));
-            if (onlyProjectId) {
-              dispatch(setSelectedProjectId(onlyProjectId));
-            }
+            if (onlyProjectId) dispatch(setSelectedProjectId(onlyProjectId));
 
-            toast.loading('Redirecting...');
-            setTimeout(() => {
-              toast.dismiss();
-              navigate('/'); // Navigate to Home directly
-            }, 1500);
+            showToast('Redirecting…');
+            setTimeout(() => navigate('/'), 1200);
             return;
           }
 
-          // More than one project → open SwitchProjectModal (same as Menu) for selection
           localStorage.setItem('userData', JSON.stringify(userDataToStore));
           dispatch(setAuthData(userDataToStore));
           setLoginProjects(projects);
           setShowProjectModal(true);
-          toast.success('Login successful. Please choose a project.');
+          showToast('Login successful. Please choose a project.');
         } else {
           throw new Error(data.error || 'Something went wrong');
         }
       }
     } catch (error) {
-      setErrors((prev) => ({
-        ...prev,
-        global: error.message || 'An error occurred'
-      }));
+      setErrors((prev) => ({ ...prev, global: error.message || 'An error occurred' }));
       setShowGlobalError(true);
     } finally {
       setIsLoading(false);
@@ -214,10 +296,7 @@ const Login = () => {
     try {
       const stored = localStorage.getItem('userData');
       const parsed = stored ? JSON.parse(stored) : {};
-      const updated = {
-        ...parsed,
-        selected_project_id: selectedId
-      };
+      const updated = { ...parsed, selected_project_id: selectedId };
 
       localStorage.setItem('userData', JSON.stringify(updated));
       dispatch(setSelectedProjectId(selectedId));
@@ -227,321 +306,138 @@ const Login = () => {
     }
 
     setShowProjectModal(false);
-    toast.success('Redirecting...');
-    setTimeout(() => {
-      toast.dismiss();
-      navigate('/');
-    }, 500);
-  };
-
-  // Handle Google Login Success
-  const handleGoogleSuccess = async (credentialResponse) => {
-    setIsGoogleLoading(true);
-
-    try {
-      // Decode the JWT token to get user info
-      const decoded = jwtDecode(credentialResponse.credential);
-
-      // Prepare payload for your backend
-      const payload = {
-        google_token: credentialResponse.credential,
-        email: decoded.email,
-        name: decoded.name,
-        picture: decoded.picture
-      };
-
-      // Encrypt and send to your backend
-      const { data, key } = Encrypt(payload);
-
-      let data_pass = JSON.stringify({
-        "data": data,
-        "key": key
-      });
-
-      let config = {
-        method: 'post',
-        maxBodyLength: Infinity,
-        url: `${API_BASE_URL}/account/google-login`, // You'll need to create this endpoint
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        data: data_pass
-      };
-
-      const response = await axios.request(config);
-      const responseData = response.data;
-
-
-      if (responseData.error) {
-        throw new Error(responseData.error || "Google login failed");
-      } else {
-        localStorage.setItem("userData", JSON.stringify(responseData));
-        toast.success('Google login successful!');
-        setTimeout(() => {
-          toast.dismiss();
-          navigate("/");
-        }, 1500);
-      }
-    } catch (error) {
-      console.error('Google login error:', error);
-      setErrors((prev) => ({
-        ...prev,
-        global: error.message || "Google login failed"
-      }));
-      setShowGlobalError(true);
-    } finally {
-      setIsGoogleLoading(false);
-    }
-  };
-
-  // Handle Google Login Failure
-  const handleGoogleError = () => {
-    setErrors((prev) => ({
-      ...prev,
-      global: "Google login failed. Please try again."
-    }));
-    setShowGlobalError(true);
+    showToast('Redirecting…');
+    setTimeout(() => navigate('/'), 500);
   };
 
   const dismissGlobalError = () => {
     setShowGlobalError(false);
-    // Clear the error message after animation completes
-    setTimeout(() => {
-      setErrors(prev => ({ ...prev, global: '' }));
-    }, 300);
+    setTimeout(() => setErrors((prev) => ({ ...prev, global: '' })), 250);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-4xl bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col md:flex-row"
+    <div className="min-h-screen w-full flex items-center justify-center p-4" style={{ background: C.surfaceSoft }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');
+        @keyframes stepIn { from { opacity:0; transform: translateX(10px) } to { opacity:1; transform: translateX(0) } }
+        .step-in { animation: stepIn .25s ease-out both; }
+      `}</style>
+
+      <div
+        className="w-full max-w-[1200px] min-h-[600px] rounded-2xl overflow-hidden flex flex-col md:flex-row"
+        style={{ background: '#fff', border: `1px solid ${C.border}`, boxShadow: '0 30px 80px -24px rgba(18,15,38,0.18)', fontFamily: "'Inter', sans-serif" }}
       >
-        {/* Animated Image Side - Hidden on mobile */}
-        <div className="hidden md:block md:w-1/2 bg-gradient-to-br from-indigo-500 to-purple-600 relative overflow-hidden">
-          <motion.div
-            animate={{
-              scale: [1, 1.05, 1],
-              rotate: [0, 2, -2, 0],
-            }}
-            transition={{
-              duration: 10,
-              repeat: Infinity,
-              repeatType: 'reverse',
-              ease: 'easeInOut',
-            }}
-            className="absolute inset-0 flex items-center justify-center"
-          >
-            <svg
-              viewBox="0 0 200 200"
-              className="w-full h-full opacity-20"
-              xmlns="http://www.w3.org/2000/svg"
+        <OrbitPanel />
+
+        {/* Form panel */}
+        <div className="w-full md:w-[44%] flex flex-col justify-center p-6 md:p-10">
+          <div className="mb-7"><Logo /></div>
+
+          <h2 className="text-2xl font-bold" style={{ color: C.text, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+            Good to see you again
+          </h2>
+          <p className="text-sm mt-1" style={{ color: C.muted }}>
+            {step === 1 ? "We'll text a one-time code to your business number." : `Enter the code sent to +91 ${formData.mobile}`}
+          </p>
+
+          {showGlobalError && errors.global && (
+            <div
+              className="mt-4 p-3 rounded-xl text-sm flex items-center justify-between step-in"
+              style={{ background: C.dangerBg, border: `1px solid ${C.dangerBorder}`, color: C.danger }}
             >
-              <path
-                fill="#FFFFFF"
-                d="M45.1,-65.6C58.2,-58.4,68.5,-45.8,73.9,-31.4C79.3,-17,79.7,-0.8,75.9,13.2C72.1,27.1,64.1,38.9,53.1,49.2C42.1,59.5,28.1,68.3,12.5,73.8C-3.1,79.3,-20.3,81.6,-34.9,74.9C-49.5,68.2,-61.5,52.6,-68.2,35.2C-74.9,17.8,-76.3,-1.4,-70.9,-17.8C-65.5,-34.2,-53.3,-47.8,-39.1,-54.7C-24.9,-61.6,-8.7,-61.8,6.3,-69.5C21.3,-77.2,42.6,-92.4,45.1,-65.6Z"
-                transform="translate(100 100)"
-              />
-            </svg>
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3, duration: 0.8 }}
-            className="relative z-10 p-10 flex flex-col justify-center h-full"
-          >
-            <h2 className="text-4xl font-bold text-white mb-4">Welcome Back</h2>
-            <p className="text-indigo-100 text-lg">
-              Sign in to access your account and continue your journey with us.
-            </p>
-          </motion.div>
-        </div>
-
-        {/* Form Side */}
-        <div className="w-full md:w-1/2 p-8 md:p-10">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-800">Sign In</h1>
-            <p className="text-gray-600 mt-2">Enter your credentials to continue</p>
-          </div>
-
-          <AnimatePresence>
-            {showGlobalError && errors.global && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.25 }}
-                className="mb-4 flex items-center justify-between rounded-lg border border-red-400 bg-red-100 px-4 py-2 text-red-700 shadow"
-                role="alert"
-              >
-                <span>{errors.global}</span>
-                <button
-                  onClick={dismissGlobalError}
-                  className="ml-3 text-red-800 hover:text-red-600"
-                >
-                  <svg
-                    className="h-5 w-5 fill-current"
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 20 20"
-                  >
-                    <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z" />
-                  </svg>
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {isGoogleAuthEnabled() && (
-            <>
-              <div className="mb-6">
-                <GoogleAuthButton
-                  onSuccess={handleGoogleSuccess}
-                  onError={handleGoogleError}
-                  text="continue_with"
-                />
-                {isGoogleLoading && (
-                  <div className="text-center mt-2">
-                    <div className="inline-flex items-center">
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Signing in with Google...
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="relative mb-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">Or continue with</span>
-                </div>
-              </div>
-            </>
+              <span>{errors.global}</span>
+              <button onClick={dismissGlobalError} aria-label="Dismiss"><X className="w-4 h-4" /></button>
+            </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {step === 1 && (
-            <div>
-              <label htmlFor="mobile" className="block text-sm font-medium text-gray-700 mb-1">
-                Mobile Number
-              </label>
-              <input
-                type="tel"
-                id="mobile"
-                name="mobile"
-                value={formData.mobile}
-                onChange={handleChange}
-                className={`w-full px-4 py-3 rounded-lg border ${errors.mobile ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all`}
-                placeholder="Enter your mobile number"
-              />
-              <AnimatePresence>
-                {errors.mobile && (
-                  <motion.p
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="text-red-500 text-sm mt-1"
+          <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+            {step === 1 ? (
+              <div key="mobile" className="step-in">
+                <label htmlFor="mobile" className="block text-sm font-medium mb-1.5" style={{ color: C.text }}>
+                  Business phone number <span style={{ color: C.danger }}>*</span>
+                </label>
+                <div className="relative flex items-center">
+                  <span
+                    className="absolute left-3.5 flex items-center gap-1.5 pr-2.5 text-sm"
+                    style={{ color: C.muted, borderRight: `1px solid ${C.border}` }}
                   >
-                    {errors.mobile}
-                  </motion.p>
-                )}
-              </AnimatePresence>
-            </div>
-            )}
-
-            {step === 2 && (
-            <div>
-              <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-1">
-                OTP
-              </label>
-              <input
-                type="text"
-                id="otp"
-                name="otp"
-                value={formData.otp}
-                onChange={handleChange}
-                className={`w-full px-4 py-3 rounded-lg border ${errors.otp ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all`}
-                placeholder="Enter OTP"
-              />
-              <AnimatePresence>
-                {errors.otp && (
-                  <motion.p
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="text-red-500 text-sm mt-1"
-                  >
-                    {errors.otp}
-                  </motion.p>
-                )}
-              </AnimatePresence>
-              <div className="mt-2 text-sm text-right">
-                <button type="button" onClick={() => setStep(1)} className="font-medium text-indigo-600 hover:text-indigo-500">
-                  Change Number
+                    <Phone className="w-4 h-4" /> +91
+                  </span>
+                  <input
+                    type="tel" id="mobile" name="mobile" autoFocus value={formData.mobile} onChange={handleChange}
+                    placeholder="98765 43210" maxLength={10}
+                    className="w-full pl-24 pr-4 py-3.5 rounded-xl text-sm focus:outline-none transition-all"
+                    style={{
+                      background: C.surfaceSoft, border: `1px solid ${errors.mobile ? '#FCA5A5' : C.border}`,
+                      color: C.text,
+                    }}
+                    onFocus={(e) => (e.target.style.boxShadow = `0 0 0 3px ${C.brand}22`, e.target.style.borderColor = C.brand)}
+                    onBlur={(e) => (e.target.style.boxShadow = 'none', e.target.style.borderColor = errors.mobile ? '#FCA5A5' : C.border)}
+                  />
+                </div>
+                {errors.mobile && <p className="text-xs mt-1.5" style={{ color: C.danger }}>{errors.mobile}</p>}
+              </div>
+            ) : (
+              <div key="otp" className="step-in">
+                <label htmlFor="otp" className="block text-sm font-medium mb-1.5" style={{ color: C.text }}>
+                  Verification code <span style={{ color: C.danger }}>*</span>
+                </label>
+                <div className="relative">
+                  <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: C.muted }} />
+                  <input
+                    type="text" id="otp" name="otp" autoFocus inputMode="numeric" value={formData.otp} onChange={handleChange}
+                    placeholder="000000" maxLength={6}
+                    className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm tracking-[0.4em] focus:outline-none transition-all"
+                    style={{
+                      background: C.surfaceSoft, border: `1px solid ${errors.otp ? '#FCA5A5' : C.border}`,
+                      color: C.text, fontFamily: "'IBM Plex Mono', monospace",
+                    }}
+                    onFocus={(e) => (e.target.style.boxShadow = `0 0 0 3px ${C.brand}22`, e.target.style.borderColor = C.brand)}
+                    onBlur={(e) => (e.target.style.boxShadow = 'none', e.target.style.borderColor = errors.otp ? '#FCA5A5' : C.border)}
+                  />
+                </div>
+                {errors.otp && <p className="text-xs mt-1.5" style={{ color: C.danger }}>{errors.otp}</p>}
+                <button
+                  type="button" onClick={() => setStep(1)}
+                  className="text-sm font-medium mt-2"
+                  style={{ color: C.brand }}
+                >
+                  ← Use a different number
                 </button>
               </div>
-            </div>
             )}
 
-            {turnstileSiteKey ? (
-              <div className="flex justify-center">
-                <Turnstile
-                  siteKey={turnstileSiteKey}
-                  onSuccess={(token) => setTurnstileToken(token)}
-                  onError={() => setTurnstileToken('')}
-                  onExpire={() => setTurnstileToken('')}
-                  options={{
-                    theme: 'light',
-                    size: 'normal'
-                  }}
-                />
-              </div>
-            ) : null}
-
-            <div>
-              <motion.button
-                type="submit"
-                disabled={isLoading}
-                whileHover={{ scale: isLoading ? 1 : 1.02 }}
-                whileTap={{ scale: isLoading ? 1 : 0.98 }}
-                className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors ${isLoading ? 'opacity-80 cursor-not-allowed' : ''}`}
-              >
-                {isLoading ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Processing...
-                  </>
-                ) : (step === 1 ? 'Send OTP' : 'Sign in')}
-              </motion.button>
-            </div>
+            <button
+              type="submit" disabled={isLoading}
+              className="w-full py-3.5 rounded-xl text-sm font-semibold text-white transition-all flex items-center justify-center gap-2"
+              style={{ background: isLoading ? C.brandDark : C.brand, opacity: isLoading ? 0.85 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }}
+            >
+              {isLoading ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> {step === 1 ? 'Sending code…' : 'Verifying…'}</>
+              ) : (
+                <>{step === 1 ? 'Send code' : 'Verify & sign in'} <ArrowRight className="w-4 h-4" /></>
+              )}
+            </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
-              <Link to='../register' className="font-medium text-indigo-600 hover:text-indigo-500">
-                Sign up
-              </Link>
-            </p>
-          </div>
-
-          <LegalLinks className="mt-6 pt-4 border-t border-gray-100" />
+          <p className="mt-5 text-center text-sm" style={{ color: C.muted }}>
+            New to OneChatting?{' '}
+            <Link to="/register" className="font-medium" style={{ color: C.brand }}>
+              Register
+            </Link>
+          </p>
         </div>
-      </motion.div>
-      <Toaster />
+      </div>
 
-      {/* Project selection modal - same as Menu's Switch Project */}
+      {toastMsg && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-xl text-sm text-white shadow-lg step-in"
+          style={{ background: C.ink }}
+        >
+          {toastMsg}
+        </div>
+      )}
+
       <SwitchProjectModal
         isOpen={showProjectModal}
         onClose={() => setShowProjectModal(false)}
