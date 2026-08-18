@@ -4,7 +4,6 @@ import {
   Radio, Users, Bot, Link2, Zap, LayoutTemplate, BarChart3,
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Turnstile } from '@marsidev/react-turnstile';
 import { API_BASE_URL } from '../config/api';
 import { Encrypt } from './encryption/payload-encryption';
 import axios from 'axios';
@@ -150,9 +149,6 @@ const Register = () => {
   const [showGlobalError, setShowGlobalError] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
 
-  // Cloudflare Turnstile
-  const [turnstileToken, setTurnstileToken] = useState('');
-  const turnstileSiteKey = process.env.REACT_APP_TURNSTILE_SITE_KEY || '0x4AAAAAACuMb3QQyxLqxHpe';
 
   const showToast = (msg) => {
     setToastMsg(msg);
@@ -365,18 +361,6 @@ const Register = () => {
                     </div>
                     {errors.otp && <p className="text-xs mt-1" style={{ color: C.danger }}>{errors.otp}</p>}
                   </div>
-
-                  {turnstileSiteKey && (
-                    <div className="flex justify-center">
-                      <Turnstile
-                        siteKey={turnstileSiteKey}
-                        onSuccess={(token) => setTurnstileToken(token)}
-                        onError={() => setTurnstileToken('')}
-                        onExpire={() => setTurnstileToken('')}
-                        options={{ theme: 'light', size: 'normal' }}
-                      />
-                    </div>
-                  )}
 
                   <p className="text-[11px] leading-relaxed" style={{ color: C.muted }}>
                     By creating a workspace, you agree to our{' '}
