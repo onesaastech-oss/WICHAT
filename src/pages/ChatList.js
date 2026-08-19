@@ -26,9 +26,22 @@ const COUNTRY_CODES = [
     { code: '60', country: 'Malaysia', dial: '+60' },
 ];
 
+// Maps the UI tab label to the value the backend's `/message/chat-list`
+// route understands (it reads `filter` / `filter_type` / `type`, all set
+// to the same value).
+const mapTabToFilter = (tab) => {
+    switch (tab) {
+        case 'Unread': return 'unread';
+        case 'Favourites': return 'favourites';
+        case 'Assigned': return 'assigned';
+        default: return 'all';
+    }
+};
+
 function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, socket_chats = [], onRepairChats, isFullScreen = false, onToggleFullScreen }) {
     const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(true);
+    const [isFiltering, setIsFiltering] = useState(false);
     const [activeTab, setActiveTab] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [chats, setChats] = useState([]);
@@ -41,6 +54,8 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
     const [repairChatsConfirming, setRepairChatsConfirming] = useState(false);
     const settingsMenuRef = useRef(null);
     const directChatInputRef = useRef(null);
+    const isFirstFilterRun = useRef(true);
+    const filterRequestId = useRef(0);
 
     // Update ref when activeChat changes
     useEffect(() => {
@@ -105,7 +120,8 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                 if (localChats.length > 0) setIsLoading(false);
             }
 
-            // 2️⃣ Call chat list API; merge API response with local, save updated data to local
+            // 2️⃣ Call chat list API (unfiltered "All" view); merge API response
+            // with local, save updated data to local
             await syncWithAPI();
 
             // 3️⃣ Re-fetch from local DB and re-render (single source of truth for UI)
@@ -204,6 +220,41 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         return unsubscribe;
     }, []);
 
+    // Pure mapper: turns raw API chat objects into the shape the UI uses.
+    // Extracted out of processApiResponse so both the local-cache sync path
+    // and the realtime search/filter path can share it.
+    const mapApiChats = (apiChats) => {
+        return apiChats.map(apiChat => {
+            const unreadCount = typeof apiChat.unread_count === 'number'
+                ? apiChat.unread_count
+                : Number(apiChat.unread_count) || 0;
+
+            const caseOpenCount = typeof apiChat.case_open_count === 'number'
+                ? Math.max(0, apiChat.case_open_count)
+                : 0;
+
+            return {
+                number: apiChat.contact.number,
+                name: apiChat.contact.name || apiChat.contact.number,
+                is_favorite: apiChat.contact.is_favorite || false,
+                case_open_count: caseOpenCount,
+                wamid: apiChat.last_message.wamid,
+                create_date: apiChat.last_message.create_date,
+                timestamp: apiChat.last_message.create_date ? toServerTimestamp(apiChat.last_message.create_date) : Date.now(),
+                type: apiChat.last_message.type,
+                message_type: apiChat.last_message.message_type,
+                message: apiChat.last_message.message,
+                status: apiChat.last_message.status,
+                unique_id: apiChat.last_message.unique_id,
+                last_id: apiChat.last_message.id,
+                unread_count: unreadCount,
+                unread: unreadCount > 0,
+                send_by_username: apiChat.last_message.send_by?.username || '',
+                send_by_mobile: apiChat.last_message.send_by?.mobile || ''
+            };
+        });
+    };
+
     const syncWithAPI = async () => {
         if (!tokens) return;
 
@@ -213,6 +264,12 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
 
             const messagePayload = {
                 project_id: projectId,
+                page: 1,
+                limit: 100,
+                search: '',
+                filter: 'all',
+                filter_type: 'all',
+                type: 'all',
                 last_id: "0"
             };
 
@@ -241,49 +298,104 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         }
     };
 
+    // Realtime search/filter: hits the API directly with the current search
+    // text and active tab, and renders straight from the response. This is
+    // NOT saved back into the local cache — the local cache stays a mirror
+    // of the unfiltered "All" list (kept fresh by syncWithAPI above), while
+    // this path is purely for what's currently on screen.
+    const fetchFilteredChats = async (search, tab) => {
+        if (!tokens) return;
+
+        const requestId = ++filterRequestId.current;
+        setIsFiltering(true);
+
+        try {
+            const projectId = tokens.selected_project_id || '';
+            const filterValue = mapTabToFilter(tab);
+
+            const messagePayload = {
+                project_id: projectId,
+                page: 1,
+                limit: 100,
+                search: search || '',
+                filter: filterValue,
+                filter_type: filterValue,
+                type: filterValue,
+            };
+
+            const { data, key } = Encrypt(messagePayload);
+            const data_pass = JSON.stringify({ "data": data, "key": key });
+
+            const response = await axios.post(
+                `${API_BASE_URL}/message/chat-list`,
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            // If a newer search/filter request has since started, drop this
+            // stale response instead of clobbering the UI with old results.
+            if (requestId !== filterRequestId.current) return;
+
+            if (!response.data.error && response.data.data) {
+                setChats(mapApiChats(response.data.data));
+            }
+        } catch (error) {
+            console.error('Failed to fetch filtered chats:', error);
+        } finally {
+            if (requestId === filterRequestId.current) {
+                setIsFiltering(false);
+            }
+        }
+    };
+
+    // Debounce search input + immediately react to tab switches, both
+    // calling the API for a realtime, server-side filtered/searched list.
+    useEffect(() => {
+        if (!tokens) return;
+
+        // Skip the very first run — the mount effect above already loads the
+        // default "All" / no-search view, so firing again here would just
+        // duplicate that initial request.
+        if (isFirstFilterRun.current) {
+            isFirstFilterRun.current = false;
+            return;
+        }
+
+        const handler = setTimeout(() => {
+            fetchFilteredChats(searchQuery, activeTab);
+        }, searchQuery ? 400 : 0); // instant on tab switch, debounced while typing
+
+        return () => clearTimeout(handler);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchQuery, activeTab, tokens]);
+
     // Refresh chat list when cases are edited/created elsewhere
     useEffect(() => {
         const handler = () => {
-            // Re-sync to refresh case_open_count + latest chat data
-            syncWithAPI();
+            // Re-sync to refresh case_open_count + latest chat data for
+            // whatever view (search/filter) is currently active.
+            if (searchQuery || activeTab !== 'All') {
+                fetchFilteredChats(searchQuery, activeTab);
+            } else {
+                syncWithAPI();
+            }
         };
         window.addEventListener('case_updated', handler);
         return () => window.removeEventListener('case_updated', handler);
         // Intentionally depends on tokens so sync uses latest auth
-    }, [tokens]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tokens, searchQuery, activeTab]);
 
     const processApiResponse = async (apiChats) => {
         try {
             // Build list from API response
-            const chatListFromApi = apiChats.map(apiChat => {
-                const unreadCount = typeof apiChat.unread_count === 'number'
-                    ? apiChat.unread_count
-                    : Number(apiChat.unread_count) || 0;
-
-                const caseOpenCount = typeof apiChat.case_open_count === 'number'
-                    ? Math.max(0, apiChat.case_open_count)
-                    : 0;
-
-                return {
-                    number: apiChat.contact.number,
-                    name: apiChat.contact.name || apiChat.contact.number,
-                    is_favorite: apiChat.contact.is_favorite || false,
-                    case_open_count: caseOpenCount,
-                    wamid: apiChat.last_message.wamid,
-                    create_date: apiChat.last_message.create_date,
-                    timestamp: apiChat.last_message.create_date ? toServerTimestamp(apiChat.last_message.create_date) : Date.now(),
-                    type: apiChat.last_message.type,
-                    message_type: apiChat.last_message.message_type,
-                    message: apiChat.last_message.message,
-                    status: apiChat.last_message.status,
-                    unique_id: apiChat.last_message.unique_id,
-                    last_id: apiChat.last_message.id,
-                    unread_count: unreadCount,
-                    unread: unreadCount > 0,
-                    send_by_username: apiChat.last_message.send_by?.username || '',
-                    send_by_mobile: apiChat.last_message.send_by?.mobile || ''
-                };
-            });
+            const chatListFromApi = mapApiChats(apiChats);
 
             if (dbAvailable) {
                 // Get current local chats to merge (preserve local name when API returns empty)
@@ -421,33 +533,11 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         }
     };
 
-    // Filter and sort chats by most recent
+    // Sort chats by most recent. Search/tab filtering now happens server-side
+    // (see fetchFilteredChats) — `chats` already reflects the active
+    // search + filter by the time it gets here, so this just orders it.
     const groupedChats = () => {
-        const filtered = chats.filter((chat) => {
-            const lastMessageText = formatLastMessage(chat);
-            const searchLower = searchQuery.toLowerCase().trim();
-            const chatNumber = chat.number || '';
-            const chatName = chat.name || '';
-
-            // Normalize phone numbers for search (remove spaces, dashes, plus signs)
-            const normalizePhone = (phone) => phone.replace(/[\s\-+]/g, '');
-            const normalizedSearch = normalizePhone(searchQuery);
-            const normalizedChatNumber = normalizePhone(chatNumber);
-
-            const matchesSearch =
-                chatName.toLowerCase().includes(searchLower) ||
-                chatNumber.toLowerCase().includes(searchLower) ||
-                normalizedChatNumber.includes(normalizedSearch) ||
-                lastMessageText.toLowerCase().includes(searchLower);
-            let matchesTab = true;
-            if (activeTab === 'Unread') matchesTab = (chat.unread_count || 0) > 0;
-            if (activeTab === 'Favourites') matchesTab = chat.is_favorite;
-            if (activeTab === 'Groups') matchesTab = chat.isGroup;
-            return matchesSearch && matchesTab;
-        });
-
-        // Sort by most recent (by timestamp/create_date)
-        const sorted = filtered.sort((a, b) => {
+        const sorted = [...chats].sort((a, b) => {
             const timeA = a.timestamp || toServerTimestamp(a.create_date) || 0;
             const timeB = b.timestamp || toServerTimestamp(b.create_date) || 0;
             return timeB - timeA; // Most recent first
@@ -507,6 +597,9 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
+                        {isFiltering && (
+                            <FiRefreshCw className="w-4 h-4 text-gray-400 animate-spin flex-shrink-0 ml-2" />
+                        )}
                     </div>
                     <div className="relative" ref={settingsMenuRef}>
                         <button
