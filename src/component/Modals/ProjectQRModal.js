@@ -236,7 +236,6 @@ const ProjectQRModal = ({ isOpen, onClose, projectId, projectName }) => {
                 <div class="card">
                     <div class="wa-header">💬 WhatsApp Direct Connect</div>
                     <h1>${projectName || 'Project Chat'}</h1>
-                    ${currentQr.label ? `<p class="label">${currentQr.label}</p>` : ''}
                     <div class="qr-container">
                         <img src="${dataUrl}" width="260" height="260" alt="QR Code" />
                     </div>
@@ -323,16 +322,10 @@ const ProjectQRModal = ({ isOpen, onClose, projectId, projectName }) => {
                                                         : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                                                 }`}
                                             >
-                                                {qr.label || `QR #${idx + 1}`}
+                                                {`QR #${idx + 1}`}
                                             </button>
                                         ))}
                                     </div>
-                                )}
-
-                                {currentQr?.label && (
-                                    <span className="mb-2 px-3 py-1 bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-full text-xs font-semibold">
-                                        {currentQr.label}
-                                    </span>
                                 )}
 
                                 <div className="p-4 bg-white rounded-2xl shadow-md border-2 border-emerald-500/30 inline-block mb-3">

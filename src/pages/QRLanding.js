@@ -90,8 +90,26 @@ const QRLanding = () => {
                     const waLink = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
                     setWhatsappUrl(waLink);
 
-                    // Record scan action in background for analytics
-                    processScanAction({ qr_id, action: 'whatsapp_redirect' }).catch(() => {});
+                    // Persist the scan/mapping for an already signed-in user before
+                    // opening WhatsApp. Anonymous visitors can still continue via
+                    // the public deep link and complete registration later.
+                    let session = null;
+                    try {
+                        const stored = localStorage.getItem('userData');
+                        session = stored ? JSON.parse(stored) : null;
+                    } catch (sessionError) {
+                        session = null;
+                    }
+                    processScanAction({
+                        qr_id,
+                        action: 'whatsapp_redirect',
+                        token: session?.token,
+                        username: session?.username,
+                        name: session?.name,
+                        mobile: session?.mobile,
+                        email: session?.email,
+                        firm_name: session?.firm_name,
+                    }).catch(() => {});
 
                     // Auto-redirect to WhatsApp after brief animation
                     setTimeout(() => {
