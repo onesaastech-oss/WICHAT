@@ -8,6 +8,19 @@ import { Encrypt } from './encryption/payload-encryption';
 import Pagination from '../component/Pagination';
 import { FiAlertCircle, FiHash, FiPhone, FiFileText, FiUser, FiSearch, FiEye, FiEdit2, FiX, FiPlus, FiClock, FiCalendar, FiCheckSquare } from 'react-icons/fi';
 import { parseServerDate } from '../utils/dateTime';
+import defaultCaseNames from '../data/caseNames.json';
+
+const CUSTOM_CASE_NAMES_STORAGE_KEY = 'openCaseCustomNames';
+const CUSTOM_CASE_NAME_VALUE = '__create_new_case_name__';
+
+const getStoredCaseNames = () => {
+    try {
+        const stored = JSON.parse(localStorage.getItem(CUSTOM_CASE_NAMES_STORAGE_KEY) || '[]');
+        return Array.isArray(stored) ? stored.filter(name => typeof name === 'string' && name.trim()) : [];
+    } catch (error) {
+        return [];
+    }
+};
 
 function OpenCaseList() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -70,8 +83,57 @@ function OpenCaseList() {
     const [caseCreateContactsQuery, setCaseCreateContactsQuery] = useState('');
     const [caseCreateContactsPage, setCaseCreateContactsPage] = useState(1);
     const [caseCreateContactsTotalPages, setCaseCreateContactsTotalPages] = useState(1);
+    const [customCaseNames, setCustomCaseNames] = useState(getStoredCaseNames);
+    const [newCaseName, setNewCaseName] = useState('');
+    const [caseNameError, setCaseNameError] = useState('');
+    const [caseCreateCustomNameMode, setCaseCreateCustomNameMode] = useState(false);
+    const [caseEditCustomNameMode, setCaseEditCustomNameMode] = useState(false);
 
     const navigate = useNavigate();
+
+    const caseNameOptions = [...new Set([
+        ...(Array.isArray(defaultCaseNames) ? defaultCaseNames : []),
+        ...customCaseNames,
+        caseCreateName,
+        caseEditName
+    ].map(name => String(name || '').trim()).filter(Boolean))];
+
+    const addCustomCaseName = (setName) => {
+        const name = newCaseName.trim();
+        if (!name) {
+            setCaseNameError('Please enter a case name');
+            return false;
+        }
+
+        const matchingName = caseNameOptions.find(option => option.toLowerCase() === name.toLowerCase());
+        if (matchingName) {
+            setName(matchingName);
+            setNewCaseName('');
+            setCaseNameError('');
+            return true;
+        }
+
+        const updatedNames = [...customCaseNames, name];
+        setCustomCaseNames(updatedNames);
+        localStorage.setItem(CUSTOM_CASE_NAMES_STORAGE_KEY, JSON.stringify(updatedNames));
+        setName(name);
+        setNewCaseName('');
+        setCaseNameError('');
+        return true;
+    };
+
+    const handleCaseNameSelect = (value, setName, setCustomMode) => {
+        if (value === CUSTOM_CASE_NAME_VALUE) {
+            setName('');
+            setCustomMode(true);
+            setNewCaseName('');
+            setCaseNameError('');
+            return;
+        }
+        setCustomMode(false);
+        setName(value);
+        setCaseNameError('');
+    };
 
     const formatShortDateTime = (value) => {
         if (!value) return '-';
@@ -246,6 +308,9 @@ function OpenCaseList() {
         setCaseCreateContactsQuery('');
         setCaseCreateContactsPage(1);
         setCaseCreateContactsTotalPages(1);
+        setNewCaseName('');
+        setCaseNameError('');
+        setCaseCreateCustomNameMode(false);
         setShowCaseCreateModal(true);
     }, []);
 
@@ -256,6 +321,9 @@ function OpenCaseList() {
         setCaseCreateRemark('');
         setCaseCreateStatus('open');
         setCaseCreateError('');
+        setNewCaseName('');
+        setCaseNameError('');
+        setCaseCreateCustomNameMode(false);
     }, []);
 
     const fetchContactsForCaseCreate = useCallback(async (page = 1, queryOverride) => {
@@ -518,6 +586,9 @@ function OpenCaseList() {
         setCaseEditRemark(row?.remark ?? '');
         setCaseEditStatus(row?.status === true || row?.status === '1' ? 'open' : 'closed');
         setCaseEditError('');
+        setNewCaseName('');
+        setCaseNameError('');
+        setCaseEditCustomNameMode(false);
         setShowCaseEditModal(true);
     };
 
@@ -527,12 +598,19 @@ function OpenCaseList() {
         setCaseEditName('');
         setCaseEditRemark('');
         setCaseEditError('');
+        setNewCaseName('');
+        setCaseNameError('');
+        setCaseEditCustomNameMode(false);
     };
 
     const fetchEditCase = useCallback(async () => {
         if (!tokens?.token || !tokens?.username || !tokens?.selected_project_id || !caseEditRow) return;
         const caseId = caseEditRow.case_id ?? caseEditRow.id;
         if (!caseId) return;
+        if (!String(caseEditName ?? '').trim()) {
+            setCaseEditError('Case name is required');
+            return;
+        }
         setCaseEditLoading(true);
         setCaseEditError('');
         try {
@@ -574,7 +652,7 @@ function OpenCaseList() {
     }, [tokens?.token, tokens?.username, tokens?.selected_project_id, caseEditRow, caseEditName, caseEditRemark, caseEditStatus, closeCaseEditModal, fetchCaseListForNumber, caseModalNumber, caseListPageNo, fetchOpenCases, pageNo, search]);
 
     return (
-        <div className="fixed inset-0 z-40 flex flex-col bg-white dark:bg-gray-900">
+        <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
             <Header
                 mobileMenuOpen={mobileMenuOpen}
                 setMobileMenuOpen={setMobileMenuOpen}
@@ -589,14 +667,23 @@ function OpenCaseList() {
             />
 
             <main
-                className={`pt-16 flex-1 overflow-auto transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
-                    } bg-slate-50 dark:bg-gray-900`}
+                className={`pt-16 transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-[260px]'
+                    }`}
             >
                 <div className="p-4 sm:p-6 lg:p-8 max-w-8xl mx-auto space-y-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div>
-                            <h1 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Open Cases</h1>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">List of numbers with at least one open case.</p>
+                            <div className="flex items-center gap-2 text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-1">
+                                <FiFileText className="w-4 h-4" />
+                                <span>Case Management</span>
+                            </div>
+                            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
+                                Open Cases
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    {total} Records
+                                </span>
+                            </h1>
+                            <p className="text-sm text-slate-500 mt-1">List of contacts with at least one open case.</p>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
                             {selectedNumbers.size > 0 && (
@@ -604,7 +691,7 @@ function OpenCaseList() {
                                     type="button"
                                     onClick={handleBulkCloseSelected}
                                     disabled={bulkCloseLoading}
-                                    className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-50 transition-colors"
+                                    className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-rose-600 text-white hover:bg-rose-700 font-semibold text-sm shadow-sm disabled:opacity-50 transition-all active:scale-95"
                                 >
                                     <FiCheckSquare className="h-3.5 w-3.5" />
                                     {bulkCloseLoading ? 'Closing...' : `Close ${selectedNumbers.size} selected`}
@@ -613,21 +700,21 @@ function OpenCaseList() {
                             <button
                                 type="button"
                                 onClick={openCaseCreateModal}
-                                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors"
+                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-sm hover:shadow transition-all active:scale-95"
                             >
                                 <FiPlus className="h-3.5 w-3.5" />
                                 Create Case
                             </button>
-                            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5">
+                            <div className="flex items-center gap-1.5 text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5">
                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                 <span>Total:</span>
-                                <span className="font-semibold text-slate-800 dark:text-slate-100">{total}</span>
+                                <span className="font-semibold text-slate-900">{total}</span>
                             </div>
                         </div>
                     </div>
-                    <div className="mb-3">
-                        <div className="relative w-full md:max-w-xs">
-                            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-sm">
+                        <div className="relative w-full">
+                            <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                             <input
                                 type="text"
                                 value={search}
@@ -638,7 +725,7 @@ function OpenCaseList() {
                                     fetchOpenCases(1, { search: value });
                                 }}
                                 placeholder="Search by number or contact name..."
-                                className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-indigo-500 shadow-sm"
+                                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                             />
                         </div>
                     </div>
@@ -650,9 +737,9 @@ function OpenCaseList() {
                         </div>
                     )}
 
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+                    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
                         {/* Desktop table */}
-                        <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 shadow-sm bg-white dark:bg-gray-900">
+                        <div className="hidden md:block overflow-x-auto">
                             <table className="w-full divide-y divide-gray-200 dark:divide-gray-800">
                                 <thead className="bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-gray-900 dark:to-gray-800">
                                     <tr>
@@ -1055,14 +1142,33 @@ function OpenCaseList() {
                                     )}
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
-                                        <input
-                                            type="text"
-                                            value={caseCreateName}
-                                            onChange={(e) => setCaseCreateName(e.target.value)}
+                                        <select
+                                            value={caseCreateCustomNameMode ? CUSTOM_CASE_NAME_VALUE : caseCreateName}
+                                            onChange={(e) => handleCaseNameSelect(e.target.value, setCaseCreateName, setCaseCreateCustomNameMode)}
                                             className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                            placeholder="Case name"
                                             disabled={caseCreateLoading}
-                                        />
+                                            required
+                                        >
+                                            <option value="">Select a case name</option>
+                                            {caseNameOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+                                            <option value={CUSTOM_CASE_NAME_VALUE}>＋ Create new case name</option>
+                                        </select>
+                                        {caseCreateCustomNameMode && (
+                                            <div className="mt-2 flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={newCaseName}
+                                                    onChange={(e) => { setNewCaseName(e.target.value); setCaseNameError(''); }}
+                                                    className="min-w-0 flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                    placeholder="Enter a new case name"
+                                                    disabled={caseCreateLoading}
+                                                    required
+                                                    autoFocus
+                                                />
+                                                <button type="button" onClick={() => addCustomCaseName(setCaseCreateName) && setCaseCreateCustomNameMode(false)} disabled={caseCreateLoading} className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50">Add</button>
+                                            </div>
+                                        )}
+                                        {caseCreateCustomNameMode && caseNameError && <p className="mt-1 text-xs text-red-600">{caseNameError}</p>}
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Remark</label>
@@ -1353,13 +1459,32 @@ function OpenCaseList() {
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                         Name
                                     </label>
-                                    <input
-                                        type="text"
-                                        value={caseEditName}
-                                        onChange={(e) => setCaseEditName(e.target.value)}
+                                    <select
+                                        value={caseEditCustomNameMode ? CUSTOM_CASE_NAME_VALUE : caseEditName}
+                                        onChange={(e) => handleCaseNameSelect(e.target.value, setCaseEditName, setCaseEditCustomNameMode)}
                                         className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                        placeholder="Case name"
-                                    />
+                                        required
+                                    >
+                                        <option value="">Select a case name</option>
+                                        {caseNameOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+                                        <option value={CUSTOM_CASE_NAME_VALUE}>＋ Create new case name</option>
+                                    </select>
+                                    {caseEditCustomNameMode && (
+                                        <div className="mt-2 flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={newCaseName}
+                                                onChange={(e) => { setNewCaseName(e.target.value); setCaseNameError(''); }}
+                                                className="min-w-0 flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                placeholder="Enter a new case name"
+                                                disabled={caseEditLoading}
+                                                required
+                                                autoFocus
+                                            />
+                                            <button type="button" onClick={() => addCustomCaseName(setCaseEditName) && setCaseEditCustomNameMode(false)} disabled={caseEditLoading} className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50">Add</button>
+                                        </div>
+                                    )}
+                                    {caseEditCustomNameMode && caseNameError && <p className="mt-1 text-xs text-red-600">{caseNameError}</p>}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

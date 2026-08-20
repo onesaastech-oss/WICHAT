@@ -110,6 +110,7 @@ const validateRemark = (remark) => {
  * @param {boolean} submitting - Whether form is being submitted
  * @param {string} error - Error message to display
  * @param {boolean} darkMode - Whether dark mode is enabled (optional, defaults to false)
+ * @param {Array} groups - Available contact groups for editing
  */
 const ContactFormModal = ({
     isOpen,
@@ -120,7 +121,8 @@ const ContactFormModal = ({
     loading = false,
     submitting = false,
     error = '',
-    darkMode = false
+    darkMode = false,
+    groups = []
 }) => {
     const [country, setCountry] = useState(DEFAULT_COUNTRY);
     const [formData, setFormData] = useState({
@@ -129,7 +131,8 @@ const ContactFormModal = ({
         email: '',
         firm_name: '',
         website: '',
-        remark: ''
+        remark: '',
+        group_id: ''
     });
     const [errors, setErrors] = useState({
         number: '',
@@ -167,7 +170,8 @@ const ContactFormModal = ({
                 email: initialData.email || '',
                 firm_name: initialData.firm_name || '',
                 website: initialData.website || '',
-                remark: initialData.remark || ''
+                remark: initialData.remark || '',
+                group_id: initialData.group_id || ''
             });
         } else {
             // Reset for new contact
@@ -180,7 +184,8 @@ const ContactFormModal = ({
                 email: initialData.email || '',
                 firm_name: initialData.firm_name || '',
                 website: initialData.website || '',
-                remark: initialData.remark || ''
+                remark: initialData.remark || '',
+                group_id: initialData.group_id || ''
             });
         }
         // Reset errors when modal opens/closes
@@ -447,6 +452,28 @@ const ContactFormModal = ({
                                         </p>
                                     )}
                                 </div>
+
+                                {isExisting && (
+                                    <div>
+                                        <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                            Contact Group <span className="text-xs font-normal text-gray-400">(optional)</span>
+                                        </label>
+                                        <select
+                                            value={formData.group_id}
+                                            onChange={(e) => handleFieldChange('group_id', e.target.value)}
+                                            disabled={loading || submitting}
+                                            className={`w-full px-3 py-2 border rounded-lg text-sm outline-none transition focus:ring-2 ${darkMode
+                                                ? 'border-gray-600 bg-gray-900 text-white focus:border-blue-400 focus:ring-blue-800'
+                                                : 'border-gray-300 bg-white text-gray-900 focus:border-blue-500 focus:ring-blue-200'
+                                                } ${(loading || submitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            <option value="">No group</option>
+                                            {groups.map((group) => (
+                                                <option key={group.id} value={group.id}>{group.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
 
                                 {/* Email Field */}
                                 <div>

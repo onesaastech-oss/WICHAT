@@ -50,6 +50,9 @@ function Contact() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingContact, setEditingContact] = useState(null);
   const [favoriteContacts, setFavoriteContacts] = useState(new Set());
+  const [contactGroups, setContactGroups] = useState([]);
+  const [bulkGroupId, setBulkGroupId] = useState('');
+  const [bulkGroupLoading, setBulkGroupLoading] = useState(false);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -145,7 +148,8 @@ function Contact() {
     email: '',
     firm_name: '',
     website: '',
-    remark: ''
+    remark: '',
+    group_id: ''
   });
 
 
@@ -157,7 +161,8 @@ function Contact() {
     email: '',
     firm_name: '',
     website: '',
-    remark: ''
+    remark: '',
+    group_id: ''
   });
 
 
@@ -193,6 +198,53 @@ function Contact() {
       console.error('Failed to load session data:', e);
     }
   }, []);
+
+  // Load all groups for contact assignment selectors.
+  useEffect(() => {
+    if (!tokens?.token || !tokens?.username) return;
+    if (permissions && permissions.view_contact === false) return;
+
+    let cancelled = false;
+    const loadGroups = async () => {
+      try {
+        const projectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
+        const allGroups = [];
+        let pageNo = 1;
+        let hasMore = true;
+
+        for (let page = 0; page < 50 && hasMore; page += 1) {
+          const payload = { project_id: projectId, page_no: pageNo, limit: 100 };
+          const { data, key } = Encrypt(payload);
+          const response = await axios.post(`${API_BASE_URL}/contact/group-list`, JSON.stringify({ data, key }), {
+            headers: { token: tokens.token, username: tokens.username, 'Content-Type': 'application/json' }
+          });
+          if (response?.data?.error) break;
+
+          const rows = response?.data?.data || [];
+          allGroups.push(...rows.map(group => ({
+            id: group.group_id,
+            name: group.name
+          })).filter(group => group.id && group.name));
+
+          const meta = response?.data?.meta || {};
+          const currentPage = Number(meta.page_no || pageNo);
+          const totalPages = Number(meta.total_pages || 1);
+          hasMore = meta.has_more === true || currentPage < totalPages;
+          pageNo = currentPage + 1;
+          if (rows.length === 0) hasMore = false;
+        }
+
+        if (!cancelled) {
+          setContactGroups(Array.from(new Map(allGroups.map(group => [group.id, group])).values()));
+        }
+      } catch (error) {
+        console.error('Failed to load contact groups:', error);
+      }
+    };
+
+    loadGroups();
+    return () => { cancelled = true; };
+  }, [tokens?.token, tokens?.username, tokens?.selected_project_id, tokens?.projects, permissions]);
 
   // Legacy paginated mode - fetch from API directly
   useEffect(() => {
@@ -890,7 +942,8 @@ function Contact() {
       email: contact.email || '',
       firm_name: contact.firm_name || '',
       website: contact.website || '',
-      remark: contact.remark || ''
+      remark: contact.remark || '',
+      group_id: contact.group_id || ''
     });
     setShowEditModal(true);
   };
@@ -928,6 +981,12 @@ function Contact() {
       );
 
       if (!response?.data?.error) {
+        if (formData.group_id) {
+          const groupResponse = await assignContactToGroup(editContact.contact_id, formData.group_id);
+          if (!groupResponse) {
+            toast.error('Contact updated, but it could not be added to the selected group.');
+          }
+        }
         // Close modal
         setShowEditModal(false);
         setEditingContact(null);
@@ -947,6 +1006,46 @@ function Contact() {
     } catch (error) {
       console.error('Failed to update contact:', error);
       toast.error('Failed to update contact. Please try again.');
+    }
+  };
+
+  const assignContactToGroup = async (contactId, groupId) => {
+    if (!tokens?.token || !tokens?.username || !contactId || !groupId) return false;
+    try {
+      const payload = {
+        project_id: tokens.selected_project_id || '',
+        group_id: groupId,
+        contact_id: contactId
+      };
+      const { data, key } = Encrypt(payload);
+      const response = await axios.post(
+        `${API_BASE_URL}/contact/group-contact-add`,
+        JSON.stringify({ data, key }),
+        { headers: { token: tokens.token, username: tokens.username, 'Content-Type': 'application/json' } }
+      );
+      return response?.data?.error === false;
+    } catch (error) {
+      console.error('Failed to add contact to group:', error);
+      return false;
+    }
+  };
+
+  const handleBulkAddToGroup = async () => {
+    if (!bulkGroupId || selectedContacts.length === 0) return;
+    setBulkGroupLoading(true);
+    try {
+      const results = await Promise.all(selectedContacts.map(contactId => assignContactToGroup(contactId, bulkGroupId)));
+      const addedCount = results.filter(Boolean).length;
+      if (addedCount === selectedContacts.length) {
+        toast.success(`${addedCount} contact(s) added to the selected group.`);
+      } else {
+        toast.error(`${addedCount} of ${selectedContacts.length} contact(s) added to the selected group.`);
+      }
+      setBulkGroupId('');
+      setSelectedContacts([]);
+      setIsAllSelected(false);
+    } finally {
+      setBulkGroupLoading(false);
     }
   };
 
@@ -2014,6 +2113,30 @@ function Contact() {
                           : `${selectedContacts.length} contact(s) selected on this page.`}
                       </div>
                       <div className="flex flex-wrap gap-2">
+                        {contactGroups.length > 0 && (
+                          <>
+                            <select
+                              value={bulkGroupId}
+                              onChange={(e) => setBulkGroupId(e.target.value)}
+                              disabled={bulkGroupLoading}
+                              className="px-3 py-2 rounded-md border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              aria-label="Select group for selected contacts"
+                            >
+                              <option value="">Add selected to group...</option>
+                              {contactGroups.map((group) => (
+                                <option key={group.id} value={group.id}>{group.name}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={handleBulkAddToGroup}
+                              disabled={!bulkGroupId || bulkGroupLoading}
+                              className="inline-flex items-center px-3 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {bulkGroupLoading ? 'Adding...' : 'Add to group'}
+                            </button>
+                          </>
+                        )}
                         {isAllSelected && (
                           <Tooltip
                             content="Not authorized"
@@ -2322,6 +2445,7 @@ function Contact() {
         submitting={false}
         error=""
         darkMode={false}
+        groups={contactGroups}
       />
 
       {/* Edit Contact Modal */}
@@ -2338,6 +2462,7 @@ function Contact() {
         submitting={false}
         error=""
         darkMode={false}
+        groups={contactGroups}
       />
 
       {/* Import Modal */}
