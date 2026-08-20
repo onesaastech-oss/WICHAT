@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { API_BASE_URL } from '../config/api';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Header, Sidebar } from '../component/Menu';
-import { getProjectMetaDetails, updateWabaProfileDetails, submitWabaId } from '../api/auth';
-import axios from 'axios';
+import { getProjectMetaDetails, updateWabaProfileDetails, submitWabaId, getEmbeddedSignupConfig } from '../api/auth';
 import toast from 'react-hot-toast';
 import { uploadFile } from '../utils/uploadFile';
 import {
@@ -62,12 +60,19 @@ const ProjectDetails = () => {
     const syncIntervalRef = useRef(null);
     const pollCountRef = useRef(0);
     const wabaIdRef = useRef(null); // Store WABA ID from Facebook event
+    const phoneNumberIdRef = useRef(null); // Store Phone Number ID from Facebook event (needed for 'own' provider)
     const [debugLogs, setDebugLogs] = useState([]); // Debug logs for troubleshooting
     const [showDebugPanel, setShowDebugPanel] = useState(false); // Toggle debug panel
     const [showErrorModal, setShowErrorModal] = useState(false); // Error modal state
     const [errorModalMessage, setErrorModalMessage] = useState(''); // Error modal message
     const [countdownSeconds, setCountdownSeconds] = useState(0); // Countdown timer state
     const countdownIntervalRef = useRef(null); // Countdown interval reference
+
+    // --- Meta Tech Provider State (admin-configured: 'own' vs 'aisensy', read entirely from
+    // system_tech_providers via GET /project/embedded-signup-config - no hardcoded values here) ---
+    // Shape: { error, provider: 'own' | 'aisensy', meta_app_id, meta_config_id, meta_graph_version, solution_id }
+    const [techProvider, setTechProvider] = useState(null);
+    const [isLoadingProviderConfig, setIsLoadingProviderConfig] = useState(true);
 
     const waitForFbSdk = (timeoutMs = 15000) => new Promise((resolve, reject) => {
         if (window.FB) {
@@ -392,18 +397,37 @@ const ProjectDetails = () => {
         setIsEditing(false);
     };
 
-    // Facebook Embedded Signup Configuration
-    const META_APP_ID = "4269135816705946";
-    const META_CONFIG_ID = "1432383791689294";
-    const META_GRAPH_VER = "v24.0";
+    // ------------------------------------------------------------------
+    // Facebook / Meta Embedded Signup Configuration
+    // ------------------------------------------------------------------
+    // Everything below is resolved ENTIRELY from the backend, which in turn
+    // reads the single active row (is_active = '1') in system_tech_providers.
+    // There are NO hardcoded app_id / config_id / graph_version / solution_id
+    // values anywhere in this file. Whichever provider is active in the DB
+    // ('own' or 'aisensy') just works, because we always use whatever
+    // `techProvider` holds after GET /project/embedded-signup-config resolves.
+    const resolvedAppId = techProvider?.meta_app_id || '';
+    const resolvedConfigId = techProvider?.meta_config_id || '';
+    const resolvedGraphVersion = techProvider?.meta_graph_version || 'v21.0';
+    const resolvedSolutionId = techProvider?.solution_id || '';
 
-    // Initialize Facebook SDK
+    // Fetches which Meta Tech Provider is currently active (system_tech_providers.is_active = '1')
+    // via the shared, authenticated api/auth.js helper (same token/username header pattern used
+    // everywhere else in this app - fixes the previous "Session expired" issue on this endpoint).
+    const fetchEmbeddedSignupConfig = async () => {
+        const response = await getEmbeddedSignupConfig();
+
+        if (response?.error) {
+            throw new Error(typeof response.error === 'string' ? response.error : 'Failed to fetch embedded signup config');
+        }
+
+        return response; // { error: false, provider: 'own' | 'aisensy', meta_app_id, meta_config_id, meta_graph_version, solution_id }
+    };
+
+    // Initialize Facebook SDK - first resolves which tech provider is active, then
+    // initializes FB.init with the correct appId/graph version for that provider.
     useEffect(() => {
-        addDebugLog('Component mounted', {
-            META_APP_ID,
-            META_CONFIG_ID,
-            META_GRAPH_VER
-        });
+        let isMounted = true;
 
         const handleMessage = (event) => {
             try {
@@ -429,7 +453,11 @@ const ProjectDetails = () => {
                         } else {
                             addDebugLog('WARNING: No WABA ID in FINISH event', data.data);
                         }
-                        // The FB.login callback will handle the code exchange
+                        // Store Phone Number ID from the event (used by the 'own' provider flow)
+                        if (data.data && data.data.phone_number_id) {
+                            phoneNumberIdRef.current = data.data.phone_number_id;
+                            addDebugLog('Phone Number ID stored', { phone_number_id: data.data.phone_number_id });
+                        }
                     } else if (data.event === 'CANCEL') {
                         addDebugLog('Signup cancelled by user');
                         setIsLoadingSignupLink(false);
@@ -459,32 +487,67 @@ const ProjectDetails = () => {
 
         window.addEventListener('message', handleMessage);
 
-        if (!window.FB) {
-            addDebugLog('Loading Facebook SDK...');
-            window.fbAsyncInit = function () {
-                window.FB.init({
-                    appId: META_APP_ID,
-                    autoLogAppEvents: true,
-                    xfbml: true,
-                    version: META_GRAPH_VER
-                });
-                addDebugLog('FB SDK initialized successfully');
-            };
+        const init = async () => {
+            addDebugLog('Component mounted');
+            try {
+                addDebugLog('Fetching active Meta Tech Provider config...');
+                const config = await fetchEmbeddedSignupConfig();
+                if (!isMounted) return;
 
-            const script = document.createElement('script');
-            script.src = 'https://connect.facebook.net/en_US/sdk.js';
-            script.async = true;
-            script.defer = true;
-            script.crossOrigin = 'anonymous';
-            script.onerror = () => {
-                addDebugLog('ERROR: Facebook SDK script failed to load (check Content-Security-Policy)');
-            };
-            document.body.appendChild(script);
-        } else {
-            addDebugLog('FB SDK already available');
-        }
+                addDebugLog('Tech provider config received', config);
+                setTechProvider(config);
+
+                // Both fields come straight from the DB-backed API response - no fallback literals.
+                const appId = config.meta_app_id || '';
+                const graphVer = config.meta_graph_version || 'v21.0';
+
+                if (!appId) {
+                    addDebugLog('WARNING: No meta_app_id returned by embedded-signup-config. Check system_tech_providers row.');
+                }
+
+                const initFb = () => {
+                    window.FB.init({
+                        appId,
+                        autoLogAppEvents: true,
+                        xfbml: true,
+                        version: graphVer
+                    });
+                    addDebugLog('FB SDK initialized', { appId, graphVer, provider: config.provider });
+                };
+
+                if (!window.FB) {
+                    addDebugLog('Loading Facebook SDK...');
+                    window.fbAsyncInit = initFb;
+
+                    const script = document.createElement('script');
+                    script.src = 'https://connect.facebook.net/en_US/sdk.js';
+                    script.async = true;
+                    script.defer = true;
+                    script.crossOrigin = 'anonymous';
+                    script.onerror = () => {
+                        addDebugLog('ERROR: Facebook SDK script failed to load (check Content-Security-Policy)');
+                    };
+                    document.body.appendChild(script);
+                } else {
+                    // SDK script already present (e.g. re-mount) - (re)initialize with the resolved appId/version
+                    addDebugLog('FB SDK already available, re-initializing with resolved config');
+                    initFb();
+                }
+            } catch (err) {
+                console.error('Error loading embedded signup config:', err);
+                addDebugLog('ERROR fetching tech provider config', { error: err.message });
+                if (isMounted) {
+                    setError('Failed to load WhatsApp signup configuration. Please refresh and try again.');
+                }
+            } finally {
+                if (isMounted) setIsLoadingProviderConfig(false);
+            }
+        };
+
+        init();
 
         return () => {
+            isMounted = false;
             window.removeEventListener('message', handleMessage);
         };
     }, []);
@@ -507,8 +570,13 @@ const ProjectDetails = () => {
                 const code = response.authResponse.code;
                 addDebugLog('Authorization code received', { code: code.substring(0, 20) + '...' });
 
-                // Check if we have the WABA ID from the message event
-                // Wait for the WABA ID with polling (up to 5 seconds)
+                const isOwnProvider = techProvider?.provider === 'own';
+
+                // Wait (best-effort) for the WABA ID / phone number ID sent via the
+                // WA_EMBEDDED_SIGNUP postMessage FINISH event.
+                // - AiSensy flow: waba_id is REQUIRED (partner API links the WABA by id).
+                // - Own Meta Tech Provider flow: best-effort only, since the authorization
+                //   `code` alone is enough to complete the token exchange server-side.
                 let attempts = 0;
                 const maxAttempts = 10; // 10 attempts * 500ms = 5 seconds max wait
                 while (!wabaIdRef.current && attempts < maxAttempts) {
@@ -520,51 +588,68 @@ const ProjectDetails = () => {
                 }
 
                 if (!wabaIdRef.current) {
-                    addDebugLog('ERROR: WABA ID still not received after waiting', {
+                    addDebugLog('WARNING: WABA ID not received after waiting', {
                         attempts,
                         maxAttempts,
                         waitedSeconds: attempts * 0.5
                     });
-                    throw new Error('WABA ID not received. The signup may not have completed successfully. Please try again.');
+                    if (!isOwnProvider) {
+                        // AiSensy flow cannot proceed without a WABA ID
+                        throw new Error('WABA ID not received. The signup may not have completed successfully. Please try again.');
+                    }
+                } else {
+                    addDebugLog('WABA ID received successfully', { waba_id: wabaIdRef.current });
                 }
 
-                addDebugLog('WABA ID received successfully', { waba_id: wabaIdRef.current });
-
-                // Prepare payload
+                // Build the payload according to which Meta Tech Provider is active.
+                // - 'aisensy': { project_id, waba_id }
+                // - 'own':     { project_id, waba_id?, code, phone_number_id? }
                 const submitPayload = {
                     project_id: activeId,
-                    waba_id: wabaIdRef.current
+                    ...(wabaIdRef.current ? { waba_id: wabaIdRef.current } : {}),
+                    ...(isOwnProvider ? {
+                        code,
+                        ...(phoneNumberIdRef.current ? { phone_number_id: phoneNumberIdRef.current } : {})
+                    } : {})
                 };
 
                 addDebugLog('Payload before encryption', submitPayload);
-                addDebugLog('Starting 1-minute countdown before calling submitWabaId API...');
 
-                // Start countdown timer (60 seconds)
-                setCountdownSeconds(60);
                 setIsSyncing(true);
                 setIsLoadingSignupLink(false);
 
-                // Wait for countdown to complete
-                await new Promise((resolve) => {
-                    let remainingSeconds = 60;
-                    countdownIntervalRef.current = setInterval(() => {
-                        remainingSeconds--;
-                        setCountdownSeconds(remainingSeconds);
+                if (!isOwnProvider) {
+                    // AiSensy's partner-side WABA registration needs a short window to
+                    // propagate before submit-facebook-access-token will reliably succeed.
+                    addDebugLog('Starting 1-minute countdown before calling submitWabaId API...');
+                    setCountdownSeconds(60);
 
-                        if (remainingSeconds <= 0) {
-                            if (countdownIntervalRef.current) {
-                                clearInterval(countdownIntervalRef.current);
-                                countdownIntervalRef.current = null;
+                    await new Promise((resolve) => {
+                        let remainingSeconds = 60;
+                        countdownIntervalRef.current = setInterval(() => {
+                            remainingSeconds--;
+                            setCountdownSeconds(remainingSeconds);
+
+                            if (remainingSeconds <= 0) {
+                                if (countdownIntervalRef.current) {
+                                    clearInterval(countdownIntervalRef.current);
+                                    countdownIntervalRef.current = null;
+                                }
+                                setCountdownSeconds(0);
+                                resolve();
                             }
-                            setCountdownSeconds(0);
-                            resolve();
-                        }
-                    }, 1000);
-                });
+                        }, 1000);
+                    });
 
-                addDebugLog('Countdown completed. Calling submitWabaId API with encryption...');
+                    addDebugLog('Countdown completed. Calling submitWabaId API with encryption...');
+                } else {
+                    // Own Meta Tech Provider: the authorization code exchange is synchronous
+                    // server-side, so there's no propagation delay to wait out.
+                    addDebugLog('Calling submitWabaId API to exchange authorization code via Meta Tech Provider...');
+                }
 
-                // Submit WABA ID to backend with encryption
+                // Submit to backend - server branches on the active tech provider to either
+                // exchange the code directly with Meta (own) or call AiSensy's partner API.
                 const wabaResponse = await submitWabaId(submitPayload);
 
                 addDebugLog('WABA submission response received', wabaResponse);
@@ -579,8 +664,9 @@ const ProjectDetails = () => {
                 addDebugLog('WABA connected successfully');
                 toast.success(wabaResponse?.msg || 'WABA connected successfully');
 
-                // Clear the stored WABA ID
+                // Clear the stored IDs
                 wabaIdRef.current = null;
+                phoneNumberIdRef.current = null;
 
                 // Start polling for connection status
                 setIsSyncing(true);
@@ -680,14 +766,27 @@ const ProjectDetails = () => {
                 countdownIntervalRef.current = null;
             }
             setCountdownSeconds(0);
-            // Clear the stored WABA ID on error
+            // Clear the stored IDs on error
             wabaIdRef.current = null;
+            phoneNumberIdRef.current = null;
         }
     };
 
     const handleGetSignupLink = async () => {
         try {
             addDebugLog('Signup button clicked');
+
+            if (isLoadingProviderConfig || !techProvider) {
+                toast.error('Signup configuration is still loading. Please wait a moment and try again.');
+                return;
+            }
+
+            if (!resolvedAppId || !resolvedConfigId) {
+                addDebugLog('ERROR: Missing meta_app_id / meta_config_id from active tech provider', techProvider);
+                toast.error('WhatsApp signup is not configured yet. Please contact support.');
+                return;
+            }
+
             setIsLoadingSignupLink(true);
             setError(null);
 
@@ -698,29 +797,36 @@ const ProjectDetails = () => {
             }
 
             addDebugLog('Project ID found', { project_id: activeId });
+            addDebugLog('Active Meta Tech Provider', techProvider);
 
             // Wait for FB SDK (may still be loading from useEffect)
             addDebugLog('Waiting for FB SDK...');
             await waitForFbSdk();
             addDebugLog('FB SDK ready');
 
+            const isOwnProvider = techProvider.provider === 'own';
+
+            const baseExtras = {
+                featureType: "whatsapp_business_app_onboarding",
+                sessionInfoVersion: "3",
+                features: [
+                    {
+                        name: "marketing_messages_lite"
+                    }
+                ],
+                version: "v3"
+            };
+
             const fbLoginConfig = {
-                config_id: META_CONFIG_ID,
+                config_id: resolvedConfigId,
                 response_type: 'code',
                 override_default_response_type: true,
-                extras: {
-                    setup: {
-                        solutionID: '887791134017383'
-                    },
-                    featureType: "whatsapp_business_app_onboarding",
-                    sessionInfoVersion: "3",
-                    features: [
-                        {
-                            name: "marketing_messages_lite"
-                        }
-                    ],
-                    version: "v3"
-                }
+                // AiSensy's partner flow needs the WhatsApp Business Solution ID (from the DB) to
+                // link the new WABA to AiSensy's Meta Tech Provider record; the admin's own
+                // provider doesn't need (and shouldn't send) that.
+                extras: isOwnProvider
+                    ? baseExtras
+                    : { setup: { solutionID: resolvedSolutionId }, ...baseExtras }
             };
 
             addDebugLog('Launching FB.login with embedded signup', fbLoginConfig);
@@ -958,10 +1064,15 @@ const ProjectDetails = () => {
                                     ) : (
                                         <button
                                             onClick={handleGetSignupLink}
-                                            disabled={isLoadingSignupLink}
+                                            disabled={isLoadingSignupLink || isLoadingProviderConfig}
                                             className="px-6 py-3 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 shadow-sm flex items-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                         >
-                                            {isLoadingSignupLink ? (
+                                            {isLoadingProviderConfig ? (
+                                                <>
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                    Loading configuration...
+                                                </>
+                                            ) : isLoadingSignupLink ? (
                                                 <>
                                                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                                                     Getting Signup Link...

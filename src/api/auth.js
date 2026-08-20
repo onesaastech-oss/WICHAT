@@ -547,8 +547,50 @@ export const getEmbedSignupLink = async ({ project_id }) => {
   return response.data;
 };
 
+// -----------------------------------------------------------------------
+// Get the active Meta Tech Provider config (own vs aisensy) for the
+// embedded WhatsApp signup flow. GET request, no encrypted body needed.
+//
+// IMPORTANT: uses the exact same 'token' / 'username' header pattern as
+// every other authenticated call in this file, because the backend's
+// `auth` middleware only reads req.headers["token"] / req.headers["username"]
+// (NOT an Authorization: Bearer header). Sending the wrong header shape
+// here is what previously caused "Session expired" on this endpoint even
+// with a valid, logged-in session.
+// -----------------------------------------------------------------------
+export const getEmbeddedSignupConfig = async () => {
+  const stored =
+    typeof window !== 'undefined' ? localStorage.getItem('userData') : null;
+  const parsed = stored ? JSON.parse(stored) : null;
+  const token = parsed?.token;
+  const username = parsed?.username;
+
+  if (!token || !username) {
+    throw new Error('Session expired');
+  }
+
+  const config = {
+    method: 'get',
+    maxBodyLength: Infinity,
+    url: `${API_BASE_URL}/project/embedded-signup-config`,
+    headers: {
+      'Content-Type': 'application/json',
+      'token': token,
+      'username': username
+    }
+  };
+
+  const response = await axios.request(config);
+  return response.data; // { error: false, provider: 'own' | 'aisensy', meta_app_id, meta_config_id, meta_graph_version, solution_id }
+};
+
 // Submit WABA ID after Facebook signup
-export const submitWabaId = async ({ project_id, waba_id }) => {
+// NOTE: also forwards `code` and `phone_number_id`, required by the 'own'
+// Meta Tech Provider flow on the backend (POST /project/submit-waba-id).
+// Previously these were silently dropped here, so the 'own' provider flow
+// always failed with "Authorization code missing" on the backend even
+// though the frontend collected everything correctly.
+export const submitWabaId = async ({ project_id, waba_id, code, phone_number_id }) => {
   // Load auth tokens from localStorage
   const stored =
     typeof window !== 'undefined' ? localStorage.getItem('userData') : null;
@@ -562,7 +604,9 @@ export const submitWabaId = async ({ project_id, waba_id }) => {
 
   const payload = {
     project_id,
-    waba_id
+    ...(waba_id ? { waba_id } : {}),
+    ...(code ? { code } : {}),
+    ...(phone_number_id ? { phone_number_id } : {})
   };
 
   // Log payload before encryption for debugging

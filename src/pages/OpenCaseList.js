@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { Header, Sidebar } from '../component/Menu';
 import { Encrypt } from './encryption/payload-encryption';
 import Pagination from '../component/Pagination';
-import { FiAlertCircle, FiHash, FiPhone, FiFileText, FiUser, FiSearch, FiEye, FiEdit2, FiX, FiPlus, FiClock, FiCalendar } from 'react-icons/fi';
+import { FiAlertCircle, FiHash, FiPhone, FiFileText, FiUser, FiSearch, FiEye, FiEdit2, FiX, FiPlus, FiClock, FiCalendar, FiCheckSquare } from 'react-icons/fi';
 import { parseServerDate } from '../utils/dateTime';
 
 function OpenCaseList() {
@@ -25,6 +25,10 @@ function OpenCaseList() {
     const [totalPage, setTotalPage] = useState(1);
     const [search, setSearch] = useState('');
 
+    // Bulk-close state (main table)
+    const [selectedNumbers, setSelectedNumbers] = useState(new Set());
+    const [bulkCloseLoading, setBulkCloseLoading] = useState(false);
+
     // Case list modal state (shared structure with Conversation.js)
     const [showCaseListModal, setShowCaseListModal] = useState(false);
     const [caseModalNumber, setCaseModalNumber] = useState(null);
@@ -38,6 +42,10 @@ function OpenCaseList() {
     const [caseListTotalPage, setCaseListTotalPage] = useState(1);
     const [caseListSearch, setCaseListSearch] = useState('');
     const [caseListStatusFilter, setCaseListStatusFilter] = useState(''); // '' | 'open' | 'closed'
+
+    // Bulk-close state inside case list modal
+    const [selectedCaseIds, setSelectedCaseIds] = useState(new Set());
+    const [modalBulkCloseLoading, setModalBulkCloseLoading] = useState(false);
 
     // Edit case state (mirrors Conversation.js)
     const [showCaseEditModal, setShowCaseEditModal] = useState(false);
@@ -161,6 +169,7 @@ function OpenCaseList() {
             setPageNo(meta.page_no || page);
             setTotal(Number(meta.total) || 0);
             setTotalPage(Number(meta.total_page) || 1);
+            setSelectedNumbers(new Set()); // Clear selection on page change
         } catch (err) {
             setError('Failed to get open case list');
             setCasesByNumber([]);
@@ -170,6 +179,61 @@ function OpenCaseList() {
             setLoading(false);
         }
     }, [tokens, limit, search]);
+
+    // ----- Bulk close (main table) -----
+    const handleBulkCloseSelected = useCallback(async () => {
+        if (selectedNumbers.size === 0) return;
+        if (!tokens?.token || !tokens?.username) return;
+        const projectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id;
+        if (!projectId) return;
+
+        const caseIds = [];
+        for (const num of selectedNumbers) {
+            const item = casesByNumber.find(r => r.number === num);
+            if (item && Array.isArray(item.cases)) {
+                item.cases.forEach(c => {
+                    if (c.status === true || c.status === '0' || c.status === 0) {
+                        if (c.case_id) caseIds.push(c.case_id);
+                    }
+                });
+            }
+        }
+        if (caseIds.length === 0) { toast.error('No open cases found for selected numbers'); return; }
+        if (!window.confirm(`Close ${caseIds.length} open case(s) for ${selectedNumbers.size} number(s)?`)) return;
+        setBulkCloseLoading(true);
+        try {
+            const payload = { project_id: projectId, case_ids: caseIds };
+            const { data, key } = Encrypt(payload);
+            const response = await axios.post(`${API_BASE_URL}/message/case-bulk-close`, JSON.stringify({ data, key }), { headers: { token: tokens.token, username: tokens.username, 'Content-Type': 'application/json' } });
+            if (response?.data?.error) { toast.error(typeof response.data.error === 'string' ? response.data.error : 'Failed to bulk close cases'); return; }
+            toast.success(response?.data?.msg ?? `${caseIds.length} case(s) closed`);
+            setSelectedNumbers(new Set());
+            fetchOpenCases(pageNo, { search });
+        } catch (e) { toast.error('Failed to bulk close cases. Please try again.'); }
+        finally { setBulkCloseLoading(false); }
+    }, [selectedNumbers, tokens, casesByNumber, pageNo, search, fetchOpenCases]);
+
+    // ----- Bulk close inside case list modal -----
+    const handleModalBulkClose = useCallback(async () => {
+        if (selectedCaseIds.size === 0) return;
+        if (!tokens?.token || !tokens?.username) return;
+        const projectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id;
+        if (!projectId) return;
+        if (!window.confirm(`Close ${selectedCaseIds.size} case(s)?`)) return;
+        setModalBulkCloseLoading(true);
+        try {
+            const payload = { project_id: projectId, case_ids: [...selectedCaseIds] };
+            const { data, key } = Encrypt(payload);
+            const response = await axios.post(`${API_BASE_URL}/message/case-bulk-close`, JSON.stringify({ data, key }), { headers: { token: tokens.token, username: tokens.username, 'Content-Type': 'application/json' } });
+            if (response?.data?.error) { toast.error(typeof response.data.error === 'string' ? response.data.error : 'Failed to bulk close cases'); return; }
+            toast.success(response?.data?.msg ?? `${selectedCaseIds.size} case(s) closed`);
+            setSelectedCaseIds(new Set());
+            fetchCaseListForNumber(caseModalNumber, caseListPageNo, { search: caseListSearch, status: caseListStatusFilter });
+            fetchOpenCases(pageNo, { search });
+        } catch (e) { toast.error('Failed to bulk close cases. Please try again.'); }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        finally { setModalBulkCloseLoading(false); }
+    }, [selectedCaseIds, tokens, caseModalNumber, caseListPageNo, caseListSearch, caseListStatusFilter, pageNo, search]);
 
     // ----- Create case (contact picker + create form) -----
     const openCaseCreateModal = useCallback(() => {
@@ -391,6 +455,7 @@ function OpenCaseList() {
             setCaseListPageNo(meta.page_no ?? page);
             setCaseListTotal(Number(meta.total) || 0);
             setCaseListTotalPage(Number(meta.total_page) || 1);
+            setSelectedCaseIds(new Set()); // Clear on reload
         } catch (err) {
             setCaseListError('Failed to fetch case list. Please try again.');
             setCaseList([]);
@@ -400,6 +465,19 @@ function OpenCaseList() {
             setCaseListLoading(false);
         }
     }, [tokens, caseListLimit, caseListSearch, caseListStatusFilter]);
+
+    // ---- Selection helpers ----
+    const toggleNumber = (num) => {
+        setSelectedNumbers(prev => { const next = new Set(prev); next.has(num) ? next.delete(num) : next.add(num); return next; });
+    };
+    const allOnPageSelected = casesByNumber.length > 0 && casesByNumber.every(item => selectedNumbers.has(item.number));
+    const toggleAllOnPage = () => {
+        if (allOnPageSelected) { setSelectedNumbers(prev => { const next = new Set(prev); casesByNumber.forEach(item => next.delete(item.number)); return next; }); }
+        else { setSelectedNumbers(prev => { const next = new Set(prev); casesByNumber.forEach(item => next.add(item.number)); return next; }); }
+    };
+    const toggleCaseId = (id) => {
+        setSelectedCaseIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+    };
 
     const openCaseModal = (item) => {
         setCaseModalNumber(item.number || '');
@@ -411,12 +489,14 @@ function OpenCaseList() {
         setCaseListTotalPage(1);
         setCaseListSearch('');
         setCaseListStatusFilter('');
+        setSelectedCaseIds(new Set());
         setShowCaseListModal(true);
         fetchCaseListForNumber(item.number, 1);
     };
 
     const closeCaseModal = () => {
         setShowCaseListModal(false);
+        setSelectedCaseIds(new Set());
     };
 
     const handleCaseListPageChange = (newPage) => {
@@ -512,50 +592,54 @@ function OpenCaseList() {
                 className={`pt-16 flex-1 overflow-auto transition-all duration-300 ease-in-out ${isMinimized ? 'md:pl-20' : 'md:pl-72'
                     } bg-slate-50 dark:bg-gray-900`}
             >
-                <div className="max-w-6xl mx-auto px-4 py-6">
-                    <div className="flex flex-col gap-4 mb-6">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                            <div>
-                                <h1 className="text-2xl font-semibold text-slate-800 dark:text-slate-100">
-                                    Open Cases
-                                </h1>
-                                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                                    List of numbers with at least one open case.
-                                </p>
-                            </div>
-                            <div className="flex items-center gap-2">
+                <div className="p-4 sm:p-6 lg:p-8 max-w-8xl mx-auto space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                        <div>
+                            <h1 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Open Cases</h1>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">List of numbers with at least one open case.</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {selectedNumbers.size > 0 && (
                                 <button
                                     type="button"
-                                    onClick={openCaseCreateModal}
-                                    className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors"
+                                    onClick={handleBulkCloseSelected}
+                                    disabled={bulkCloseLoading}
+                                    className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-50 transition-colors"
                                 >
-                                    <FiPlus className="h-4 w-4" />
-                                    Create Case
+                                    <FiCheckSquare className="h-3.5 w-3.5" />
+                                    {bulkCloseLoading ? 'Closing...' : `Close ${selectedNumbers.size} selected`}
                                 </button>
-                                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    <span>Total Numbers with Open Cases:</span>
-                                    <span className="font-semibold text-slate-800 dark:text-slate-100">{total}</span>
-                                </div>
+                            )}
+                            <button
+                                type="button"
+                                onClick={openCaseCreateModal}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors"
+                            >
+                                <FiPlus className="h-3.5 w-3.5" />
+                                Create Case
+                            </button>
+                            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span>Total:</span>
+                                <span className="font-semibold text-slate-800 dark:text-slate-100">{total}</span>
                             </div>
                         </div>
-
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                            <div className="relative w-full md:max-w-xs">
-                                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                <input
-                                    type="text"
-                                    value={search}
-                                    onChange={(e) => {
-                                        const value = e.target.value;
-                                        setSearch(value);
-                                        setPageNo(1);
-                                        fetchOpenCases(1, { search: value });
-                                    }}
-                                    placeholder="Search by number or contact name..."
-                                    className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-indigo-500 shadow-sm"
-                                />
-                            </div>
+                    </div>
+                    <div className="mb-3">
+                        <div className="relative w-full md:max-w-xs">
+                            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                            <input
+                                type="text"
+                                value={search}
+                                onChange={(e) => {
+                                    const value = e.target.value;
+                                    setSearch(value);
+                                    setPageNo(1);
+                                    fetchOpenCases(1, { search: value });
+                                }}
+                                placeholder="Search by number or contact name..."
+                                className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-indigo-500 shadow-sm"
+                            />
                         </div>
                     </div>
 
@@ -567,32 +651,36 @@ function OpenCaseList() {
                     )}
 
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
-                        {/* Desktop style table similar to Transactions */}
+                        {/* Desktop table */}
                         <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 shadow-sm bg-white dark:bg-gray-900">
                             <table className="w-full divide-y divide-gray-200 dark:divide-gray-800">
                                 <thead className="bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-gray-900 dark:to-gray-800">
                                     <tr>
-                                        <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-700/60">
-                                            <div className="flex flex-col items-center justify-center gap-1">
-                                                <FiHash className="w-3.5 h-3.5 text-gray-400" />
+                                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-700/60 w-10">
+                                            <input type="checkbox" checked={allOnPageSelected} onChange={toggleAllOnPage}
+                                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer" title="Select all on page" />
+                                        </th>
+                                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-700/60 w-12">
+                                            <div className="flex flex-col items-center justify-center gap-0.5">
+                                                <FiHash className="w-3 h-3 text-gray-400" />
                                                 <div>S.No</div>
                                             </div>
                                         </th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-700/60">
-                                            <div className="flex items-center gap-2">
-                                                <FiPhone className="w-3.5 h-3.5 text-gray-400" />
+                                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-700/60">
+                                            <div className="flex items-center gap-1.5">
+                                                <FiPhone className="w-3 h-3 text-gray-400" />
                                                 <div>Number &amp; Contact</div>
                                             </div>
                                         </th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-700/60">
-                                            <div className="flex items-center gap-2">
-                                                <FiFileText className="w-3.5 h-3.5 text-gray-400" />
+                                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-700/60">
+                                            <div className="flex items-center gap-1.5">
+                                                <FiFileText className="w-3 h-3 text-gray-400" />
                                                 <div>Cases</div>
                                             </div>
                                         </th>
-                                        <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wider">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <FiEye className="w-3.5 h-3.5 text-gray-400" />
+                                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wider">
+                                            <div className="flex items-center justify-center gap-1.5">
+                                                <FiEye className="w-3 h-3 text-gray-400" />
                                                 <div>Actions</div>
                                             </div>
                                         </th>
@@ -601,7 +689,7 @@ function OpenCaseList() {
                                 <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
                                     {loading ? (
                                         <tr>
-                                            <td colSpan={4} className="px-6 py-10 text-center">
+                                            <td colSpan={5} className="px-6 py-8 text-center">
                                                 <div className="flex flex-col items-center justify-center gap-3">
                                                     <div className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-700 animate-spin border-t-transparent"></div>
                                                     <p className="text-sm text-gray-500 dark:text-gray-400">Loading open cases...</p>
@@ -610,7 +698,7 @@ function OpenCaseList() {
                                         </tr>
                                     ) : casesByNumber.length === 0 ? (
                                         <tr>
-                                            <td colSpan={4} className="px-6 py-12 text-center">
+                                            <td colSpan={5} className="px-6 py-10 text-center">
                                                 <div className="flex flex-col items-center justify-center gap-3">
                                                     <svg className="w-12 h-12 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
@@ -632,69 +720,69 @@ function OpenCaseList() {
                                             const primaryTitle = contactName || numberValue || '-';
                                             const secondaryLine = contactName ? (numberValue || '-') : '';
 
+                                            const isChecked = selectedNumbers.has(item.number);
                                             return (
                                                 <tr
                                                     key={item.number || index}
-                                                    className="hover:bg-gray-50/80 dark:hover:bg-gray-800/80 transition-all duration-150 group"
+                                                    className={`hover:bg-gray-50/80 dark:hover:bg-gray-800/80 transition-all duration-150 group ${isChecked ? 'bg-indigo-50/60 dark:bg-indigo-900/10' : ''}`}
                                                 >
-                                                    <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100 dark:border-gray-800 text-center align-middle">
+                                                    <td className="px-3 py-2 border-r border-gray-100 dark:border-gray-800 text-center align-middle">
+                                                        <input type="checkbox" checked={isChecked} onChange={() => toggleNumber(item.number)}
+                                                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer" />
+                                                    </td>
+                                                    <td className="px-3 py-2 border-r border-gray-100 dark:border-gray-800 text-center align-middle">
                                                         <div className="flex items-center justify-center">
-                                                            <div className="flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-100 text-sm font-semibold">
+                                                            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-100 text-xs font-semibold">
                                                                 {(pageNo - 1) * limit + index + 1}
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100 dark:border-gray-800 align-middle">
+                                                    <td className="px-3 py-2 whitespace-nowrap border-r border-gray-100 dark:border-gray-800 align-middle">
                                                         <button
                                                             type="button"
                                                             onClick={() => navigate(`/live-chat/${item.number || ''}`)}
-                                                            className="flex items-center gap-3 text-left group cursor-pointer"
+                                                            className="flex items-center gap-2 text-left group cursor-pointer"
                                                         >
                                                             <div className="flex flex-col">
                                                                 <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 tracking-wide">
                                                                     {primaryTitle}
                                                                 </span>
                                                                 {secondaryLine ? (
-                                                                    <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                                                    <span className="text-xs text-gray-500 dark:text-gray-400">
                                                                         {secondaryLine}
                                                                     </span>
                                                                 ) : null}
                                                             </div>
                                                         </button>
                                                     </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100 dark:border-gray-800 align-middle">
+                                                    <td className="px-3 py-2 border-r border-gray-100 dark:border-gray-800 align-middle">
                                                         {sortedCases.length === 0 ? (
                                                             <div className="text-sm text-gray-700 dark:text-gray-200">-</div>
                                                         ) : (
-                                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                                            <div className="flex flex-wrap gap-2">
                                                                 {sortedCases.map((c, idx) => {
                                                                     const caseCreateDate = c?.create_date || c?.created_at || c?.createdAt || c?.created_date;
                                                                     return (
                                                                         <div
                                                                             key={c?.case_id || c?.id || `${item.number || 'n'}-${idx}`}
-                                                                            className="rounded-xl border border-indigo-100/70 dark:border-indigo-900/40 bg-gradient-to-br from-white to-indigo-50/40 dark:from-gray-900 dark:to-indigo-900/10 px-3 py-2.5 shadow-sm hover:shadow-md transition-shadow"
+                                                                            className="rounded-lg border border-indigo-100/70 dark:border-indigo-900/40 bg-gradient-to-br from-white to-indigo-50/40 dark:from-gray-900 dark:to-indigo-900/10 px-2.5 py-1.5 shadow-sm hover:shadow-md transition-shadow"
                                                                         >
-                                                                            <div className="flex items-start justify-between gap-2">
+                                                                            <div className="flex items-center gap-1.5">
+                                                                                <span className="inline-flex items-center justify-center h-5 w-5 rounded-md bg-indigo-600 text-white shadow-sm flex-shrink-0">
+                                                                                    <FiFileText className="h-3 w-3" />
+                                                                                </span>
                                                                                 <div className="min-w-0">
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <span className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-indigo-600 text-white shadow-sm flex-shrink-0">
-                                                                                            <FiFileText className="h-4 w-4" />
-                                                                                        </span>
-                                                                                        <div className="min-w-0">
-                                                                                            <div className="text-sm text-gray-900 dark:text-gray-100 font-semibold truncate">
-                                                                                                {c?.name || '-'}
-                                                                                            </div>
-                                                                                            <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200 px-2 py-0.5 text-[11px] font-semibold">
-                                                                                                <FiClock className="h-3 w-3" />
-                                                                                                Open {formatOpenSince(caseCreateDate)}
-                                                                                            </div>
-                                                                                        </div>
+                                                                                    <div className="text-xs text-gray-900 dark:text-gray-100 font-semibold truncate max-w-[120px]">
+                                                                                        {c?.name || '-'}
+                                                                                    </div>
+                                                                                    <div className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200 px-1.5 py-0.5 text-[10px] font-semibold">
+                                                                                        <FiClock className="h-2.5 w-2.5" />
+                                                                                        Open {formatOpenSince(caseCreateDate)}
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
-
-                                                                            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
-                                                                                <FiCalendar className="h-3.5 w-3.5 text-indigo-500/80" />
+                                                                            <div className="mt-1 flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                                                                                <FiCalendar className="h-3 w-3 text-indigo-500/80 flex-shrink-0" />
                                                                                 <span className="font-medium text-gray-600 dark:text-gray-300">Created:</span>
                                                                                 <span className="truncate">{formatShortDateTime(caseCreateDate)}</span>
                                                                             </div>
@@ -704,13 +792,13 @@ function OpenCaseList() {
                                                             </div>
                                                         )}
                                                     </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-center align-middle">
+                                                    <td className="px-3 py-2 whitespace-nowrap text-center align-middle">
                                                         <button
                                                             type="button"
                                                             onClick={() => openCaseModal(item)}
-                                                            className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 dark:border-indigo-700 px-3 py-1 text-xs font-semibold text-indigo-600 dark:text-indigo-300 bg-indigo-50/60 dark:bg-indigo-900/40 hover:bg-indigo-100 hover:border-indigo-300 dark:hover:bg-indigo-900/70 transition-colors"
+                                                            className="inline-flex items-center gap-1 rounded-full border border-indigo-200 dark:border-indigo-700 px-2.5 py-1 text-xs font-semibold text-indigo-600 dark:text-indigo-300 bg-indigo-50/60 dark:bg-indigo-900/40 hover:bg-indigo-100 hover:border-indigo-300 dark:hover:bg-indigo-900/70 transition-colors"
                                                         >
-                                                            <FiEye className="w-3.5 h-3.5" />
+                                                            <FiEye className="w-3 h-3" />
                                                             <span>View Cases</span>
                                                         </button>
                                                     </td>
@@ -810,11 +898,12 @@ function OpenCaseList() {
                             )}
                         </div>
 
-                        {/* Pagination - Show only when not loading and has data */}
+                        {/* Pagination */}
                         {!loading && !error && casesByNumber.length > 0 && (
-                            <div className="border-t border-slate-100 dark:border-gray-700 px-4 py-3 bg-slate-50/60 dark:bg-gray-900/40 flex items-center justify-between">
+                            <div className="border-t border-slate-100 dark:border-gray-700 px-4 py-2 bg-slate-50/60 dark:bg-gray-900/40 flex items-center justify-between">
                                 <div className="text-xs text-slate-500 dark:text-slate-400">
-                                    Page {pageNo} of {Math.max(totalPage, 1)} &middot; Total numbers: {total}
+                                    Page {pageNo} of {Math.max(totalPage, 1)} &middot; Total: {total}
+                                    {selectedNumbers.size > 0 && <span className="ml-2 text-indigo-600 dark:text-indigo-300 font-medium">· {selectedNumbers.size} selected</span>}
                                 </div>
                                 <Pagination
                                     currentPage={pageNo}
@@ -834,9 +923,9 @@ function OpenCaseList() {
                 {showCaseCreateModal && (
                     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
                         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-                            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <div className="flex justify-between items-center px-5 py-3 border-b border-gray-200 dark:border-gray-700">
                                 <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create case</h3>
+                                    <h3 className="text-base font-semibold text-gray-900 dark:text-white">Create case</h3>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                         Select a contact and create a new case.
                                     </p>
@@ -844,14 +933,14 @@ function OpenCaseList() {
                                 <button
                                     type="button"
                                     onClick={closeCaseCreateModal}
-                                    className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                     aria-label="Close"
                                 >
-                                    <FiX className="w-5 h-5" />
+                                    <FiX className="w-4 h-4" />
                                 </button>
                             </div>
 
-                            <div className="px-6 py-4 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto">
+                            <div className="px-5 py-3 grid grid-cols-1 md:grid-cols-2 gap-5 overflow-y-auto">
                                 {/* Contact picker */}
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
@@ -882,7 +971,7 @@ function OpenCaseList() {
                                     </div>
 
                                     <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-                                        <div className="h-72 overflow-y-auto bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+                                        <div className="h-60 overflow-y-auto bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
                                             {String(caseCreateContactsQuery || '').trim().length === 0 ? (
                                                 <div className="p-4 text-sm text-gray-500 dark:text-gray-400">
                                                     Type to search contacts.
@@ -1016,11 +1105,11 @@ function OpenCaseList() {
                                 </div>
                             </div>
 
-                            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+                            <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
                                 <button
                                     type="button"
                                     onClick={closeCaseCreateModal}
-                                    className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium transition-colors"
+                                    className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium transition-colors"
                                     disabled={caseCreateLoading}
                                 >
                                     Cancel
@@ -1029,7 +1118,7 @@ function OpenCaseList() {
                                     type="button"
                                     onClick={fetchCreateCase}
                                     disabled={caseCreateLoading || !caseCreateSelectedContact?.number}
-                                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
                                     {caseCreateLoading ? (
                                         <span className="inline-flex items-center gap-2">
@@ -1049,9 +1138,9 @@ function OpenCaseList() {
                 {showCaseListModal && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-                            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <div className="flex justify-between items-center px-5 py-3 border-b border-gray-200 dark:border-gray-700">
                                 <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <h3 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                                         <FiFileText className="w-4 h-4 text-indigo-500" />
                                         Case List
                                     </h3>
@@ -1070,22 +1159,22 @@ function OpenCaseList() {
                                 <button
                                     type="button"
                                     onClick={closeCaseModal}
-                                    className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                     aria-label="Close"
                                 >
-                                    <FiX className="w-5 h-5" />
+                                    <FiX className="w-4 h-4" />
                                 </button>
                             </div>
 
-                            {/* Filters */}
-                            <div className="px-6 py-3 flex flex-wrap items-center gap-3 border-b border-gray-100 dark:border-gray-700">
+                            {/* Filters + Bulk close */}
+                            <div className="px-5 py-2.5 flex flex-wrap items-center gap-2 border-b border-gray-100 dark:border-gray-700">
                                 <input
                                     type="text"
                                     placeholder="Search by name..."
                                     value={caseListSearch}
                                     onChange={(e) => setCaseListSearch(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && fetchCaseListForNumber(caseModalNumber, 1, { search: caseListSearch, status: caseListStatusFilter })}
-                                    className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48 sm:w-56"
+                                    className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-44 sm:w-52"
                                 />
                                 <select
                                     value={caseListStatusFilter}
@@ -1093,7 +1182,7 @@ function OpenCaseList() {
                                         setCaseListStatusFilter(e.target.value);
                                         fetchCaseListForNumber(caseModalNumber, 1, { search: caseListSearch, status: e.target.value });
                                     }}
-                                    className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="">All status</option>
                                     <option value="open">Open</option>
@@ -1102,10 +1191,21 @@ function OpenCaseList() {
                                 <button
                                     type="button"
                                     onClick={() => fetchCaseListForNumber(caseModalNumber, 1, { search: caseListSearch, status: caseListStatusFilter })}
-                                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 >
                                     Search
                                 </button>
+                                {selectedCaseIds.size > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={handleModalBulkClose}
+                                        disabled={modalBulkCloseLoading}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 text-white text-sm font-medium hover:bg-rose-700 disabled:opacity-50 transition-colors"
+                                    >
+                                        <FiCheckSquare className="w-3.5 h-3.5" />
+                                        {modalBulkCloseLoading ? 'Closing...' : `Close ${selectedCaseIds.size} selected`}
+                                    </button>
+                                )}
                             </div>
 
                             <div className="flex-1 overflow-auto min-h-0">
@@ -1121,30 +1221,30 @@ function OpenCaseList() {
                                         <table className="w-full divide-y divide-gray-200 dark:divide-gray-600">
                                             <thead className="bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-gray-700/50 dark:to-gray-700/30">
                                                 <tr>
-                                                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-600">
-                                                        #
+                                                    <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-600 w-10">
+                                                        <input type="checkbox"
+                                                            checked={caseList.filter(r => r.status === true || r.status === '1').length > 0 && caseList.filter(r => r.status === true || r.status === '1').every(r => selectedCaseIds.has(r.case_id ?? r.id))}
+                                                            onChange={() => {
+                                                                const openRows = caseList.filter(r => r.status === true || r.status === '1');
+                                                                const allSel = openRows.every(r => selectedCaseIds.has(r.case_id ?? r.id));
+                                                                if (allSel) setSelectedCaseIds(new Set());
+                                                                else setSelectedCaseIds(new Set(openRows.map(r => r.case_id ?? r.id)));
+                                                            }}
+                                                            disabled={caseList.filter(r => r.status === true || r.status === '1').length === 0}
+                                                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer" />
                                                     </th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-600">
-                                                        Name
-                                                    </th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-600">
-                                                        Create date
-                                                    </th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-600">
-                                                        Remark
-                                                    </th>
-                                                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-600">
-                                                        Status
-                                                    </th>
-                                                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                                        Edit
-                                                    </th>
+                                                    <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-600 w-10">#</th>
+                                                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-600">Name</th>
+                                                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-600">Create date</th>
+                                                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-600">Remark</th>
+                                                    <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200/50 dark:border-gray-600">Status</th>
+                                                    <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Edit</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
                                                 {caseList.length === 0 ? (
                                                     <tr>
-                                                        <td colSpan="6" className="px-6 py-12 text-center">
+                                                        <td colSpan="7" className="px-6 py-8 text-center">
                                                             <div className="flex flex-col items-center justify-center gap-3">
                                                                 <p className="text-gray-500 dark:text-gray-400 font-medium">No cases found</p>
                                                                 <p className="text-gray-400 dark:text-gray-500 text-sm">Try adjusting filters or search.</p>
@@ -1161,38 +1261,42 @@ function OpenCaseList() {
                                                                 day: 'numeric',
                                                             })
                                                             : '—';
+                                                        const isOpen = row.status === true || row.status === '1';
+                                                        const rowId = row.case_id ?? row.id;
+                                                        const isRowChecked = isOpen && selectedCaseIds.has(rowId);
                                                         return (
-                                                            <tr key={row.id ?? row.case_id ?? index} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                                                <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100 dark:border-gray-700 text-center text-sm text-gray-700 dark:text-gray-300">
+                                                            <tr key={rowId ?? index} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${isRowChecked ? 'bg-indigo-50/60 dark:bg-indigo-900/10' : ''}`}>
+                                                                <td className="px-3 py-2 border-r border-gray-100 dark:border-gray-700 text-center">
+                                                                    {isOpen ? (
+                                                                        <input type="checkbox" checked={isRowChecked} onChange={() => toggleCaseId(rowId)}
+                                                                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer" />
+                                                                    ) : <span className="block h-3.5 w-3.5" />}
+                                                                </td>
+                                                                <td className="px-3 py-2 whitespace-nowrap border-r border-gray-100 dark:border-gray-700 text-center text-sm text-gray-700 dark:text-gray-300">
                                                                     {(caseListPageNo - 1) * caseListLimit + index + 1}
                                                                 </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100 dark:border-gray-700 text-sm font-medium text-gray-900 dark:text-white">
+                                                                <td className="px-3 py-2 whitespace-nowrap border-r border-gray-100 dark:border-gray-700 text-sm font-medium text-gray-900 dark:text-white">
                                                                     {row.name ?? '—'}
                                                                 </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300">
+                                                                <td className="px-3 py-2 whitespace-nowrap border-r border-gray-100 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300">
                                                                     {createDateStr}
                                                                 </td>
-                                                                <td className="px-6 py-4 border-r border-gray-100 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate" title={row.remark ?? ''}>
+                                                                <td className="px-3 py-2 border-r border-gray-100 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate" title={row.remark ?? ''}>
                                                                     {row.remark ?? '—'}
                                                                 </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100 dark:border-gray-700 text-center">
-                                                                    <span
-                                                                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${row.status === true || row.status === '1'
-                                                                            ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'
-                                                                            : 'bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-200'
-                                                                            }`}
-                                                                    >
-                                                                        {row.status === true || row.status === '1' ? 'Open' : 'Closed'}
+                                                                <td className="px-3 py-2 whitespace-nowrap border-r border-gray-100 dark:border-gray-700 text-center">
+                                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${isOpen ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200' : 'bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-200'}`}>
+                                                                        {isOpen ? 'Open' : 'Closed'}
                                                                     </span>
                                                                 </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                                <td className="px-3 py-2 whitespace-nowrap text-center">
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => openCaseEditModal(row)}
-                                                                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 font-medium text-sm transition-colors"
+                                                                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 font-medium text-xs transition-colors"
                                                                         title="Edit case"
                                                                     >
-                                                                        <FiEdit2 className="w-4 h-4" />
+                                                                        <FiEdit2 className="w-3.5 h-3.5" />
                                                                         Edit
                                                                     </button>
                                                                 </td>
@@ -1228,18 +1332,18 @@ function OpenCaseList() {
                 {showCaseEditModal && caseEditRow && (
                     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
                         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md">
-                            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Edit case</h3>
+                            <div className="flex justify-between items-center px-5 py-3 border-b border-gray-200 dark:border-gray-700">
+                                <h3 className="text-base font-semibold text-gray-900 dark:text-white">Edit case</h3>
                                 <button
                                     type="button"
                                     onClick={closeCaseEditModal}
-                                    className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                     aria-label="Close"
                                 >
-                                    <FiX className="w-5 h-5" />
+                                    <FiX className="w-4 h-4" />
                                 </button>
                             </div>
-                            <div className="px-6 py-4 space-y-4">
+                            <div className="px-5 py-4 space-y-3">
                                 {caseEditError && (
                                     <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">
                                         {caseEditError}
@@ -1297,11 +1401,11 @@ function OpenCaseList() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+                            <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
                                 <button
                                     type="button"
                                     onClick={closeCaseEditModal}
-                                    className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium transition-colors"
+                                    className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium transition-colors"
                                 >
                                     Cancel
                                 </button>
@@ -1309,7 +1413,7 @@ function OpenCaseList() {
                                     type="button"
                                     onClick={fetchEditCase}
                                     disabled={caseEditLoading}
-                                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
                                     {caseEditLoading ? (
                                         <span className="inline-flex items-center gap-2">
