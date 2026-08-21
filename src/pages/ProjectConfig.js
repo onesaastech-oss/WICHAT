@@ -6,7 +6,7 @@ import axios from 'axios';
 import { Header, Sidebar } from '../component/Menu';
 import { fetchProjectInfo } from '../store/projectSlice';
 import { Encrypt } from './encryption/payload-encryption';
-import { FiSettings, FiLock, FiZap, FiMessageSquare, FiBell, FiShield, FiBarChart2, FiUserCheck } from 'react-icons/fi';
+import { FiSettings, FiLock, FiZap, FiMessageSquare, FiBell, FiShield, FiBarChart2, FiUserCheck, FiGitBranch } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 const PROJECT_CONFIG_STORAGE_KEY = (projectId) => `project_config_${projectId}`;
@@ -526,6 +526,28 @@ function ProjectConfig() {
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+
+                        {/* Flow Builder - navigable card */}
+                        <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => navigate('/flows')}
+                            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') navigate('/flow'); }}
+                            className="group rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden cursor-pointer transition hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-indigo-50"
+                        >
+                            <div className="p-5 flex-1">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="p-2.5 rounded-xl bg-indigo-100 text-indigo-600">
+                                        <FiGitBranch className="w-6 h-6" />
+                                    </div>
+                                    <div className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 transition group-hover:bg-indigo-100 group-hover:text-indigo-700">
+                                        Open builder
+                                    </div>
+                                </div>
+                                <h3 className="font-semibold text-slate-800 mt-4">Flow Builder</h3>
+                                <p className="text-sm text-slate-600 mt-1.5">Build drag-and-drop conversation flows for your project chats.</p>
                             </div>
                         </div>
 

@@ -33,6 +33,25 @@ body {
   overscroll-behavior-y: contain;
 }
 
+.btn-primary,
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.btn-primary { color: white; background: #4f46e5; }
+.btn-primary:hover { background: #4338ca; }
+.btn-secondary { color: #334155; background: white; border: 1px solid #e2e8f0; }
+.btn-secondary:hover { background: #f8fafc; }
+.btn-primary:disabled, .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+.field { width: 100%; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.5rem; outline: none; }
+.field:focus { border-color: #6366f1; }
+
 body.chat-composer-focused {
   overflow-x: hidden;
   overflow-y: hidden;

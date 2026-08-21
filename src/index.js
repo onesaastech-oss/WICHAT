@@ -29,6 +29,7 @@ import CampaignList from './pages/Campaign/CampaignList';
 import CampaignDetails from './pages/Campaign/CampaignDetails.js';
 import AutoReply from './pages/Automation/AutoReply';
 import Flow from './pages/Automation/Flow';
+import FlowList from './pages/Automation/FlowList';
 import OpenCaseList from './pages/OpenCaseList';
 import ScannedUsers from './pages/ScannedUsers';
 import MyProfile from './pages/MyProfile.js';
@@ -163,6 +164,11 @@ root.render(
           <Route path="/flow" element={
             <ProtectedRoute requiresProject={true}>
               <Flow />
+            </ProtectedRoute>
+          } />
+          <Route path="/flows" element={
+            <ProtectedRoute requiresProject={true}>
+              <FlowList />
             </ProtectedRoute>
           } />
           {/* Protected routes that require project - Management */}
