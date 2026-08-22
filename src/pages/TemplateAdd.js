@@ -23,11 +23,84 @@ import {
   FiAlertCircle
 } from 'react-icons/fi';
 import WhatsAppPreview from '../component/TemplateAdd/WhatsAppPreview';
+import AiTemplateModal from '../component/Modals/AiTemplateModal';
+import { RiSparklingFill } from 'react-icons/ri';
+import { useLocation } from 'react-router-dom';
 import { uploadFile } from '../utils/uploadFile';
 
 function TemplateAdd() {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const location = useLocation();
+
+  const handleApplyAiTemplate = (aiData) => {
+    if (!aiData?.template) return;
+    const { template, sample_variables } = aiData;
+    const comps = template.components || [];
+
+    const headerC = comps.find(c => String(c.type).toUpperCase() === 'HEADER');
+    const bodyC = comps.find(c => String(c.type).toUpperCase() === 'BODY');
+    const footerC = comps.find(c => String(c.type).toUpperCase() === 'FOOTER');
+    const buttonsC = comps.find(c => String(c.type).toUpperCase() === 'BUTTONS');
+
+    setFormData({
+      name: template.name || '',
+      category: template.category || 'MARKETING',
+      language: template.language || 'en',
+      components: {
+        header: {
+          type: 'HEADER',
+          format: headerC?.format || 'NONE',
+          text: headerC?.text || '',
+          example: headerC?.example || { header_handle: [] }
+        },
+        body: {
+          type: 'BODY',
+          text: bodyC?.text || '',
+          example: bodyC?.example || { body_text: [] }
+        },
+        footer: {
+          type: 'FOOTER',
+          text: footerC?.text || ''
+        },
+        buttons: {
+          type: 'BUTTONS',
+          buttons: buttonsC?.buttons || []
+        }
+      }
+    });
+
+    // Parse variables from body text
+    const varRegex = /\{\{(\d+)\}\}/g;
+    const varsFound = [];
+    const varSet = new Set();
+    let m;
+    const bodyText = bodyC?.text || '';
+    while ((m = varRegex.exec(bodyText)) !== null) {
+      const num = parseInt(m[1]);
+      if (!varSet.has(num)) {
+        varSet.add(num);
+        varsFound.push(num);
+      }
+    }
+
+    const newVars = varsFound.sort((a, b) => a - b).map((num, idx) => {
+      let sampleVal = sample_variables?.[String(num)] || bodyC?.example?.body_text?.[0]?.[num - 1] || '';
+      return {
+        id: idx + 1,
+        sample: String(sampleVal)
+      };
+    });
+
+    setBodyVariables(newVars);
+  };
+
+  useEffect(() => {
+    if (location.state?.aiTemplateData) {
+      handleApplyAiTemplate(location.state.aiTemplateData);
+    }
+  }, [location.state]);
   const [formData, setFormData] = useState({
     name: '',
     category: '',
@@ -957,6 +1030,25 @@ function TemplateAdd() {
             {/* Form section */}
             <div className="bg-white shadow rounded-lg p-6">
               <form onSubmit={handleSubmit}>
+                {/* AI Assistant Banner */}
+                <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 border border-indigo-100 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center text-amber-300 shadow-sm flex-shrink-0">
+                      <RiSparklingFill className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-indigo-950">AI Template Assistant</h4>
+                      <p className="text-xs text-indigo-800/80">Need ideas? Describe your campaign and AI will build the template.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAiModalOpen(true)}
+                    className="text-xs font-bold px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-sm active:scale-95 cursor-pointer flex-shrink-0"
+                  >
+                    Open AI
+                  </button>
+                </div>
                 {/* Template Name */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1575,6 +1667,18 @@ function TemplateAdd() {
           </div>
         </div>
       )}
+
+      {/* AI Template Modal */}
+      <AiTemplateModal
+        isOpen={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        onApplyTemplate={handleApplyAiTemplate}
+        projectId={(() => {
+          const ud = JSON.parse(localStorage.getItem('userData') || '{}');
+          return ud.selected_project_id || ud.projects?.[0]?.project_id;
+        })()}
+        tokens={JSON.parse(localStorage.getItem('userData') || '{}')}
+      />
 
       {/* Error Message Modal */}
       {errorMessage && (

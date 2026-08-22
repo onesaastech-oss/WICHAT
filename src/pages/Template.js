@@ -10,9 +10,14 @@ import toast from 'react-hot-toast';
 import { FiPlus, FiEdit, FiTrash2, FiRefreshCw, FiAlertCircle, FiMoreVertical, FiChevronDown, FiCheck, FiEye } from 'react-icons/fi';
 import TemplatePreviewModal from '../component/Modals/TemplatePreviewModal';
 import DeleteConfirmationModal from '../component/Modals/DeleteConfirmationModal';
+import AiTemplateModal from '../component/Modals/AiTemplateModal';
+import { RiSparklingFill } from 'react-icons/ri';
+import { useNavigate } from 'react-router-dom';
 
 function Template() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const navigate = useNavigate();
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -625,6 +630,20 @@ function Template() {
           </div>
         </main>
       </div>
+
+      {/* AI Template Modal */}
+      <AiTemplateModal
+        isOpen={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        onSavedDirectly={() => {
+          fetchTemplates();
+        }}
+        onApplyTemplate={(aiData) => {
+          navigate('/template-add', { state: { aiTemplateData: aiData } });
+        }}
+        projectId={tokens?.selected_project_id || tokens?.projects?.[0]?.project_id}
+        tokens={tokens}
+      />
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmationModal

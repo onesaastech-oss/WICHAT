@@ -1,0 +1,542 @@
+import React, { useState } from 'react';
+import { API_BASE_URL } from '../../config/api';
+import { Encrypt } from '../../pages/encryption/payload-encryption';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+import {
+  FiX,
+  FiZap,
+  FiCheck,
+  FiRefreshCw,
+  FiSliders,
+  FiArrowRight,
+  FiMessageSquare,
+  FiInfo,
+  FiLayers,
+  FiCheckCircle,
+  FiAlertCircle
+} from 'react-icons/fi';
+import { RiSparklingFill } from 'react-icons/ri';
+
+const QUICK_PROMPTS = [
+  {
+    label: '🔥 50% Flash Sale',
+    prompt: 'Create an exciting limited-time 50% discount announcement for a weekend fashion sale with coupon code and countdown.',
+    category: 'MARKETING',
+    tone: 'exciting and promotional',
+    button_type: 'QUICK_REPLY'
+  },
+  {
+    label: '📦 Order Shipping Update',
+    prompt: 'Create an order shipped notification with customer name, order ID, courier name, tracking number, and tracking link button.',
+    category: 'UTILITY',
+    tone: 'informative and polite',
+    button_type: 'URL'
+  },
+  {
+    label: '💳 Payment Reminder',
+    prompt: 'Polite reminder about pending invoice payment with customer name, invoice ID, due date, and pay now link button.',
+    category: 'UTILITY',
+    tone: 'polite and professional',
+    button_type: 'URL'
+  },
+  {
+    label: '🎉 Welcome Offer',
+    prompt: 'Warm welcome message for new signups offering a 20% first purchase discount code and a link to browse the catalog.',
+    category: 'MARKETING',
+    tone: 'friendly and welcoming',
+    button_type: 'URL'
+  },
+  {
+    label: '⚡ Service Appointment',
+    prompt: 'Confirm booking/appointment with customer name, service name, date, time, and quick reply buttons to Confirm or Reschedule.',
+    category: 'UTILITY',
+    tone: 'clear and reassuring',
+    button_type: 'QUICK_REPLY'
+  }
+];
+
+export default function AiTemplateModal({
+  isOpen,
+  onClose,
+  onApplyTemplate,
+  onSavedDirectly,
+  projectId,
+  tokens
+}) {
+  const [prompt, setPrompt] = useState('');
+  const [category, setCategory] = useState('MARKETING');
+  const [language, setLanguage] = useState('en');
+  const [tone, setTone] = useState('friendly and persuasive');
+  const [headerType, setHeaderType] = useState('NONE');
+  const [buttonType, setButtonType] = useState('QUICK_REPLY');
+  const [customInstructions, setCustomInstructions] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [savingDirectly, setSavingDirectly] = useState(false);
+  const [generatedData, setGeneratedData] = useState(null);
+
+  if (!isOpen) return null;
+
+  const handleSelectQuickPrompt = (item) => {
+    setPrompt(item.prompt);
+    if (item.category) setCategory(item.category);
+    if (item.tone) setTone(item.tone);
+    if (item.button_type) setButtonType(item.button_type);
+  };
+
+  const handleGenerate = async (e) => {
+    if (e) e.preventDefault();
+    if (!prompt.trim()) {
+      toast.error('Please enter a description or use-case for the template');
+      return;
+    }
+
+    const selectedProjectId = projectId || tokens?.selected_project_id || tokens?.projects?.[0]?.project_id;
+    if (!selectedProjectId) {
+      toast.error('Project ID not found. Please select a project first.');
+      return;
+    }
+
+    setLoading(true);
+    setGeneratedData(null);
+
+    try {
+      const payload = {
+        project_id: selectedProjectId,
+        prompt: prompt.trim(),
+        category,
+        language,
+        tone,
+        header_type: headerType,
+        button_type: buttonType,
+        custom_instructions: customInstructions.trim()
+      };
+
+      const { data, key } = Encrypt(payload);
+      const res = await axios.post(
+        `${API_BASE_URL}/template/generate-ai-template`,
+        JSON.stringify({ data, key }),
+        {
+          headers: {
+            token: tokens?.token,
+            username: tokens?.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (res.data?.error) {
+        toast.error(res.data.error || 'Failed to generate template');
+      } else if (res.data?.data?.template) {
+        setGeneratedData(res.data.data);
+        toast.success('✨ WhatsApp Template generated with AI!');
+      } else {
+        toast.error('Unexpected response from AI generator');
+      }
+    } catch (err) {
+      console.error('AI Gen Error:', err);
+      toast.error(err.response?.data?.error || err.message || 'AI generation failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApply = () => {
+    if (!generatedData) return;
+    if (onApplyTemplate) {
+      onApplyTemplate(generatedData);
+    }
+    toast.success('Template applied to editor');
+    onClose();
+  };
+
+  const handleSaveDirectly = async () => {
+    if (!generatedData?.template) return;
+    const selectedProjectId = projectId || tokens?.selected_project_id || tokens?.projects?.[0]?.project_id;
+    setSavingDirectly(true);
+
+    try {
+      const payload = {
+        project_id: selectedProjectId,
+        template: generatedData.template
+      };
+
+      const { data, key } = Encrypt(payload);
+      const res = await axios.post(
+        `${API_BASE_URL}/template/create-template`,
+        JSON.stringify({ data, key }),
+        {
+          headers: {
+            token: tokens?.token,
+            username: tokens?.username,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (res.data?.error) {
+        toast.error(res.data.error || 'Failed to save template to WhatsApp');
+      } else {
+        toast.success('Template submitted and saved successfully!');
+        if (onSavedDirectly) {
+          onSavedDirectly(res.data);
+        }
+        onClose();
+      }
+    } catch (err) {
+      console.error('Direct Save Error:', err);
+      toast.error(err.response?.data?.error || err.message || 'Failed to save template');
+    } finally {
+      setSavingDirectly(false);
+    }
+  };
+
+  const bodyComp = generatedData?.template?.components?.find(c => String(c.type).toUpperCase() === 'BODY');
+  const headerComp = generatedData?.template?.components?.find(c => String(c.type).toUpperCase() === 'HEADER');
+  const footerComp = generatedData?.template?.components?.find(c => String(c.type).toUpperCase() === 'FOOTER');
+  const buttonsComp = generatedData?.template?.components?.find(c => String(c.type).toUpperCase() === 'BUTTONS');
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl border border-indigo-100 max-w-4xl w-full overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
+        
+        {/* Modal Header */}
+        <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 p-5 text-white flex items-center justify-between shadow-sm">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center text-amber-300 shadow-inner">
+              <RiSparklingFill className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                AI WhatsApp Template Generator
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/20 text-indigo-100 uppercase tracking-wider">
+                  AI Powered
+                </span>
+              </h2>
+              <p className="text-xs text-indigo-100/90 mt-0.5">
+                Describe your message and AI will build a WhatsApp Cloud API compliant template instantly.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-white/80 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+          >
+            <FiX className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Quick Prompts */}
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2 block flex items-center gap-1.5">
+              <FiZap className="text-amber-500" /> Quick Starters / Examples
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {QUICK_PROMPTS.map((item, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSelectQuickPrompt(item)}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-indigo-100 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-800 font-medium transition-all hover:scale-[1.02] active:scale-95 text-left cursor-pointer"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Prompt Input Form */}
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-semibold text-gray-800 mb-1 flex items-center justify-between">
+                <span>Describe your message / purpose *</span>
+                <span className="text-xs text-gray-400 font-normal">Be specific for best results</span>
+              </label>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="E.g., Send a 30% weekend discount alert to loyalty customers with code WEEKEND30, valid till Sunday, and add a link to shop now..."
+                rows={3}
+                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-sm text-gray-800 placeholder-gray-400 shadow-sm transition-all"
+              />
+            </div>
+
+            {/* Basic Options Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">Category</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm"
+                >
+                  <option value="MARKETING">Marketing (Promotions, Offers)</option>
+                  <option value="UTILITY">Utility (Updates, Orders, Alerts)</option>
+                  <option value="AUTHENTICATION">Authentication (OTP, Verification)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">Language</label>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm"
+                >
+                  <option value="en">English (en)</option>
+                  <option value="hi">Hindi (hi)</option>
+                  <option value="es">Spanish (es)</option>
+                  <option value="pt_BR">Portuguese (pt_BR)</option>
+                  <option value="ar">Arabic (ar)</option>
+                  <option value="fr">French (fr)</option>
+                  <option value="de">German (de)</option>
+                  <option value="it">Italian (it)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">Tone / Style</label>
+                <select
+                  value={tone}
+                  onChange={(e) => setTone(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm"
+                >
+                  <option value="friendly and persuasive">Friendly & Persuasive</option>
+                  <option value="exciting and promotional">Exciting & Urgent</option>
+                  <option value="polite and professional">Polite & Professional</option>
+                  <option value="concise and direct">Concise & Direct</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Toggle Advanced */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <FiSliders className="w-3.5 h-3.5" />
+                {showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options (Header, Buttons, Custom instructions)'}
+              </button>
+
+              {showAdvanced && (
+                <div className="mt-3 p-4 bg-gray-50 rounded-xl border border-gray-200 grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in duration-150">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Header Type</label>
+                    <select
+                      value={headerType}
+                      onChange={(e) => setHeaderType(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-800 focus:border-indigo-500 outline-none shadow-sm"
+                    >
+                      <option value="NONE">None</option>
+                      <option value="TEXT">Text Header</option>
+                      <option value="IMAGE">Image Header</option>
+                      <option value="VIDEO">Video Header</option>
+                      <option value="DOCUMENT">Document Header</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Buttons Preference</label>
+                    <select
+                      value={buttonType}
+                      onChange={(e) => setButtonType(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-800 focus:border-indigo-500 outline-none shadow-sm"
+                    >
+                      <option value="NONE">None</option>
+                      <option value="QUICK_REPLY">Quick Reply Buttons</option>
+                      <option value="URL">Call to Action (Website URL)</option>
+                      <option value="PHONE_NUMBER">Call Phone Number</option>
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Additional Custom Instructions (optional)</label>
+                    <input
+                      type="text"
+                      value={customInstructions}
+                      onChange={(e) => setCustomInstructions(e.target.value)}
+                      placeholder="E.g., include an opt-out line in footer, use 2 variables only..."
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 text-xs text-gray-800 focus:border-indigo-500 outline-none shadow-sm"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Generate Action Button */}
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={loading || !prompt.trim()}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 text-white text-sm font-semibold hover:from-indigo-700 hover:to-purple-700 active:scale-95 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <FiRefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Generating with AI...</span>
+                  </>
+                ) : (
+                  <>
+                    <RiSparklingFill className="w-4 h-4 text-amber-300" />
+                    <span>Generate Template</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Result Preview Area */}
+          {generatedData && generatedData.template && (
+            <div className="border-t border-indigo-100 pt-6 space-y-4 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-ping" />
+                  <h3 className="text-sm font-bold text-gray-900">Generated Template Result</h3>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
+                  <span className="px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100 font-mono">
+                    {generatedData.template.name}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-green-50 text-green-700 border border-green-200">
+                    {generatedData.template.category}
+                  </span>
+                </div>
+              </div>
+
+              {/* Chat Bubble & Details Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Simulated WhatsApp Phone Bubble */}
+                <div className="bg-[#E5DDD5] p-4 rounded-2xl border border-gray-300 shadow-inner flex flex-col justify-center">
+                  <div className="bg-white rounded-xl p-3.5 shadow-sm space-y-2 border border-black/5 max-w-sm mx-auto w-full">
+                    {headerComp && (
+                      <div className="text-xs font-bold text-gray-900 pb-1 border-b border-gray-100">
+                        {headerComp.format === 'TEXT' ? (
+                          headerComp.text
+                        ) : (
+                          <div className="h-20 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-xs font-medium uppercase tracking-wider">
+                            [{headerComp.format} Header]
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="text-xs text-gray-800 whitespace-pre-wrap leading-relaxed">
+                      {bodyComp?.text || ''}
+                    </div>
+
+                    {footerComp && (
+                      <div className="text-[11px] text-gray-500 pt-1">
+                        {footerComp.text}
+                      </div>
+                    )}
+
+                    {buttonsComp && Array.isArray(buttonsComp.buttons) && (
+                      <div className="pt-2 border-t border-gray-100 space-y-1.5">
+                        {buttonsComp.buttons.map((btn, bIdx) => (
+                          <div
+                            key={bIdx}
+                            className="text-xs font-semibold text-[#00a884] bg-gray-50 py-1.5 px-3 rounded-lg text-center border border-gray-200 flex items-center justify-center gap-1.5"
+                          >
+                            <FiMessageSquare className="w-3 h-3" />
+                            <span>{btn.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Variable Mappings & AI Notes */}
+                <div className="space-y-3 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1">
+                        <FiLayers className="text-indigo-600" /> Sample Variables Detected:
+                      </h4>
+                      {generatedData.sample_variables && Object.keys(generatedData.sample_variables).length > 0 ? (
+                        <div className="space-y-1.5">
+                          {Object.entries(generatedData.sample_variables).map(([k, v]) => (
+                            <div key={k} className="flex items-center gap-2 text-xs bg-gray-50 p-2 rounded-lg border border-gray-200">
+                              <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 font-mono font-bold text-[11px]">
+                                {'{{' + k + '}}'}
+                              </span>
+                              <span className="text-gray-700 font-medium">{String(v)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic">No variable placeholders used in this template.</p>
+                      )}
+                    </div>
+
+                    {generatedData.explanation && (
+                      <div className="bg-indigo-50/60 border border-indigo-100 p-3 rounded-xl text-xs text-indigo-900">
+                        <span className="font-bold flex items-center gap-1 mb-0.5 text-indigo-800">
+                          <FiInfo className="w-3.5 h-3.5" /> AI Strategy Note:
+                        </span>
+                        {generatedData.explanation}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Choices */}
+                  <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleApply}
+                      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-all shadow-sm active:scale-95 cursor-pointer"
+                    >
+                      <FiCheck className="w-4 h-4" />
+                      <span>Apply to Editor & Customize</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveDirectly}
+                      disabled={savingDirectly}
+                      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white text-xs font-semibold transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+                    >
+                      {savingDirectly ? (
+                        <>
+                          <FiRefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Submitting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FiCheckCircle className="w-4 h-4" />
+                          <span>Save & Submit to WhatsApp</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Modal Footer */}
+        <div className="bg-gray-50 border-t border-gray-200 px-6 py-3.5 flex items-center justify-between text-xs text-gray-500">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            Platform AI Key Active ({generatedData?.provider || 'Platform Default'})
+          </span>
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 font-medium transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
