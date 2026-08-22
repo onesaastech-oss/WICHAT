@@ -15,7 +15,8 @@ import {
   FiX,
   FiUser,
   FiFileText,
-  FiCheckCircle
+  FiCheckCircle,
+  FiUsers
 } from 'react-icons/fi';
 
 function ContactGroup() {
@@ -753,6 +754,13 @@ function ContactGroup() {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => handleGroupNameClick(group)}
+                                    className="text-indigo-600 hover:text-indigo-900"
+                                    title="View group contacts"
+                                  >
+                                    <FiUsers className="h-4 w-4" />
+                                  </button>
                                   <button
                                     onClick={() => handleOpenEditModal(group)}
                                     className="text-indigo-600 hover:text-indigo-900"

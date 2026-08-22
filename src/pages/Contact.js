@@ -936,13 +936,15 @@ function Contact() {
     console.log('🔧 Opening edit modal for contact:', contact);
     setEditingContact(contact);
     setEditContact({
-      contact_id: contact.id, // This should be the contact_id from API
-      number: contact.mobile,
+      contact_id: contact.id || contact.contact_id,
+      number: contact.mobile || contact.number,
       name: contact.name,
       email: contact.email || '',
       firm_name: contact.firm_name || '',
       website: contact.website || '',
       remark: contact.remark || '',
+      groups: contact.groups || [],
+      group_ids: contact.group_ids || [],
       group_id: contact.group_id || ''
     });
     setShowEditModal(true);
@@ -1032,18 +1034,40 @@ function Contact() {
 
   const handleBulkAddToGroup = async () => {
     if (!bulkGroupId || selectedContacts.length === 0) return;
+    if (!tokens?.token || !tokens?.username) return;
+
     setBulkGroupLoading(true);
     try {
-      const results = await Promise.all(selectedContacts.map(contactId => assignContactToGroup(contactId, bulkGroupId)));
-      const addedCount = results.filter(Boolean).length;
-      if (addedCount === selectedContacts.length) {
-        toast.success(`${addedCount} contact(s) added to the selected group.`);
+      const projectId = tokens.selected_project_id || tokens.projects?.[0]?.project_id || '';
+      const payload = {
+        project_id: projectId,
+        group_ids: [bulkGroupId],
+        contact_ids: selectedContacts
+      };
+      const { data, key } = Encrypt(payload);
+      const response = await axios.post(
+        `${API_BASE_URL}/contact/group-contact-add-bulk`,
+        JSON.stringify({ data, key }),
+        { headers: { token: tokens.token, username: tokens.username, 'Content-Type': 'application/json' } }
+      );
+
+      if (!response?.data?.error) {
+        const msg = response?.data?.msg || `${selectedContacts.length} contact(s) added to the selected group.`;
+        toast.success(msg);
+        const targetGroup = contactGroups.find(g => String(g.id) === String(bulkGroupId));
+        const groupName = targetGroup ? targetGroup.name : 'Group';
+        const targetId = bulkGroupId;
+        setBulkGroupId('');
+        setSelectedContacts([]);
+        setIsAllSelected(false);
+        setReloadTick((t) => t + 1);
+        navigate(`/contact-group-list?group_id=${targetId}&group_name=${encodeURIComponent(groupName)}`);
       } else {
-        toast.error(`${addedCount} of ${selectedContacts.length} contact(s) added to the selected group.`);
+        toast.error(response?.data?.error || response?.data?.msg || 'Failed to add contacts to group');
       }
-      setBulkGroupId('');
-      setSelectedContacts([]);
-      setIsAllSelected(false);
+    } catch (error) {
+      console.error('Failed to bulk add contacts to group:', error);
+      toast.error('Failed to add contacts to group');
     } finally {
       setBulkGroupLoading(false);
     }

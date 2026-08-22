@@ -21,4 +21,13 @@ export const updateFlowDraft = (payload) => request('/update-draft', payload);
 export const validateFlow = (payload) => request('/validate', payload);
 export const publishFlow = (payload) => request('/publish', payload);
 export const toggleFlow = (payload) => request('/toggle', payload);
-export const deleteFlow = (payload) => request('/delete', payload);
+export const deleteFlow = (payload) => {
+  if (payload?.flow_id && !payload?.flow_ids) {
+    return request('/delete', { ...payload, flow_ids: [payload.flow_id] });
+  }
+  return request('/delete', payload);
+};
+export const deleteFlows = (project_id, flow_ids) => {
+  const ids = Array.isArray(flow_ids) ? flow_ids : [flow_ids];
+  return request('/delete', { project_id, flow_ids: ids });
+};
