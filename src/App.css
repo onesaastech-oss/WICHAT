@@ -36,3 +36,22 @@
     transform: rotate(360deg);
   }
 }
+/* Flow Builder panel order: canvas first on mobile, tools/canvas/settings on desktop. */
+.flow-builder-layout > section {
+  order: 1;
+}
+
+.flow-builder-layout section > svg {
+  z-index: 0;
+  overflow: visible;
+}
+
+.flow-builder-layout section > div {
+  z-index: 2;
+}
+
+@media (min-width: 1024px) {
+  .flow-builder-layout > aside:first-child { order: 1; }
+  .flow-builder-layout > section { order: 2; }
+  .flow-builder-layout > aside:last-child { order: 3; }
+}

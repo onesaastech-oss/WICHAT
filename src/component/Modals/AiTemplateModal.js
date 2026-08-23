@@ -130,7 +130,28 @@ export default function AiTemplateModal({
       if (res.data?.error) {
         toast.error(res.data.error || 'Failed to generate template');
       } else if (res.data?.data?.template) {
-        setGeneratedData(res.data.data);
+        let result = res.data.data;
+        const generatedHeader = result.template.components?.find(c => String(c.type).toUpperCase() === 'HEADER');
+        if (generatedHeader && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(String(generatedHeader.format).toUpperCase())) {
+          try {
+            const mediaPayload = {
+              project_id: selectedProjectId,
+              format: String(generatedHeader.format).toUpperCase(),
+              prompt: prompt.trim(),
+              body: result.template.components?.find(c => String(c.type).toUpperCase() === 'BODY')?.text || '',
+              header_text: generatedHeader.text || ''
+            };
+            const mediaRes = await axios.post(`${API_BASE_URL}/template/generate-ai-header-media`, JSON.stringify(Encrypt(mediaPayload)), {
+              headers: { token: tokens?.token, username: tokens?.username, 'Content-Type': 'application/json' }
+            });
+            if (mediaRes.data?.data?.url) {
+              result = { ...result, template: { ...result.template, components: result.template.components.map(component => String(component.type).toUpperCase() === 'HEADER' ? { ...component, example: { header_handle: [mediaRes.data.data.url] } } : component) } };
+            } else if (mediaRes.data?.error) toast.error(mediaRes.data.error);
+          } catch (mediaError) {
+            toast.error(mediaError.response?.data?.error || 'Header format created, but media generation failed');
+          }
+        }
+        setGeneratedData(result);
         toast.success('✨ WhatsApp Template generated with AI!');
       } else {
         toast.error('Unexpected response from AI generator');
@@ -420,9 +441,12 @@ export default function AiTemplateModal({
                         {headerComp.format === 'TEXT' ? (
                           headerComp.text
                         ) : (
-                          <div className="h-20 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-xs font-medium uppercase tracking-wider">
-                            [{headerComp.format} Header]
-                          </div>
+                          (() => {
+                            const mediaUrl = headerComp.example?.header_handle?.[0];
+                            if (mediaUrl && headerComp.format === 'IMAGE') return <img src={mediaUrl} alt="AI generated header" className="w-full h-24 object-cover rounded-lg" />;
+                            if (mediaUrl && headerComp.format === 'VIDEO') return <video src={mediaUrl} controls className="w-full h-24 object-cover rounded-lg" />;
+                            return <a href={mediaUrl || '#'} target="_blank" rel="noreferrer" className="h-20 bg-gray-100 rounded-lg flex items-center justify-center text-indigo-600 text-xs font-medium uppercase tracking-wider">{mediaUrl ? `Open ${headerComp.format} file` : `[${headerComp.format} media unavailable]`}</a>;
+                          })()
                         )}
                       </div>
                     )}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Header, Sidebar } from '../component/Menu';
-import { getProjectMetaDetails, updateWabaProfileDetails, submitWabaId, getEmbeddedSignupConfig } from '../api/auth';
+import { getProjectMetaDetails, getEmbedSignupLink, updateWabaProfileDetails, submitWabaId, getEmbeddedSignupConfig } from '../api/auth';
 import toast from 'react-hot-toast';
 import { uploadFile } from '../utils/uploadFile';
 import {
@@ -781,12 +781,6 @@ const ProjectDetails = () => {
                 return;
             }
 
-            if (!resolvedAppId || !resolvedConfigId) {
-                addDebugLog('ERROR: Missing meta_app_id / meta_config_id from active tech provider', techProvider);
-                toast.error('WhatsApp signup is not configured yet. Please contact support.');
-                return;
-            }
-
             setIsLoadingSignupLink(true);
             setError(null);
 
@@ -799,21 +793,59 @@ const ProjectDetails = () => {
             addDebugLog('Project ID found', { project_id: activeId });
             addDebugLog('Active Meta Tech Provider', techProvider);
 
+            const isOwnProvider = techProvider.provider === 'own';
+
+            // ==============================================================
+            // AiSensy Provider Flow
+            // Backend generates a one-time embeddedSignupURL via the AiSensy
+            // Partner API. We open it in a new tab. The user completes the
+            // Meta embedded signup inside AiSensy's hosted flow.
+            // After completion, the user pastes their WABA ID back.
+            // ==============================================================
+            if (!isOwnProvider) {
+                addDebugLog('AiSensy provider detected — generating signup URL from server...');
+                const linkResponse = await getEmbedSignupLink({ project_id: activeId });
+
+                if (linkResponse?.error) {
+                    throw new Error(typeof linkResponse.error === 'string' ? linkResponse.error : 'Failed to generate signup link');
+                }
+
+                const signupUrl = linkResponse?.url;
+                if (!signupUrl) {
+                    throw new Error('No signup URL returned from server. Please try again.');
+                }
+
+                addDebugLog('AiSensy signup URL received', { url: signupUrl.substring(0, 60) + '...' });
+
+                // Open in new tab
+                window.open(signupUrl, '_blank', 'noopener,noreferrer');
+                toast.success('Signup page opened in a new tab. Complete the Meta flow and come back to submit your WABA ID.');
+                setIsLoadingSignupLink(false);
+                return;
+            }
+
+            // ==============================================================
+            // Own Meta Tech Provider Flow
+            // Uses FB.init() + FB.login() with the credentials from DB.
+            // The authorization code + WABA data is returned via postMessage
+            // and the handleFBLoginResponse function processes it.
+            // ==============================================================
+            if (!resolvedAppId || !resolvedConfigId) {
+                addDebugLog('ERROR: Missing meta_app_id / meta_config_id from active tech provider', techProvider);
+                toast.error('WhatsApp signup is not configured yet (missing App ID or Config ID). Please contact support.');
+                setIsLoadingSignupLink(false);
+                return;
+            }
+
             // Wait for FB SDK (may still be loading from useEffect)
             addDebugLog('Waiting for FB SDK...');
             await waitForFbSdk();
             addDebugLog('FB SDK ready');
 
-            const isOwnProvider = techProvider.provider === 'own';
-
             const baseExtras = {
                 featureType: "whatsapp_business_app_onboarding",
                 sessionInfoVersion: "3",
-                features: [
-                    {
-                        name: "marketing_messages_lite"
-                    }
-                ],
+                features: [{ name: "marketing_messages_lite" }],
                 version: "v3"
             };
 
@@ -821,20 +853,14 @@ const ProjectDetails = () => {
                 config_id: resolvedConfigId,
                 response_type: 'code',
                 override_default_response_type: true,
-                // AiSensy's partner flow needs the WhatsApp Business Solution ID (from the DB) to
-                // link the new WABA to AiSensy's Meta Tech Provider record; the admin's own
-                // provider doesn't need (and shouldn't send) that.
-                extras: isOwnProvider
-                    ? baseExtras
-                    : { setup: { solutionID: resolvedSolutionId }, ...baseExtras }
+                extras: baseExtras
             };
 
-            addDebugLog('Launching FB.login with embedded signup', fbLoginConfig);
+            addDebugLog('Launching FB.login with Own Meta embedded signup', fbLoginConfig);
 
             // Launch Facebook Login with WhatsApp Embedded Signup
             // Note: FB.login callback must be a regular function, not async
             window.FB.login(function (response) {
-                // Handle the response in a separate async function
                 handleFBLoginResponse(response, activeId);
             }, fbLoginConfig);
 

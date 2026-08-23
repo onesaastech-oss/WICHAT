@@ -44,10 +44,11 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                 }
             );
 
-            // const approvedTemplates = response?.data?.data?.filter(template => template.status === 'APPROVED');
-
             if (!response?.data?.error && response?.data?.data) {
-                const apiTemplates = response.data.data.map(template => ({
+                // Sending a template is only valid after Meta approves it. Keep
+                // this client-side guard even when the API status filter is set.
+                const approvedTemplates = response.data.data.filter(template => String(template.status || '').toUpperCase() === 'APPROVED');
+                const apiTemplates = approvedTemplates.map(template => ({
                     id: template.template_id,
                     name: template.template_name,
                     language: template.template?.language?.toUpperCase() || 'EN',
@@ -67,7 +68,7 @@ const ChatTemplateModal = ({ isOpen, onClose, tokens, onTemplateSelect, onTempla
                 }
 
                 setLastId(response.data.last_id);
-                setHasMore(response.data.has_more);
+                setHasMore(Boolean(response.data.has_more) && approvedTemplates.length > 0);
             } else {
                 console.error('API Error:', response?.data?.message);
                 if (resetData) {

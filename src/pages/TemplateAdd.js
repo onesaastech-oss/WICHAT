@@ -44,6 +44,10 @@ function TemplateAdd() {
     const footerC = comps.find(c => String(c.type).toUpperCase() === 'FOOTER');
     const buttonsC = comps.find(c => String(c.type).toUpperCase() === 'BUTTONS');
 
+    const headerFormat = String(headerC?.format || 'NONE').toUpperCase();
+    const isMediaHeader = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
+    const headerExample = headerC?.example || {};
+
     setFormData({
       name: template.name || '',
       category: template.category || 'MARKETING',
@@ -51,9 +55,13 @@ function TemplateAdd() {
       components: {
         header: {
           type: 'HEADER',
-          format: headerC?.format || 'NONE',
+          format: ['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat) ? headerFormat : 'NONE',
           text: headerC?.text || '',
-          example: headerC?.example || { header_handle: [] }
+          // AI defines the default format. Media can be replaced with a real
+          // upload in the editor because AI cannot create a WhatsApp media handle.
+          example: isMediaHeader
+            ? { header_handle: Array.isArray(headerExample.header_handle) ? headerExample.header_handle : [] }
+            : { header_text: Array.isArray(headerExample.header_text) ? headerExample.header_text : [] }
         },
         body: {
           type: 'BODY',
