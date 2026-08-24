@@ -70,6 +70,8 @@ import { SearchChatModal } from '../component/Modals/Conversation/SearchChatModa
 import TemplateMessageRenderer from '../component/Conversation/TemplateMessageRender';
 import { buildTemplateDisplayMessage } from '../utils/templateMessageDisplay';
 import Pagination from '../component/Pagination';
+import InteractiveMessageRenderer from '../component/Conversation/InteractiveMessageRenderer';
+import { getInteractiveSearchText, normalizeInteractiveMessage } from '../utils/interactiveMessage';
 
 const escapeRegExp = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -142,6 +144,10 @@ const getSearchableTextFromMessage = (msg) => {
     }
 
     const type = (msg.message_type || '').toLowerCase();
+
+    if (type === 'interactive') {
+        return getInteractiveSearchText(msg);
+    }
 
     if (type === 'text' || type === '' || type === 'template') {
         return msg.message || '';
@@ -510,6 +516,8 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                     isOwnMessage={msg.type === 'out'}
                                     onAudioTimeChange={handleAudioTimeChange}
                                 />
+                            ) : (msg.message_type || '').toLowerCase() === 'interactive' ? (
+                                <InteractiveMessageRenderer msg={msg} isOwnMessage={msg.type === 'out'} />
                             ) : msg.message_type === 'text' ? (
                                 <p className="whitespace-pre-wrap break-words text-sm sm:text-base">{msg.message}</p>
                             ) : (
@@ -1977,6 +1985,10 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
 
                 const isTemplate = Boolean(apiMessage?.is_template || apiMessage?.message_type === 'template');
+                const interactiveData = (apiMessage?.message_type || '').toLowerCase() === 'interactive'
+                    || apiMessage?.interactive || apiMessage?.interactive_data
+                    ? normalizeInteractiveMessage(apiMessage)
+                    : null;
                 let resolvedMessage = (apiMessage.message ?? '');
                 if (isTemplate && (!resolvedMessage || resolvedMessage.length === 0)) {
                     resolvedMessage = buildTemplateDisplayMessage(
@@ -2042,8 +2054,8 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     wamid: apiMessage.wamid || '',
                     create_date: apiMessage.create_date || '',
                     type: apiMessage.type || '',
-                    message_type: derivedMessageType || apiMessage.message_type || '',
-                    message: resolvedMessage,
+                    message_type: interactiveData ? 'interactive' : (derivedMessageType || apiMessage.message_type || ''),
+                    message: interactiveData?.message || resolvedMessage,
                     is_template: isTemplate,
                     is_forwarded: apiMessage.is_forwarded || false,
                     is_reply: apiMessage.is_reply || false,
@@ -2074,7 +2086,9 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                     chat_number: activeChat.number,
                     // Store template and component data for rendering
                     template: apiMessage.template || null,
-                    component: normalizedComponent.length ? normalizedComponent : null
+                    component: normalizedComponent.length ? normalizedComponent : null,
+                    interactive: interactiveData?.interactive || apiMessage.interactive || null,
+                    interactive_reply: interactiveData?.interactive_reply || apiMessage.interactive_reply || null
                 });
             });
 

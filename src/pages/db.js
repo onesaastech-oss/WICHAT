@@ -48,8 +48,12 @@ class ChatDatabase extends Dexie {
                 chat_number
             `,
         });
+        this.version(3).stores({
+            chats: '++id, number, name, is_favorite, wamid, create_date, type, message_type, message, status, unique_id, last_id, lastUpdated, send_by_username, send_by_mobile',
+            messages: '++id, message_id, wamid, create_date, type, message_type, message, is_template, is_forwarded, is_reply, status, send_by_username, send_by_name, send_by_mobile, send_by_email, send_by_status, is_read, read_by_username, read_by_name, read_by_mobile, read_by_email, read_by_status, failed_reason, media_url, media_name, is_voice, address, latitude, longitude, name, reply_wamid, timestamp, retryCount, chat_number, interactive_reply'
+        });
 
-        // Set up database change listeners
+        // Set up change listeners
         this.setupChangeListeners();
     }
 
@@ -307,7 +311,9 @@ export const dbHelper = {
                         retryCount: message.retryCount || '',
                         chat_number: message.chat_number,
                         template: message.template || null,
-                        component: message.component || null
+                        component: message.component || null,
+                        interactive: message.interactive || null,
+                        interactive_reply: message.interactive_reply || null
                     };
 
                     // Prefer exact match by server message_id
@@ -582,6 +588,8 @@ export const dbHelper = {
                     is_template: serverMessage.is_template !== undefined ? serverMessage.is_template : candidate.is_template,
                     template: serverMessage.template || candidate.template,
                     component: serverMessage.component || candidate.component,
+                    interactive: serverMessage.interactive || candidate.interactive || null,
+                    interactive_reply: serverMessage.interactive_reply || candidate.interactive_reply || null,
                     timestamp: (
                         serverMessage.timestamp
                         || toServerTimestamp(serverMessage.create_date)

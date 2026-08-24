@@ -1,6 +1,7 @@
 import { io } from "socket.io-client";
 import { API_BASE_URL } from '../config/api';
 import { dbHelper } from './db';
+import { normalizeInteractiveMessage } from '../utils/interactiveMessage';
 
 /** Get currently selected project ID from localStorage (used to filter socket payloads by project). */
 const getSelectedProjectId = () => {
@@ -25,6 +26,10 @@ const isPayloadForSelectedProject = (payloadProjectId) => {
 const normalizeSocketMessagePayload = (message = {}) => {
     const isTemplate = message.message_type === 'template' || message.is_template;
     let resolvedMessage = message.message || '';
+    const interactiveData = (message.message_type || '').toLowerCase() === 'interactive'
+        || message.interactive || message.interactive_data
+        ? normalizeInteractiveMessage(message)
+        : null;
 
     // Normalize `component` (socket can deliver array or JSON-stringified array)
     const normalizedComponent = (() => {
@@ -109,10 +114,12 @@ const normalizeSocketMessagePayload = (message = {}) => {
     }
 
     return {
-        resolvedMessage,
+        resolvedMessage: interactiveData?.message || resolvedMessage,
         headerMediaUrl,
         headerMediaName,
-        derivedMessageType,
+        derivedMessageType: interactiveData ? 'interactive' : derivedMessageType,
+        interactive: interactiveData?.interactive || message.interactive || null,
+        interactive_reply: interactiveData?.interactive_reply || message.interactive_reply || null,
         normalizedComponent,
     };
 };
@@ -253,6 +260,8 @@ class SocketManager {
                 headerMediaName,
                 derivedMessageType,
                 normalizedComponent,
+                interactive,
+                interactive_reply,
             } = normalizeSocketMessagePayload(messageData.message || {});
 
             // Check if this is a message sent by the current user (outgoing message)
@@ -305,7 +314,9 @@ class SocketManager {
                     timestamp: messageData.message.timestamp || '',
                     retryCount: messageData.message.retryCount || '',
                     template: messageData.message.template || null,
-                    component: (normalizedComponent?.length ? normalizedComponent : (messageData.message.component || null))
+                    component: (normalizedComponent?.length ? normalizedComponent : (messageData.message.component || null)),
+                    interactive,
+                    interactive_reply
                 });
                 return true;
             }
@@ -352,7 +363,9 @@ class SocketManager {
                 retryCount: messageData.message.retryCount || '',
                 chat_number: messageData.contact.number,
                 template: messageData.message.template || null,
-                component: (normalizedComponent?.length ? normalizedComponent : (messageData.message.component || null))
+                component: (normalizedComponent?.length ? normalizedComponent : (messageData.message.component || null)),
+                interactive,
+                interactive_reply
             }]
 
             // New Chat
@@ -370,6 +383,7 @@ class SocketManager {
                 last_id: messageData.message.id || '',
                 send_by_username: messageData.message.send_by?.username || '',
                 send_by_mobile: messageData.message.send_by?.mobile || '',
+                interactive_reply: interactive_reply || null,
             }]
 
             // Save to IndexedDB if available
