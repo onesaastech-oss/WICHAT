@@ -724,7 +724,7 @@ function OpenCaseList() {
                                     setPageNo(1);
                                     fetchOpenCases(1, { search: value });
                                 }}
-                                placeholder="Search by number or contact name..."
+                                placeholder="Search by name or phone number..."
                                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                             />
                         </div>
@@ -802,6 +802,7 @@ function OpenCaseList() {
                                             const sortedCases = Array.isArray(item.cases) && item.cases.length > 0
                                                 ? [...item.cases].sort((a, b) => parseServerDate(b.modify_date || b.create_date) - parseServerDate(a.modify_date || a.create_date))
                                                 : [];
+                                            const latestCase = item.latest_case || sortedCases[0] || null;
                                             const contactName = (item?.contact?.name || '').toString().trim();
                                             const numberValue = (item?.number || '').toString().trim();
                                             const primaryTitle = contactName || numberValue || '-';
@@ -843,7 +844,14 @@ function OpenCaseList() {
                                                         </button>
                                                     </td>
                                                     <td className="px-3 py-2 border-r border-gray-100 dark:border-gray-800 align-middle">
-                                                        {sortedCases.length === 0 ? (
+                                                        {latestCase ? (
+                                                            <div className="mb-2 rounded-lg border border-emerald-200/70 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-900/20 px-2.5 py-1.5">
+                                                                <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Latest case</div>
+                                                                <div className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">{latestCase.name || 'Untitled Case'}</div>
+                                                                {latestCase.remark ? <div className="text-[11px] text-gray-600 dark:text-gray-300 truncate">{latestCase.remark}</div> : null}
+                                                                <div className="text-[10px] text-gray-500 dark:text-gray-400">{formatShortDateTime(latestCase.modify_date || latestCase.create_date)}</div>
+                                                            </div>
+                                                        ) : sortedCases.length === 0 ? (
                                                             <div className="text-sm text-gray-700 dark:text-gray-200">-</div>
                                                         ) : (
                                                             <div className="flex flex-wrap gap-2">
@@ -914,6 +922,7 @@ function OpenCaseList() {
                                     const sortedCases = Array.isArray(item.cases) && item.cases.length > 0
                                         ? [...item.cases].sort((a, b) => parseServerDate(b.modify_date || b.create_date) - parseServerDate(a.modify_date || a.create_date))
                                         : [];
+                                    const latestCase = item.latest_case || sortedCases[0] || null;
                                     const contactName = (item?.contact?.name || '').toString().trim();
                                     const numberValue = (item?.number || '').toString().trim();
                                     const primaryTitle = contactName || numberValue || '-';
@@ -931,11 +940,19 @@ function OpenCaseList() {
                                                             {primaryTitle}
                                                         </div>
                                                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                            {secondaryLine || (sortedCases?.[0]?.name || 'No case name')}
+                                                            {secondaryLine || (latestCase?.name || 'No case name')}
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
+                                            {latestCase ? (
+                                                <div className="rounded-lg border border-emerald-200/70 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-900/20 px-3 py-2">
+                                                    <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Latest case</div>
+                                                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{latestCase.name || 'Untitled Case'}</div>
+                                                    {latestCase.remark ? <div className="text-xs text-gray-600 dark:text-gray-300 truncate">{latestCase.remark}</div> : null}
+                                                    <div className="text-[11px] text-gray-500 dark:text-gray-400">{formatShortDateTime(latestCase.modify_date || latestCase.create_date)}</div>
+                                                </div>
+                                            ) : null}
                                             {sortedCases.length === 0 ? (
                                                 <div className="text-xs text-gray-500 dark:text-gray-400">No cases</div>
                                             ) : (

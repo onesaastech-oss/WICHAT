@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../../config/api';
 import { Encrypt } from '../../pages/encryption/payload-encryption';
+import { uploadFile } from '../../utils/uploadFile';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import {
@@ -9,18 +10,23 @@ import {
   FiCheck,
   FiRefreshCw,
   FiSliders,
-  FiArrowRight,
   FiMessageSquare,
   FiInfo,
   FiLayers,
   FiCheckCircle,
-  FiAlertCircle
+  FiUploadCloud,
+  FiTrash2,
+  FiImage,
+  FiAlertTriangle,
+  FiKey,
+  FiCreditCard
 } from 'react-icons/fi';
 import { RiSparklingFill } from 'react-icons/ri';
+import { Link } from 'react-router-dom';
 
 const QUICK_PROMPTS = [
   {
-    label: '🔥 50% Flash Sale',
+    label: '⚡ 50% Flash Sale',
     prompt: 'Create an exciting limited-time 50% discount announcement for a weekend fashion sale with coupon code and countdown.',
     category: 'MARKETING',
     tone: 'exciting and promotional',
@@ -48,7 +54,7 @@ const QUICK_PROMPTS = [
     button_type: 'URL'
   },
   {
-    label: '⚡ Service Appointment',
+    label: '📅 Service Appointment',
     prompt: 'Confirm booking/appointment with customer name, service name, date, time, and quick reply buttons to Confirm or Reschedule.',
     category: 'UTILITY',
     tone: 'clear and reassuring',
@@ -65,10 +71,13 @@ export default function AiTemplateModal({
   tokens
 }) {
   const [prompt, setPrompt] = useState('');
+  const [headerPrompt, setHeaderPrompt] = useState('');
   const [category, setCategory] = useState('MARKETING');
   const [language, setLanguage] = useState('en');
   const [tone, setTone] = useState('friendly and persuasive');
   const [headerType, setHeaderType] = useState('NONE');
+  const [referenceImageUrl, setReferenceImageUrl] = useState('');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [buttonType, setButtonType] = useState('QUICK_REPLY');
   const [customInstructions, setCustomInstructions] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -76,6 +85,58 @@ export default function AiTemplateModal({
   const [loading, setLoading] = useState(false);
   const [savingDirectly, setSavingDirectly] = useState(false);
   const [generatedData, setGeneratedData] = useState(null);
+
+  // AI & Wallet status
+  const [aiStatus, setAiStatus] = useState({
+    loading: true,
+    is_eligible: true,
+    is_personal_key: false,
+    balance: 0,
+    source: 'none',
+  });
+
+  const selectedProjectId = projectId || tokens?.selected_project_id || tokens?.projects?.[0]?.project_id;
+
+  useEffect(() => {
+    if (!isOpen || !selectedProjectId) return;
+
+    let isMounted = true;
+    const fetchAiStatus = async () => {
+      try {
+        const { data, key } = Encrypt({ project_id: selectedProjectId });
+        const res = await axios.post(
+          `${API_BASE_URL}/template/get-ai-status`,
+          JSON.stringify({ data, key }),
+          {
+            headers: {
+              token: tokens?.token,
+              username: tokens?.username,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (isMounted && res.data?.data) {
+          setAiStatus({
+            loading: false,
+            is_eligible: res.data.data.is_eligible,
+            is_personal_key: res.data.data.is_personal_key,
+            balance: res.data.data.balance,
+            source: res.data.data.source,
+          });
+        }
+      } catch (e) {
+        if (isMounted) {
+          setAiStatus((prev) => ({ ...prev, loading: false }));
+        }
+      }
+    };
+
+    fetchAiStatus();
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, selectedProjectId, tokens]);
 
   if (!isOpen) return null;
 
@@ -86,14 +147,42 @@ export default function AiTemplateModal({
     if (item.button_type) setButtonType(item.button_type);
   };
 
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file (PNG, JPG, WebP)');
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    try {
+      const { link, url } = await uploadFile(file);
+      const uploadedUrl = link || url;
+      setReferenceImageUrl(uploadedUrl);
+      toast.success('Logo / Reference image uploaded successfully');
+    } catch (err) {
+      console.error('Logo upload error:', err);
+      toast.error(err.message || 'Failed to upload logo/reference image');
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
   const handleGenerate = async (e) => {
     if (e) e.preventDefault();
+
+    if (!aiStatus.is_eligible && !aiStatus.is_personal_key) {
+      toast.error('AI generation requires a wallet balance > ₹100 or your own Personal API Key.');
+      return;
+    }
+
     if (!prompt.trim()) {
       toast.error('Please enter a description or use-case for the template');
       return;
     }
 
-    const selectedProjectId = projectId || tokens?.selected_project_id || tokens?.projects?.[0]?.project_id;
     if (!selectedProjectId) {
       toast.error('Project ID not found. Please select a project first.');
       return;
@@ -106,6 +195,8 @@ export default function AiTemplateModal({
       const payload = {
         project_id: selectedProjectId,
         prompt: prompt.trim(),
+        header_prompt: headerType !== 'NONE' ? headerPrompt.trim() : '',
+        reference_image_url: headerType === 'IMAGE' ? referenceImageUrl : '',
         category,
         language,
         tone,
@@ -138,6 +229,8 @@ export default function AiTemplateModal({
               project_id: selectedProjectId,
               format: String(generatedHeader.format).toUpperCase(),
               prompt: prompt.trim(),
+              header_prompt: headerType !== 'NONE' ? headerPrompt.trim() : '',
+              reference_image_url: headerType === 'IMAGE' ? referenceImageUrl : '',
               body: result.template.components?.find(c => String(c.type).toUpperCase() === 'BODY')?.text || '',
               header_text: generatedHeader.text || ''
             };
@@ -152,7 +245,7 @@ export default function AiTemplateModal({
           }
         }
         setGeneratedData(result);
-        toast.success('✨ WhatsApp Template generated with AI!');
+        toast.success('WhatsApp Template generated with AI!');
       } else {
         toast.error('Unexpected response from AI generator');
       }
@@ -175,7 +268,6 @@ export default function AiTemplateModal({
 
   const handleSaveDirectly = async () => {
     if (!generatedData?.template) return;
-    const selectedProjectId = projectId || tokens?.selected_project_id || tokens?.projects?.[0]?.project_id;
     setSavingDirectly(true);
 
     try {
@@ -219,6 +311,8 @@ export default function AiTemplateModal({
   const footerComp = generatedData?.template?.components?.find(c => String(c.type).toUpperCase() === 'FOOTER');
   const buttonsComp = generatedData?.template?.components?.find(c => String(c.type).toUpperCase() === 'BUTTONS');
 
+  const isBlocked = !aiStatus.loading && !aiStatus.is_eligible && !aiStatus.is_personal_key;
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl border border-indigo-100 max-w-4xl w-full overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
@@ -251,6 +345,40 @@ export default function AiTemplateModal({
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          
+          {/* Caution Alert Banner if Low Balance & using Platform Key */}
+          {isBlocked && (
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+              <div className="flex items-start gap-3">
+                <FiAlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-xs font-bold text-amber-900">
+                    Low Wallet Balance (₹{Number(aiStatus.balance).toFixed(2)})
+                  </h4>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    AI generation with OneChat Platform Key requires a minimum balance of <strong>₹100</strong>. Alternatively, you can use your own Personal AI API Key with zero balance minimum.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Link
+                  to="/recharge"
+                  className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+                >
+                  <FiCreditCard className="w-3.5 h-3.5" />
+                  <span>Recharge</span>
+                </Link>
+                <Link
+                  to="/project-setting"
+                  className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 hover:bg-amber-100/60 text-amber-900 text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+                >
+                  <FiKey className="w-3.5 h-3.5" />
+                  <span>Add Personal Key</span>
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* Quick Prompts */}
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2 block flex items-center gap-1.5">
@@ -342,7 +470,7 @@ export default function AiTemplateModal({
                 className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
               >
                 <FiSliders className="w-3.5 h-3.5" />
-                {showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options (Header, Buttons, Custom instructions)'}
+                {showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options (Header, Logo / Reference Image, Buttons)'}
               </button>
 
               {showAdvanced && (
@@ -351,7 +479,12 @@ export default function AiTemplateModal({
                     <label className="text-xs font-semibold text-gray-700 mb-1 block">Header Type</label>
                     <select
                       value={headerType}
-                      onChange={(e) => setHeaderType(e.target.value)}
+                      onChange={(e) => {
+                        setHeaderType(e.target.value);
+                        if (e.target.value !== 'IMAGE') {
+                          setReferenceImageUrl('');
+                        }
+                      }}
                       className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-800 focus:border-indigo-500 outline-none shadow-sm"
                     >
                       <option value="NONE">None</option>
@@ -376,6 +509,79 @@ export default function AiTemplateModal({
                     </select>
                   </div>
 
+                  {/* Separate Header Prompt: Visible when headerType !== 'NONE' */}
+                  {headerType !== 'NONE' && (
+                    <div className="sm:col-span-2">
+                      <label className="text-xs font-semibold text-gray-700 mb-1 block flex items-center justify-between">
+                        <span>Header Visual / Text Prompt (Separate from Description)</span>
+                        <span className="text-[11px] text-gray-400 font-normal">Specifies header graphics or title</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={headerPrompt}
+                        onChange={(e) => setHeaderPrompt(e.target.value)}
+                        placeholder={headerType === 'IMAGE' ? 'e.g. Modern minimalist banner with luxury gold theme...' : 'e.g. Special Weekend Announcement'}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-300 text-xs text-gray-800 focus:border-indigo-500 outline-none shadow-sm"
+                      />
+                    </div>
+                  )}
+
+                  {/* Logo / Reference Image Upload: ONLY enabled when headerType === 'IMAGE' */}
+                  {headerType === 'IMAGE' && (
+                    <div className="sm:col-span-2 p-3 bg-white rounded-xl border border-indigo-100 shadow-sm space-y-2">
+                      <label className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                        <FiImage className="text-indigo-600" />
+                        <span>Upload Logo or Reference Image (Optional for Header Visual)</span>
+                      </label>
+                      <p className="text-[11px] text-gray-500">
+                        Upload your brand logo or sample visual to guide the AI in generating the header image.
+                      </p>
+
+                      {referenceImageUrl ? (
+                        <div className="flex items-center gap-3 p-2 bg-indigo-50/50 rounded-lg border border-indigo-200">
+                          <img
+                            src={referenceImageUrl}
+                            alt="Reference logo"
+                            className="w-16 h-12 object-contain bg-white rounded-md border border-gray-200 p-1"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-gray-800 truncate">Logo / Reference Attached</p>
+                            <p className="text-[10px] text-gray-500 truncate">{referenceImageUrl}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setReferenceImageUrl('')}
+                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            title="Remove reference image"
+                          >
+                            <FiTrash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className={`flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-indigo-200 rounded-lg bg-indigo-50/30 hover:bg-indigo-50/70 transition-all ${isUploadingLogo ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                          {isUploadingLogo ? (
+                            <>
+                              <FiRefreshCw className="w-4 h-4 text-indigo-600 animate-spin" />
+                              <span className="text-xs font-medium text-indigo-700">Uploading logo / image...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FiUploadCloud className="w-4 h-4 text-indigo-600" />
+                              <span className="text-xs font-medium text-indigo-700">Click to upload logo / reference image (PNG, JPG, WebP)</span>
+                            </>
+                          )}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleLogoUpload}
+                            disabled={isUploadingLogo}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )}
+
                   <div className="sm:col-span-2">
                     <label className="text-xs font-semibold text-gray-700 mb-1 block">Additional Custom Instructions (optional)</label>
                     <input
@@ -391,11 +597,18 @@ export default function AiTemplateModal({
             </div>
 
             {/* Generate Action Button */}
-            <div className="flex justify-end pt-2">
+            <div className="flex items-center justify-between pt-2">
+              <div className="text-xs text-gray-500">
+                {isBlocked && (
+                  <span className="text-amber-600 font-semibold flex items-center gap-1">
+                    <FiAlertTriangle className="w-3.5 h-3.5" /> Minimum ₹100 wallet balance or personal key needed
+                  </span>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={handleGenerate}
-                disabled={loading || !prompt.trim()}
+                disabled={loading || !prompt.trim() || isBlocked}
                 className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 text-white text-sm font-semibold hover:from-indigo-700 hover:to-purple-700 active:scale-95 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {loading ? (
@@ -549,8 +762,17 @@ export default function AiTemplateModal({
         {/* Modal Footer */}
         <div className="bg-gray-50 border-t border-gray-200 px-6 py-3.5 flex items-center justify-between text-xs text-gray-500">
           <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            Platform AI Key Active ({generatedData?.provider || 'Platform Default'})
+            {aiStatus.is_personal_key ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span className="text-emerald-700 font-semibold">Personal API Key Active (Free / No Wallet Min)</span>
+              </>
+            ) : (
+              <>
+                <span className={`w-2 h-2 rounded-full ${aiStatus.is_eligible ? 'bg-indigo-500' : 'bg-amber-500'}`}></span>
+                <span>Platform AI Key Active (Wallet: ₹{Number(aiStatus.balance).toFixed(2)})</span>
+              </>
+            )}
           </span>
           <button
             onClick={onClose}
