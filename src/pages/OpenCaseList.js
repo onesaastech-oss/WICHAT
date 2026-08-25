@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { Header, Sidebar } from '../component/Menu';
 import { Encrypt } from './encryption/payload-encryption';
 import Pagination from '../component/Pagination';
-import { FiAlertCircle, FiHash, FiPhone, FiFileText, FiUser, FiSearch, FiEye, FiEdit2, FiX, FiPlus, FiClock, FiCalendar, FiCheckSquare } from 'react-icons/fi';
+import { FiAlertCircle, FiHash, FiPhone, FiFileText, FiUser, FiSearch, FiFilter, FiEye, FiEdit2, FiX, FiPlus, FiClock, FiCalendar, FiCheckSquare } from 'react-icons/fi';
 import { parseServerDate } from '../utils/dateTime';
 import defaultCaseNames from '../data/caseNames.json';
 
@@ -37,6 +37,7 @@ function OpenCaseList() {
     const [total, setTotal] = useState(0);
     const [totalPage, setTotalPage] = useState(1);
     const [search, setSearch] = useState('');
+    const [caseNameFilter, setCaseNameFilter] = useState('');
 
     // Bulk-close state (main table)
     const [selectedNumbers, setSelectedNumbers] = useState(new Set());
@@ -187,11 +188,14 @@ function OpenCaseList() {
 
         try {
             const effectiveSearch = overrides.search !== undefined ? overrides.search : search;
+            const effectiveCaseNameFilter = overrides.caseNameFilter !== undefined ? overrides.caseNameFilter : caseNameFilter;
 
             const payload = {
                 project_id: selectedProjectId,
                 page_no: page,
-                limit
+                limit,
+                case_name_filter: effectiveCaseNameFilter || '',
+                known_case_names: Array.isArray(defaultCaseNames) ? defaultCaseNames : []
             };
 
             if (effectiveSearch && String(effectiveSearch).trim()) {
@@ -240,7 +244,7 @@ function OpenCaseList() {
         } finally {
             setLoading(false);
         }
-    }, [tokens, limit, search]);
+    }, [tokens, limit, search, caseNameFilter]);
 
     // ----- Bulk close (main table) -----
     const handleBulkCloseSelected = useCallback(async () => {
@@ -713,8 +717,9 @@ function OpenCaseList() {
                         </div>
                     </div>
                     <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-sm">
-                        <div className="relative w-full">
-                            <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <div className="flex items-center gap-3">
+                            <div className="relative flex-1">
+                                <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                             <input
                                 type="text"
                                 value={search}
@@ -727,6 +732,27 @@ function OpenCaseList() {
                                 placeholder="Search by name or phone number..."
                                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                             />
+                            </div>
+                            <label className="flex items-center gap-2 shrink-0 text-sm text-slate-600">
+                                <FiFilter className="h-4 w-4 text-slate-400" />
+                                <select
+                                    value={caseNameFilter}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        setCaseNameFilter(value);
+                                        setPageNo(1);
+                                        fetchOpenCases(1, { caseNameFilter: value });
+                                    }}
+                                    className="max-w-[190px] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    aria-label="Filter by case name"
+                                >
+                                    <option value="">All case names</option>
+                                    {(Array.isArray(defaultCaseNames) ? defaultCaseNames : []).map((name) => (
+                                        <option key={name} value={name}>{name}</option>
+                                    ))}
+                                    <option value="others">Others</option>
+                                </select>
+                            </label>
                         </div>
                     </div>
 
