@@ -308,7 +308,7 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                         )}
                         <div
                             id={`message-${messageKey}`}
-                            className={`p-3 sm:p-4 rounded-2xl ${msg.type === 'out'
+                            className={`p-1 rounded-2xl ${msg.type === 'out'
                                 ? 'bg-[#D9FDD3] text-gray-800 rounded-br-md'
                                 : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-md border border-gray-200 dark:border-gray-700'
                                 } max-w-full relative ${bubbleHighlightClass}`}
@@ -517,9 +517,17 @@ const MessageItem = ({ msg, activeChat, displayName, darkMode, renderFilePreview
                                     onAudioTimeChange={handleAudioTimeChange}
                                 />
                             ) : (msg.message_type || '').toLowerCase() === 'interactive' ? (
-                                <InteractiveMessageRenderer msg={msg} isOwnMessage={msg.type === 'out'} />
+                                <InteractiveMessageRenderer
+                                    msg={msg}
+                                    isOwnMessage={msg.type === 'out'}
+                                    onSelectOption={(selectedOption, originalMsg) => {
+                                        if (typeof window !== 'undefined' && typeof window.handleInteractiveSelect === 'function') {
+                                            window.handleInteractiveSelect(selectedOption, originalMsg);
+                                        }
+                                    }}
+                                />
                             ) : msg.message_type === 'text' ? (
-                                <p className="whitespace-pre-wrap break-words text-sm sm:text-base">{msg.message}</p>
+                                <p className="p-1 whitespace-pre-wrap break-words text-sm sm:text-base">{msg.message}</p>
                             ) : (
                                 <div className="space-y-2">
                                     {renderFilePreview(msg, { onAudioTimeChange: handleAudioTimeChange })}
@@ -2755,124 +2763,124 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
             });
 
             const fileType = fileItem.type;
-                const fileName = fileItem.file?.name || fileItem.displayName || fallbackFileName;
-                const displayName = fileType === 'document' ? (fileItem.documentName ?? fileName) : fileName;
+            const fileName = fileItem.file?.name || fileItem.displayName || fallbackFileName;
+            const displayName = fileType === 'document' ? (fileItem.documentName ?? fileName) : fileName;
 
-                const tempMessage = {
-                    id: Date.now().toString(),
-                    message_id: tempMessageId,
-                    type: 'out',
-                    message_type: fileType,
-                    message: attachmentMessage,
-                    media_url: fileUrl,
-                    media_name: displayName,
-                    status: 'pending',
-                    timestamp: Date.now(),
-                    send_by: 'You',
-                    chat_number: activeChat.number,
-                    create_date: new Date().toISOString(),
-                    is_voice: isVoiceRecording
-                };
+            const tempMessage = {
+                id: Date.now().toString(),
+                message_id: tempMessageId,
+                type: 'out',
+                message_type: fileType,
+                message: attachmentMessage,
+                media_url: fileUrl,
+                media_name: displayName,
+                status: 'pending',
+                timestamp: Date.now(),
+                send_by: 'You',
+                chat_number: activeChat.number,
+                create_date: new Date().toISOString(),
+                is_voice: isVoiceRecording
+            };
 
-                setMessages(prev => [...prev, tempMessage]);
-                shouldAutoScrollRef.current = true;
-                if (onMessageStatusUpdate) {
-                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
-                }
+            setMessages(prev => [...prev, tempMessage]);
+            shouldAutoScrollRef.current = true;
+            if (onMessageStatusUpdate) {
+                onMessageStatusUpdate(activeChat.number, tempMessageId, 'pending');
+            }
 
-                const messagePayload = {
-                    project_id: tokens.selected_project_id || '',
-                    message: isVoiceRecording ? '' : attachmentMessage,
-                    number: activeChat.number
-                };
-                if (fileType === 'photo') messagePayload.image_link = fileUrl;
-                else if (fileType === 'video') messagePayload.video_link = fileUrl;
-                else if (fileType === 'audio') {
-                    messagePayload.audio_link = fileUrl;
-                    messagePayload.is_voice = isVoiceParam;
-                }
-                else if (fileType === 'document') {
-                    messagePayload.document_link = fileUrl;
-                    messagePayload.document_name = fileItem.documentName ?? '';
-                }
+            const messagePayload = {
+                project_id: tokens.selected_project_id || '',
+                message: isVoiceRecording ? '' : attachmentMessage,
+                number: activeChat.number
+            };
+            if (fileType === 'photo') messagePayload.image_link = fileUrl;
+            else if (fileType === 'video') messagePayload.video_link = fileUrl;
+            else if (fileType === 'audio') {
+                messagePayload.audio_link = fileUrl;
+                messagePayload.is_voice = isVoiceParam;
+            }
+            else if (fileType === 'document') {
+                messagePayload.document_link = fileUrl;
+                messagePayload.document_name = fileItem.documentName ?? '';
+            }
 
-                let api_url = 'send-text-message';
-                if (fileType === 'photo') api_url = 'send-image-message';
-                else if (fileType === 'video') api_url = 'send-video-message';
-                else if (fileType === 'audio') api_url = 'send-audio-message';
-                else if (fileType === 'document') api_url = 'send-document-message';
+            let api_url = 'send-text-message';
+            if (fileType === 'photo') api_url = 'send-image-message';
+            else if (fileType === 'video') api_url = 'send-video-message';
+            else if (fileType === 'audio') api_url = 'send-audio-message';
+            else if (fileType === 'document') api_url = 'send-document-message';
 
-                const { data, key } = Encrypt(messagePayload);
-                const data_pass = JSON.stringify({ "data": data, "key": key });
+            const { data, key } = Encrypt(messagePayload);
+            const data_pass = JSON.stringify({ "data": data, "key": key });
 
-                const messageResponse = await axios.post(
-                    `${API_BASE_URL}/message/${api_url}`,
-                    data_pass,
-                    {
-                        headers: {
-                            'token': tokens.token,
-                            'username': tokens.username,
-                            'Content-Type': 'application/json'
-                        }
+            const messageResponse = await axios.post(
+                `${API_BASE_URL}/message/${api_url}`,
+                data_pass,
+                {
+                    headers: {
+                        'token': tokens.token,
+                        'username': tokens.username,
+                        'Content-Type': 'application/json'
                     }
+                }
+            );
+
+            if (!messageResponse.data.error) {
+                const serverWamid = messageResponse?.data?.wamid || '';
+                const serverMessageId = messageResponse?.data?.message_id || '';
+                const serverId = messageResponse?.data?.id || '';
+
+                const sentMediaMessage = {
+                    ...tempMessage,
+                    status: 'sent',
+                    message_id: serverMessageId || tempMessageId,
+                    wamid: serverWamid,
+                    id: serverId || tempMessage.id
+                };
+
+                if (dbAvailable) {
+                    await dbHelper.addMessage(activeChat.number, sentMediaMessage);
+                    await dbHelper.saveChats([
+                        {
+                            number: activeChat.number,
+                            name: activeChat.name,
+                            is_favorite: activeChat.is_favorite || false,
+                            wamid: serverWamid,
+                            create_date: tempMessage.create_date,
+                            type: 'out',
+                            message_type: fileType,
+                            message: tempMessage.message,
+                            status: 'sent',
+                            unique_id: serverMessageId || tempMessageId,
+                            last_id: serverId || Date.now(),
+                            send_by_username: tokens?.username || '',
+                            send_by_mobile: ''
+                        }
+                    ]);
+                }
+                setMessages(prev =>
+                    prev.map(msg =>
+                        msg.message_id === tempMessageId
+                            ? { ...msg, ...sentMediaMessage }
+                            : msg
+                    )
                 );
 
-                if (!messageResponse.data.error) {
-                    const serverWamid = messageResponse?.data?.wamid || '';
-                    const serverMessageId = messageResponse?.data?.message_id || '';
-                    const serverId = messageResponse?.data?.id || '';
-
-                    const sentMediaMessage = {
-                        ...tempMessage,
-                        status: 'sent',
-                        message_id: serverMessageId || tempMessageId,
-                        wamid: serverWamid,
-                        id: serverId || tempMessage.id
-                    };
-
-                    if (dbAvailable) {
-                        await dbHelper.addMessage(activeChat.number, sentMediaMessage);
-                        await dbHelper.saveChats([
-                            {
-                                number: activeChat.number,
-                                name: activeChat.name,
-                                is_favorite: activeChat.is_favorite || false,
-                                wamid: serverWamid,
-                                create_date: tempMessage.create_date,
-                                type: 'out',
-                                message_type: fileType,
-                                message: tempMessage.message,
-                                status: 'sent',
-                                unique_id: serverMessageId || tempMessageId,
-                                last_id: serverId || Date.now(),
-                                send_by_username: tokens?.username || '',
-                                send_by_mobile: ''
-                            }
-                        ]);
-                    }
-                    setMessages(prev =>
-                        prev.map(msg =>
-                            msg.message_id === tempMessageId
-                                ? { ...msg, ...sentMediaMessage }
-                                : msg
-                        )
-                    );
-
-                    if (onMessageStatusUpdate) {
-                        onMessageStatusUpdate(activeChat.number, serverMessageId || tempMessageId, 'sent');
-                    }
-                } else {
-                    const errMsg = messageResponse.data.error || messageResponse.data.msg || 'Failed to send message';
-                    toast.error(typeof errMsg === 'string' ? errMsg : 'Failed to send message');
-                    setMessages(prev =>
-                        prev.map(msg =>
-                            msg.message_id === tempMessageId ? { ...msg, status: 'failed' } : msg
-                        )
-                    );
-                    if (onMessageStatusUpdate) {
-                        onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
-                    }
+                if (onMessageStatusUpdate) {
+                    onMessageStatusUpdate(activeChat.number, serverMessageId || tempMessageId, 'sent');
                 }
+            } else {
+                const errMsg = messageResponse.data.error || messageResponse.data.msg || 'Failed to send message';
+                toast.error(typeof errMsg === 'string' ? errMsg : 'Failed to send message');
+                setMessages(prev =>
+                    prev.map(msg =>
+                        msg.message_id === tempMessageId ? { ...msg, status: 'failed' } : msg
+                    )
+                );
+                if (onMessageStatusUpdate) {
+                    onMessageStatusUpdate(activeChat.number, tempMessageId, 'failed');
+                }
+            }
         } catch (error) {
             const errMsg = error.response?.data?.error || error.response?.data?.msg || error.message || 'Failed to send message';
             toast.error(typeof errMsg === 'string' ? errMsg : 'Failed to send message');

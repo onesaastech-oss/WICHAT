@@ -50,7 +50,7 @@ const ImagePreview = ({ fileInfo, isOwnMessage, onImageLoad }) => {
                     <img
                         src={fileInfo.serverUrl}
                         alt={fileInfo.name || 'Image'}
-                        className={`w-full max-w-xs sm:max-w-sm max-h-64 sm:max-h-96 object-cover transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
+                        className={`w-full max-w-xs sm:max-w-sm max-h-64 sm:max-h-96 object-contain transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
                         onLoad={handleImageLoad}
                         onError={handleImageError}
                         loading="lazy"
