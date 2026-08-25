@@ -42,6 +42,9 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
     const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(true);
     const [isFiltering, setIsFiltering] = useState(false);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [activeTab, setActiveTab] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [chats, setChats] = useState([]);
@@ -122,7 +125,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
 
             // 2️⃣ Call chat list API (unfiltered "All" view); merge API response
             // with local, save updated data to local
-            await syncWithAPI();
+            await syncWithAPI(1, false);
 
             // 3️⃣ Re-fetch from local DB and re-render (single source of truth for UI)
             if (dbAvailable) {
@@ -255,8 +258,14 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         });
     };
 
-    const syncWithAPI = async () => {
+    const PAGE_LIMIT = 30;
+
+    const syncWithAPI = async (pageToFetch = 1, append = false) => {
         if (!tokens) return;
+
+        if (pageToFetch > 1) {
+            setLoadingMore(true);
+        }
 
         try {
             // Use the currently selected project ID (fallback to first project if needed)
@@ -264,8 +273,8 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
 
             const messagePayload = {
                 project_id: projectId,
-                page: 1,
-                limit: 100,
+                page: pageToFetch,
+                limit: PAGE_LIMIT,
                 search: '',
                 filter: 'all',
                 filter_type: 'all',
@@ -289,12 +298,21 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
             );
 
             if (!response.data.error && response.data.data) {
-                await processApiResponse(response.data.data);
+                const apiData = response.data.data;
+                const meta = response.data.meta;
+                const hasMoreFromMeta = meta ? !!meta.hasMore : apiData.length >= PAGE_LIMIT;
+                setHasMore(hasMoreFromMeta);
+                setPage(pageToFetch);
+
+                await processApiResponse(apiData, append);
+            } else {
+                setHasMore(false);
             }
         } catch (error) {
             console.error('Failed to sync conversations:', error);
         } finally {
             setIsLoading(false);
+            setLoadingMore(false);
         }
     };
 
@@ -303,11 +321,15 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
     // NOT saved back into the local cache — the local cache stays a mirror
     // of the unfiltered "All" list (kept fresh by syncWithAPI above), while
     // this path is purely for what's currently on screen.
-    const fetchFilteredChats = async (search, tab) => {
+    const fetchFilteredChats = async (search, tab, pageToFetch = 1, append = false) => {
         if (!tokens) return;
 
         const requestId = ++filterRequestId.current;
-        setIsFiltering(true);
+        if (pageToFetch === 1) {
+            setIsFiltering(true);
+        } else {
+            setLoadingMore(true);
+        }
 
         try {
             const projectId = tokens.selected_project_id || '';
@@ -315,8 +337,8 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
 
             const messagePayload = {
                 project_id: projectId,
-                page: 1,
-                limit: 100,
+                page: pageToFetch,
+                limit: PAGE_LIMIT,
                 search: search || '',
                 filter: filterValue,
                 filter_type: filterValue,
@@ -343,14 +365,50 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
             if (requestId !== filterRequestId.current) return;
 
             if (!response.data.error && response.data.data) {
-                setChats(mapApiChats(response.data.data));
+                const apiData = response.data.data;
+                const meta = response.data.meta;
+                const hasMoreFromMeta = meta ? !!meta.hasMore : apiData.length >= PAGE_LIMIT;
+                setHasMore(hasMoreFromMeta);
+                setPage(pageToFetch);
+
+                const newMappedChats = mapApiChats(apiData);
+                if (append) {
+                    setChats(prev => {
+                        const existingNumbers = new Set(prev.map(c => c.number));
+                        const uniqueNew = newMappedChats.filter(c => !existingNumbers.has(c.number));
+                        return [...prev, ...uniqueNew];
+                    });
+                } else {
+                    setChats(newMappedChats);
+                }
+            } else {
+                setHasMore(false);
             }
         } catch (error) {
             console.error('Failed to fetch filtered chats:', error);
         } finally {
             if (requestId === filterRequestId.current) {
                 setIsFiltering(false);
+                setLoadingMore(false);
             }
+        }
+    };
+
+    // Load next page of chats when scrolled to bottom
+    const loadMoreChats = () => {
+        if (isLoading || isFiltering || loadingMore || !hasMore) return;
+        const nextPage = page + 1;
+        if (searchQuery || activeTab !== 'All') {
+            fetchFilteredChats(searchQuery, activeTab, nextPage, true);
+        } else {
+            syncWithAPI(nextPage, true);
+        }
+    };
+
+    const handleScroll = (e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        if (scrollHeight - scrollTop - clientHeight < 120 && !isLoading && !isFiltering && !loadingMore && hasMore) {
+            loadMoreChats();
         }
     };
 
@@ -367,8 +425,11 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
             return;
         }
 
+        setPage(1);
+        setHasMore(true);
+
         const handler = setTimeout(() => {
-            fetchFilteredChats(searchQuery, activeTab);
+            fetchFilteredChats(searchQuery, activeTab, 1, false);
         }, searchQuery ? 400 : 0); // instant on tab switch, debounced while typing
 
         return () => clearTimeout(handler);
@@ -381,9 +442,9 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
             // Re-sync to refresh case_open_count + latest chat data for
             // whatever view (search/filter) is currently active.
             if (searchQuery || activeTab !== 'All') {
-                fetchFilteredChats(searchQuery, activeTab);
+                fetchFilteredChats(searchQuery, activeTab, 1, false);
             } else {
-                syncWithAPI();
+                syncWithAPI(1, false);
             }
         };
         window.addEventListener('case_updated', handler);
@@ -392,7 +453,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tokens, searchQuery, activeTab]);
 
-    const processApiResponse = async (apiChats) => {
+    const processApiResponse = async (apiChats, append = false) => {
         try {
             // Build list from API response
             const chatListFromApi = mapApiChats(apiChats);
@@ -408,9 +469,18 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                     return { ...apiChat, name };
                 });
                 await dbHelper.saveChats(mergedList);
-                // UI is updated in step 3 (re-fetch from local), so do not setChats here
+                const updatedChats = await dbHelper.getChats();
+                setChats(updatedChats);
             } else {
-                setChats(chatListFromApi);
+                if (append) {
+                    setChats(prev => {
+                        const existingNumbers = new Set(prev.map(c => c.number));
+                        const uniqueNew = chatListFromApi.filter(c => !existingNumbers.has(c.number));
+                        return [...prev, ...uniqueNew];
+                    });
+                } else {
+                    setChats(chatListFromApi);
+                }
             }
         } catch (error) {
             console.error('Error processing API response:', error);
@@ -688,7 +758,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
             </div>
 
             {/* Chat List */}
-            <div className="flex-1 overflow-y-auto scrollbar-hide">
+            <div className="flex-1 overflow-y-auto scrollbar-hide" onScroll={handleScroll}>
                 {isLoading && chats.length === 0 ? (
                     <div className="p-4 space-y-4">
                         {[...Array(8)].map((_, i) => (
@@ -774,6 +844,13 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                                 </div>
                             </div>
                         ))}
+
+                        {/* Bottom loading spinner for pagination */}
+                        {loadingMore && (
+                            <div className="flex justify-center items-center py-4">
+                                <FiRefreshCw className="w-5 h-5 text-blue-500 animate-spin" />
+                            </div>
+                        )}
 
                         {chats.length === 0 && !isLoading && (
                             <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
