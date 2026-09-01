@@ -160,14 +160,14 @@ const MediaModal = ({ isOpen, onClose, mediaItem, type }) => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-2 sm:p-4"
+                    className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[9999] p-2 sm:p-4 overflow-hidden"
                     onClick={onClose}
                 >
                     <motion.div
                         initial={{ scale: 0.9, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0.9, opacity: 0 }}
-                        className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl w-full h-full sm:max-w-6xl sm:max-h-[90vh] sm:h-auto overflow-hidden flex flex-col"
+                        className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl w-full max-w-6xl max-h-[90dvh] overflow-hidden flex flex-col"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Header */}
@@ -234,7 +234,7 @@ const MediaModal = ({ isOpen, onClose, mediaItem, type }) => {
                         </div>
 
                         {/* Media Content */}
-                        <div className="flex-1 min-h-0 max-h-[75vh] p-2 sm:p-4 overflow-auto flex flex-col">
+                        <div className="flex-1 min-h-0 max-h-[calc(90dvh-4rem)] p-2 sm:p-4 overflow-auto flex flex-col">
                             <div className="flex-1 min-h-0 w-full flex items-center justify-center">
                                 {renderMediaContent()}
                             </div>

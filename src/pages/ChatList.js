@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { API_BASE_URL } from '../config/api';
 import { useNavigate } from 'react-router-dom';
 import { toServerTimestamp, parseServerDate } from '../utils/dateTime';
-import { FiSearch, FiStar, FiImage, FiVideo, FiFile, FiMusic, FiUser, FiCheck, FiClock, FiAlertCircle, FiMoreVertical, FiMessageCircle, FiRefreshCw, FiDelete, FiTrash2, FiChevronLeft, FiChevronRight, FiX, FiBriefcase, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
+import { FiSearch, FiStar, FiImage, FiVideo, FiFile, FiMusic, FiUser, FiCheck, FiClock, FiAlertCircle, FiMoreVertical, FiMessageCircle, FiRefreshCw, FiDelete, FiTrash2, FiChevronLeft, FiChevronRight, FiX, FiBriefcase, FiMaximize2, FiMinimize2, FiLayers } from 'react-icons/fi';
 import axios from 'axios';
 import { Encrypt } from './encryption/payload-encryption';
 import { dbHelper } from './db';
 import { socketManager } from './socket';
+import GlobalMediaGalleryModal from '../component/Modals/GlobalMediaGalleryModal';
 
 const COUNTRY_CODES = [
     { code: '91', country: 'India', dial: '+91' },
@@ -52,6 +53,7 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
     const [showSettingsMenu, setShowSettingsMenu] = useState(false);
     const [showDirectChatModal, setShowDirectChatModal] = useState(false);
     const [showRepairChatsModal, setShowRepairChatsModal] = useState(false);
+    const [showMediaGalleryModal, setShowMediaGalleryModal] = useState(false);
     const [directChatCountryCode, setDirectChatCountryCode] = useState('91');
     const [directChatNumber, setDirectChatNumber] = useState('');
     const [repairChatsConfirming, setRepairChatsConfirming] = useState(false);
@@ -715,6 +717,14 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                                         </>
                                     )}
                                 </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowSettingsMenu(false); setShowMediaGalleryModal(true); }}
+                                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                >
+                                    <FiLayers className="w-4 h-4" />
+                                    Media Gallery
+                                </button>
                             </div>
                         )}
                     </div>
@@ -1101,6 +1111,13 @@ function ChatList({ tokens, onChatSelect, activeChat, darkMode, dbAvailable, soc
                     </div>
                 </div>
             )}
+
+            <GlobalMediaGalleryModal
+                isOpen={showMediaGalleryModal}
+                onClose={() => setShowMediaGalleryModal(false)}
+                tokens={tokens}
+                onChatSelect={onChatSelect}
+            />
         </>
     );
 }

@@ -71,6 +71,7 @@ import TemplateMessageRenderer from '../component/Conversation/TemplateMessageRe
 import { buildTemplateDisplayMessage } from '../utils/templateMessageDisplay';
 import Pagination from '../component/Pagination';
 import InteractiveMessageRenderer from '../component/Conversation/InteractiveMessageRenderer';
+import ContactMediaSection from '../component/Conversation/ContactMediaSection';
 import { getInteractiveSearchText, normalizeInteractiveMessage } from '../utils/interactiveMessage';
 
 const escapeRegExp = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -4614,26 +4615,25 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
 
                         {/* Scrollable content */}
                         <div className="flex-1 overflow-y-auto">
+                            <div className="p-5 space-y-5">
                             {contactDetailsLoading && !contactDetails ? (
-                                <div className="flex items-center justify-center py-16">
-                                    <div className="h-10 w-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                                </div>
-                            ) : contactDetailsError ? (
-                                <div className="p-5">
-                                    <div className="rounded-2xl border border-red-200 dark:border-red-800/50 bg-white dark:bg-gray-800 p-8 text-center shadow-sm">
-                                        <FiAlertCircle className="w-12 h-12 mx-auto mb-4 text-red-500 dark:text-red-400" />
-                                        <p className="text-red-600 dark:text-red-300 text-sm mb-5">{contactDetailsError}</p>
-                                        <button
-                                            onClick={() => fetchContactDetails(activeChat?.number)}
-                                            className="px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors"
-                                        >
-                                            Retry
-                                        </button>
+                                <section className="rounded-2xl border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
+                                    <div className="flex items-center justify-center py-16">
+                                        <div className="h-10 w-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                                     </div>
-                                </div>
+                                </section>
+                            ) : contactDetailsError ? (
+                                <section className="rounded-2xl border border-red-200 dark:border-red-800/50 bg-white dark:bg-gray-800 p-8 text-center shadow-sm">
+                                    <FiAlertCircle className="w-12 h-12 mx-auto mb-4 text-red-500 dark:text-red-400" />
+                                    <p className="text-red-600 dark:text-red-300 text-sm mb-5">{contactDetailsError}</p>
+                                    <button
+                                        onClick={() => fetchContactDetails(activeChat?.number)}
+                                        className="px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors"
+                                    >
+                                        Retry
+                                    </button>
+                                </section>
                             ) : (
-                                <div className="p-5 space-y-5">
-                                    {/* ——— Contact Details ——— */}
                                     <section className="rounded-2xl border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
                                         <div className="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
                                             <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
@@ -4756,6 +4756,15 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                             )}
                                         </div>
                                     </section>
+                            )}
+
+                                    {/* ——— Media & Documents ——— */}
+                                    {activeChat?.number && (
+                                        <ContactMediaSection
+                                            number={activeChat.number}
+                                            tokens={tokens}
+                                        />
+                                    )}
 
                                     {/* ——— Chat Assign ——— */}
                                     {isAssignedToMeOrChatAssignAccess && (
@@ -4926,8 +4935,7 @@ function Conversation({ activeChat, tokens, onBack, darkMode, dbAvailable, socke
                                             </div>
                                         </section>
                                     )}
-                                </div>
-                            )}
+                            </div>
                         </div>
                     </motion.div>
                 )}
